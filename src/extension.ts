@@ -18,9 +18,19 @@ function initializeLogging(): void {
 	}
 	
 	logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
+	
+	// CRITICAL: Clear log file at start of each session
+	try {
+		fs.writeFileSync(logFile, ''); // Clear the file completely
+		console.log(`Log file cleared: ${logFile}`);
+	} catch (error) {
+		console.error('Failed to clear log file:', error);
+	}
+	
 	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
 	
-	writeLog('Extension initialized', 'INFO');
+	writeLog('=== NEW SESSION STARTED ===', 'INFO');
+	writeLog('Extension initialized - log file cleared', 'INFO');
 }
 
 function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): void {
@@ -91,8 +101,11 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
 
 	constructor(private readonly _extensionUri: vscode.Uri) {
+		// FORCE logging regardless of settings to debug webview issues
+		console.log('=== RECENT PROMPTS PROVIDER CONSTRUCTOR ===');
 		writeLog('RecentPromptsProvider constructor called', 'INFO');
 		writeLog(`Extension URI: ${_extensionUri.toString()}`, 'INFO');
+		console.log(`Extension URI: ${_extensionUri.toString()}`);
 	}
 
 	public resolveWebviewView(
@@ -370,16 +383,17 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 	
-	// Force immediate log write to test
+	// Force immediate log write to test - CLEAR previous session
 	const timestamp = new Date().toISOString();
-	const testLogEntry = `[${timestamp}] INFO: EXTENSION ACTIVATION STARTED - CRITICAL DEBUG MODE`;
+	const testLogEntry = `[${timestamp}] INFO: === NEW EXTENSION SESSION STARTED ===`;
 	try {
 		const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
 		if (!fs.existsSync(logFolder)) {
 			fs.mkdirSync(logFolder, { recursive: true });
 		}
 		const logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
-		fs.appendFileSync(logFile, testLogEntry + '\n');
+		fs.writeFileSync(logFile, testLogEntry + '\n'); // CLEAR and write first entry
+		console.log('=== LOG FILE CLEARED FOR NEW SESSION ===');
 	} catch (error) {
 		console.error('Failed test log write:', error);
 	}
