@@ -388,9 +388,10 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function updateStatusBar(): void {
-	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.24';
-	statusBarItem.text = `$(comment-discussion) ${sessionPromptCount} session | v${version}`;
-	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${sessionPromptCount} prompts in current session`;
+	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.27';
+	const totalPrompts = recentPrompts.length;
+	statusBarItem.text = `$(comment-discussion) ${totalPrompts} prompts | v${version}`;
+	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${totalPrompts} prompts total, ${sessionPromptCount} in session`;
 }
 
 function addRecentPrompt(filePath: string): void {
