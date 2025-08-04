@@ -247,3 +247,5 @@ Never create tests. We will not use unit tests or any other tests in the applica
 
 For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywhere, no shorter or other versions
 
+Create files as small as possible, no more than 200 lines each.
+
