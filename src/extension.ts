@@ -1,64 +1,72 @@
 import * as vscode from 'vscode';
-import { AutoSaveManager } from './autoSaveManager';
-import { ConfigurationManager } from './configurationManager';
-import { StatusBarManager } from './statusBarManager';
-import { SpecStoryPromptProvider } from './activityBarProvider';
+import * as fs from 'fs';
+import * as path from 'path';
 
-let autoSaveManager: AutoSaveManager;
-let configurationManager: ConfigurationManager;
-let statusBarManager: StatusBarManager;
+let statusBarItem: vscode.StatusBarItem;
+let promptCount = 0;
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('SpecStory AutoSave extension is now active');
+	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 
-	// Initialize managers
-	configurationManager = new ConfigurationManager();
-	statusBarManager = new StatusBarManager();
-	autoSaveManager = new AutoSaveManager(configurationManager, statusBarManager);
+	// Create status bar item
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	updateStatusBar();
+	statusBarItem.show();
 
-	// Register activity bar provider
-	const promptProvider = new SpecStoryPromptProvider();
-	vscode.window.registerTreeDataProvider('specstory-autosave-view', promptProvider);
-	context.subscriptions.push(promptProvider);
-
-	// Register commands
-	const enableCommand = vscode.commands.registerCommand('specstory-autosave.enable', () => {
-		autoSaveManager.enable();
-		vscode.window.showInformationMessage('SpecStory AutoSave enabled');
+	// Watch for new SpecStory files across entire workspace
+	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
+	
+	watcher.onDidCreate(uri => {
+		promptCount++;
+		updateStatusBar();
+		analyzeAndNotify(uri.fsPath);
 	});
 
-	const disableCommand = vscode.commands.registerCommand('specstory-autosave.disable', () => {
-		autoSaveManager.disable();
-		vscode.window.showInformationMessage('SpecStory AutoSave disabled');
-	});
+	context.subscriptions.push(statusBarItem, watcher);
+}
 
-	const configureCommand = vscode.commands.registerCommand('specstory-autosave.configure', () => {
-		vscode.commands.executeCommand('workbench.action.openSettings', 'specstory-autosave');
-	});
+function updateStatusBar(): void {
+	const version = vscode.extensions.getExtension('specstory.autosave')?.packageJSON.version || '1.0.0';
+	statusBarItem.text = `$(comment-discussion) ${promptCount} | v${version}`;
+	statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
+}
 
-	// Add to subscriptions
-	context.subscriptions.push(
-		enableCommand,
-		disableCommand,
-		configureCommand,
-		autoSaveManager,
-		configurationManager,
-		statusBarManager
-	);
-
-	// Start auto-save if enabled
-	if (configurationManager.isEnabled()) {
-		autoSaveManager.enable();
-	} else {
-		statusBarManager.showDisabled();
+async function analyzeAndNotify(filePath: string): Promise<void> {
+	try {
+		const content = fs.readFileSync(filePath, 'utf8');
+		const message = generateSmartMessage(content);
+		
+		vscode.window.showInformationMessage(message, 'View File').then(selection => {
+			if (selection === 'View File') {
+				vscode.workspace.openTextDocument(filePath).then(doc => {
+					vscode.window.showTextDocument(doc);
+				});
+			}
+		});
+	} catch (error) {
+		console.error('Error analyzing SpecStory file:', error);
 	}
 }
 
+function generateSmartMessage(content: string): string {
+	const lower = content.toLowerCase();
+	
+	if (lower.includes('debug') || lower.includes('error') || lower.includes('fix')) {
+		return 'AI just debugged! Check: • Fixed actual root cause? • Introduced new bugs? • Test edge cases';
+	}
+	if (lower.includes('html') || lower.includes('css') || lower.includes('ui') || lower.includes('design')) {
+		return 'AI worked with UI! Check: • Responsive design • Accessibility • Cross-browser compatibility';
+	}
+	if (lower.includes('database') || lower.includes('sql') || lower.includes('query')) {
+		return 'AI modified database! Check: • Data integrity • Performance impact • Backup strategy';
+	}
+	if (lower.includes('api') || lower.includes('endpoint') || lower.includes('rest')) {
+		return 'AI created API! Check: • Error handling • Security • API documentation';
+	}
+	
+	return 'AI conversation detected! Review the changes and test thoroughly.';
+}
+
 export function deactivate() {
-	if (autoSaveManager) {
-		autoSaveManager.dispose();
-	}
-	if (configurationManager) {
-		configurationManager.dispose();
-	}
+	// Cleanup handled by subscriptions
 }

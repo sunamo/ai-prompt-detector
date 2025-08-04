@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.33",
+  "version": "1.1.35",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -18,62 +18,7 @@
 		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
-  "contributes": {
-	"viewsContainers": {
-	  "activitybar": [
-		{
-		  "id": "specstory-autosave-activitybar",
-		  "title": "SpecStory AutoSave + AI Copilot Prompt Detection",
-		  "icon": "icon.png"
-		}
-	  ]
-	},
-	"views": {
-	  "specstory-autosave-activitybar": [
-		{
-		  "id": "specstory-autosave-view",
-		  "name": "SpecStory AutoSave + AI Copilot Prompt Detection"
-		}
-	  ]
-	},
-		"commands": [
-			{
-				"command": "specstory-autosave.enable",
-				"title": "Enable AutoSave",
-				"category": "SpecStory"
-			},
-			{
-				"command": "specstory-autosave.disable",
-				"title": "Disable AutoSave",
-				"category": "SpecStory"
-			},
-			{
-				"command": "specstory-autosave.configure",
-				"title": "Configure AutoSave",
-				"category": "SpecStory"
-			}
-		],
-		"configuration": {
-			"title": "SpecStory AutoSave",
-			"properties": {
-				"specstory-autosave.enabled": {
-					"type": "boolean",
-					"default": true,
-					"description": "Enable automatic saving"
-				},
-				"specstory-autosave.interval": {
-					"type": "number",
-					"default": 5000,
-					"description": "Auto-save interval in milliseconds"
-				},
-				"specstory-autosave.filePatterns": {
-					"type": "array",
-					"default": ["**/*.md", "**/*.txt", "**/*.json"],
-					"description": "File patterns to auto-save"
-				}
-			}
-		}
-	},
+  "contributes": {},
 	"scripts": {
 	   "vscode:prepublish": "node_modules\\.bin\\tsc.cmd -p ./",
 	   "compile": "pwsh ./install.ps1",
