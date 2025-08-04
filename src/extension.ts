@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 let statusBarItem: vscode.StatusBarItem;
-let promptCount = 0;
+let sessionPromptCount = 0;  // Count prompts in current VS Code session
 let recentPrompts: string[] = [];
 let logFile: string;
 let outputChannel: vscode.OutputChannel;
@@ -108,7 +108,6 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 					writeLog('Manual refresh requested from activity bar', 'DEBUG');
 					// Clear existing prompts and reload from all files
 					recentPrompts = [];
-					promptCount = 0;
 					
 					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
 						writeLog(`Found ${files.length} SpecStory files to process`, 'DEBUG');
@@ -126,13 +125,12 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 							writeLog(`Processing file: ${file.fsPath}`, 'DEBUG');
 							if (isValidSpecStoryFile(file.fsPath)) {
 								addRecentPrompt(file.fsPath);
-								promptCount++; // Count files, not individual prompts
 							}
 						});
 						
 						updateStatusBar();
 						this.refreshFromPrompts();
-						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${promptCount} files`);
+						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${sortedFiles.length} files`);
 					});
 					break;
 			}
@@ -341,27 +339,26 @@ export function activate(context: vscode.ExtensionContext) {
 		sortedFiles.forEach(file => {
 			writeLog(`Existing file: ${file.fsPath}`, 'DEBUG');
 			if (isValidSpecStoryFile(file.fsPath)) {
-				promptCount++; // Count files
 				addRecentPrompt(file.fsPath);
 			}
 		});
 		
 		updateStatusBar();
 		provider.refresh();
-		writeLog(`Loaded ${recentPrompts.length} total prompts from ${promptCount} files`);
+		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`);
 	});
 	
 	watcher.onDidCreate(uri => {
 		writeLog(`File created event: ${uri.fsPath}`);
 		// Validate this is actually a SpecStory export file
 		if (isValidSpecStoryFile(uri.fsPath)) {
-			promptCount++; // Increment file count
 			writeLog(`New SpecStory export detected: ${path.basename(uri.fsPath)}`, 'INFO');
 			addRecentPrompt(uri.fsPath);
+			sessionPromptCount++; // Increment session prompt count
 			updateStatusBar();
 			provider.refresh();
 			showNotification();
-			writeLog(`File count updated to: ${promptCount}, total prompts: ${recentPrompts.length}`);
+			writeLog(`Session prompts: ${sessionPromptCount}, total prompts: ${recentPrompts.length}`);
 		} else {
 			writeLog(`Ignored non-SpecStory file: ${path.basename(uri.fsPath)}`, 'DEBUG');
 		}
@@ -372,10 +369,9 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function updateStatusBar(): void {
-	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.47';
-	const totalPrompts = recentPrompts.length;
-	statusBarItem.text = `$(comment-discussion) ${totalPrompts} prompts | v${version}`;
-	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${totalPrompts} prompts from ${promptCount} files`;
+	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.24';
+	statusBarItem.text = `$(comment-discussion) ${sessionPromptCount} session | v${version}`;
+	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${sessionPromptCount} prompts in current session`;
 }
 
 function addRecentPrompt(filePath: string): void {
