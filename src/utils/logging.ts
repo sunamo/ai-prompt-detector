@@ -44,3 +44,54 @@ export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'I
 		console.error('Failed to write to log file:', error);
 	}
 }
+
+export function verifyLogFile(): void {
+	try {
+		if (fs.existsSync(LOG_FILE_PATH)) {
+			const logContent = fs.readFileSync(LOG_FILE_PATH, 'utf8');
+			const logLines = logContent.split('\n').filter(line => line.trim());
+			
+			if (logLines.length > 0) {
+				const lastLine = logLines[logLines.length - 1];
+				const logTimestampMatch = lastLine.match(/\[([^\]]+)\]/);
+				
+				if (logTimestampMatch) {
+					const logTimeString = logTimestampMatch[1];
+					const logTime = new Date(logTimeString.replace(' ', 'T') + 'Z');
+					const now = new Date();
+					const ageMinutes = (now.getTime() - logTime.getTime()) / (1000 * 60);
+					
+					if (ageMinutes <= 5) {
+						console.log(`✅ Log verification passed - log is ${ageMinutes.toFixed(1)} minutes old`);
+						writeLog(`Log verification passed - log is ${ageMinutes.toFixed(1)} minutes old`, 'INFO');
+					} else {
+						const errorMsg = `LOG ERROR: Log is too old (${ageMinutes.toFixed(1)} minutes)! Logging may not be working properly.`;
+						console.error(`❌ ${errorMsg}`);
+						writeLog(errorMsg, 'ERROR');
+						vscode.window.showErrorMessage(`SpecStory Extension: ${errorMsg}`);
+					}
+				} else {
+					const errorMsg = 'LOG ERROR: Cannot parse log timestamp';
+					console.error(`❌ ${errorMsg}`);
+					writeLog(errorMsg, 'ERROR');
+					vscode.window.showErrorMessage(`SpecStory Extension: ${errorMsg}`);
+				}
+			} else {
+				const errorMsg = 'LOG ERROR: Log file is empty after writing';
+				console.error(`❌ ${errorMsg}`);
+				writeLog(errorMsg, 'ERROR');
+				vscode.window.showErrorMessage(`SpecStory Extension: ${errorMsg}`);
+			}
+		} else {
+			const errorMsg = 'LOG ERROR: Log file does not exist after writing';
+			console.error(`❌ ${errorMsg}`);
+			writeLog(errorMsg, 'ERROR');
+			vscode.window.showErrorMessage(`SpecStory Extension: ${errorMsg}`);
+		}
+	} catch (verifyError) {
+		const errorMsg = `LOG ERROR: Failed to verify log file: ${verifyError}`;
+		console.error(`❌ ${errorMsg}`);
+		writeLog(errorMsg, 'ERROR');
+		vscode.window.showErrorMessage(`SpecStory Extension: ${errorMsg}`);
+	}
+}

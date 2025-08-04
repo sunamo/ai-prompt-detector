@@ -1,5 +1,8 @@
 export function getHtmlForWebview(prompts: Array<{number: string; shortPrompt: string; fullContent: string}>): string {
+	console.log(`getHtmlForWebview called with ${prompts.length} prompts`);
+	
 	if (prompts.length === 0) {
+		console.log('Generating empty state HTML');
 		return `
 		<!DOCTYPE html>
 		<html lang="en">
@@ -42,6 +45,9 @@ export function getHtmlForWebview(prompts: Array<{number: string; shortPrompt: s
 			<div class="prompt-text" title="${prompt.fullContent.replace(/"/g, '&quot;')}">${prompt.shortPrompt}</div>
 		</div>
 	`).join('');
+
+	console.log(`Generated promptItems HTML for ${prompts.length} prompts, HTML length: ${promptItems.length}`);
+	console.log('First 3 prompts preview:', prompts.slice(0, 3).map(p => `${p.number}: ${p.shortPrompt.substring(0, 30)}...`).join(' | '));
 
 	return `
 	<!DOCTYPE html>

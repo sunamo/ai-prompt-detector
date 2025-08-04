@@ -7,8 +7,11 @@ import { addRecentPrompt } from '../utils/promptProcessing';
 import { extractTimestampFromFileName } from '../utils/timeUtils';
 import { getHtmlForWebview } from '../utils/htmlGenerator';
 import { updateStatusBar } from '../utils/statusBar';
+import { usePrompts } from './usePrompts';
 
 export const useWebview = () => {
+	const { loadExistingPrompts } = usePrompts();
+	
 	const createWebviewProvider = (): vscode.WebviewViewProvider => {
 		return {
 			resolveWebviewView: (
@@ -29,70 +32,23 @@ export const useWebview = () => {
 				};
 				writeLog('Webview options set', 'INFO');
 
-				// CRITICAL: Force immediate data loading and wait for completion
-				writeLog('Forcing immediate data loading for webview', 'INFO');
+				// Use existing prompts data instead of reloading
+				writeLog('Using existing prompts data for webview initialization', 'INFO');
+				writeLog(`Existing prompts count: ${state.recentPrompts.length}`, 'INFO');
 				
-				// Always force reload from files to ensure fresh data
-				vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-					writeLog(`Webview resolve: Found ${files.length} SpecStory files to process`, 'INFO');
-					
-					// Clear and reload
-					state.recentPrompts = [];
-					
-					// Sort files by timestamp (newest first)
-					const sortedFiles = files.sort((a, b) => {
-						const nameA = path.basename(a.fsPath);
-						const nameB = path.basename(b.fsPath);
-						const timestampA = extractTimestampFromFileName(nameA);
-						const timestampB = extractTimestampFromFileName(nameB);
-						return timestampB.getTime() - timestampA.getTime();
-					});
-					
-					// Process all files to extract prompts
-					sortedFiles.forEach(file => {
-						if (isValidSpecStoryFile(file.fsPath)) {
-							addRecentPrompt(file.fsPath);
-						}
-					});
-					
-					writeLog(`After loading: ${state.recentPrompts.length} total prompts`, 'INFO');
-					
-					// Now refresh the webview with loaded data
-					writeLog('Data loaded, refreshing webview display', 'INFO');
-					refreshWebview();
-				});
+				// Immediately refresh webview with existing data
+				refreshWebview();
 
 				webviewView.webview.onDidReceiveMessage(data => {
 					switch (data.type) {
 						case 'refresh':
 							writeLog('Manual refresh requested from activity bar', 'INFO');
 							
-							// Clear existing prompts and reload from all files
-							state.recentPrompts = [];
-							
-							vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-								writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'INFO');
-								
-								// Sort files by timestamp (newest first)
-								const sortedFiles = files.sort((a, b) => {
-									const nameA = path.basename(a.fsPath);
-									const nameB = path.basename(b.fsPath);
-									// Extract timestamp from filename for proper chronological sorting
-									const timestampA = extractTimestampFromFileName(nameA);
-									const timestampB = extractTimestampFromFileName(nameB);
-									return timestampB.getTime() - timestampA.getTime(); // Newest first
-								});
-								
-								// Process all files to extract prompts
-								sortedFiles.forEach(file => {
-									if (isValidSpecStoryFile(file.fsPath)) {
-										addRecentPrompt(file.fsPath);
-									}
-								});
-								
+							// Use centralized loading function
+							loadExistingPrompts().then(() => {
 								updateStatusBar();
 								refreshWebview();
-								writeLog(`Refresh complete: ${state.recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+								writeLog(`Manual refresh complete: ${state.recentPrompts.length} total prompts loaded`, 'INFO');
 							});
 							break;
 					}
