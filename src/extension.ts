@@ -335,6 +335,38 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
 	writeLog('Activity bar provider registered', 'INFO');
 
+	// Register refresh command
+	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', () => {
+		writeLog('Manual refresh command executed', 'INFO');
+		// Clear existing prompts and reload from all files
+		recentPrompts = [];
+		
+		vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+			writeLog(`Refresh: Found ${files.length} SpecStory files to process`, 'INFO');
+			
+			// Sort files by timestamp (newest first)
+			const sortedFiles = files.sort((a, b) => {
+				const nameA = path.basename(a.fsPath);
+				const nameB = path.basename(b.fsPath);
+				const timestampA = extractTimestampFromFileName(nameA);
+				const timestampB = extractTimestampFromFileName(nameB);
+				return timestampB.getTime() - timestampA.getTime();
+			});
+			
+			// Process all files to extract prompts
+			sortedFiles.forEach(file => {
+				writeLog(`Refresh: Processing file: ${file.fsPath}`, 'DEBUG');
+				if (isValidSpecStoryFile(file.fsPath)) {
+					addRecentPrompt(file.fsPath);
+				}
+			});
+			
+			updateStatusBar();
+			provider.refresh();
+			writeLog(`Refresh complete: ${recentPrompts.length} total prompts loaded`, 'INFO');
+		});
+	});
+
 	// Watch for new SpecStory files across entire workspace
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	writeLog('File watcher created for pattern: **/.specstory/history/*.md');
@@ -363,7 +395,7 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 		
 		updateStatusBar();
-		provider.refresh();
+		provider.refresh(); // This will load prompts into activity bar
 		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`);
 	});
 	
@@ -383,15 +415,14 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(statusBarItem, watcher, outputChannel);
+	context.subscriptions.push(statusBarItem, watcher, outputChannel, refreshCommand);
 	writeLog('Extension activation complete');
 }
 
 function updateStatusBar(): void {
-	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.27';
-	const totalPrompts = recentPrompts.length;
-	statusBarItem.text = `$(comment-discussion) ${totalPrompts} prompts | v${version}`;
-	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${totalPrompts} prompts total, ${sessionPromptCount} in session`;
+	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.28';
+	statusBarItem.text = `$(comment-discussion) ${sessionPromptCount} prompts | v${version}`;
+	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${sessionPromptCount} prompts in current session`;
 }
 
 function addRecentPrompt(filePath: string): void {
