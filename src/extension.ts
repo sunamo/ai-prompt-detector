@@ -21,10 +21,14 @@ function initializeLogging(): void {
 	
 	// Get current date in Czech timezone (UTC+1/UTC+2)
 	const now = new Date();
-	const czechTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // UTC+1 basic offset
+	// Czech time: UTC+1 winter, UTC+2 summer (automatically handled by toLocaleString)
+	const czechTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Prague"}));
 	const dateStr = czechTime.toISOString().split('T')[0];
 	logFile = path.join(logFolder, `extension-${dateStr}.log`);
 	
+	console.log(`Current UTC time: ${now.toISOString()}`);
+	console.log(`Czech time: ${czechTime.toISOString()}`);
+	console.log(`Date string: ${dateStr}`);
 	console.log(`Log file path: ${logFile}`);
 	
 	// CRITICAL: Clear log file at start of each session
@@ -41,7 +45,9 @@ function initializeLogging(): void {
 	
 	// Force first log entry to ensure logging works
 	const timestamp = new Date().toISOString();
-	const firstEntry = `[${timestamp}] INFO: === NEW SESSION STARTED ===\n`;
+	const logCzechTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Prague"}));
+	const czechTimestamp = logCzechTime.toISOString();
+	const firstEntry = `[${czechTimestamp}] INFO: === NEW SESSION STARTED ===\n`;
 	try {
 		fs.appendFileSync(logFile, firstEntry);
 		console.log('First log entry written successfully');
@@ -105,27 +111,32 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 	const timestamp = new Date().toISOString();
 	const logEntry = `[${timestamp}] ${level}: ${message}`;
 	
-	// Always write to console for debugging
-	console.log(`LOG: ${logEntry}`);
+	// Also create Czech time version for display
+	const logCzechTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Prague"}));
+	const czechTimestamp = logCzechTime.toISOString();
+	const czechLogEntry = `[${czechTimestamp}] ${level}: ${message}`;
 	
-	// Write to VS Code output channel
+	// Always write to console for debugging (with Czech time)
+	console.log(`LOG: ${czechLogEntry}`);
+	
+	// Write to VS Code output channel (with Czech time)
 	if (outputChannel) {
-		outputChannel.appendLine(logEntry);
+		outputChannel.appendLine(czechLogEntry);
 	} else {
 		console.log('Output channel not available');
 	}
 	
-	// Write to temp file
+	// Write to temp file (with Czech time)
 	try {
 		if (logFile) {
-			fs.appendFileSync(logFile, logEntry + '\n');
+			fs.appendFileSync(logFile, czechLogEntry + '\n');
 		} else {
 			console.error('Log file path not set!');
 		}
 	} catch (error) {
 		console.error('Failed to write log:', error);
 		console.error('Log file path:', logFile);
-		console.error('Log entry:', logEntry);
+		console.error('Log entry:', czechLogEntry);
 	}
 }
 
