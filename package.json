@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.40",
+  "version": "1.1.41",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -44,6 +44,13 @@
 		  "type": "string",
 		  "default": "",
 		  "description": "Custom message to display when AI prompt is detected (leave empty for smart detection)"
+		},
+		"specstory-autosave.maxPrompts": {
+		  "type": "number",
+		  "default": 10,
+		  "minimum": 1,
+		  "maximum": 50,
+		  "description": "Maximum number of recent prompts to display in activity bar"
 		}
 	  }
     }

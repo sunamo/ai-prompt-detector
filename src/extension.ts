@@ -21,7 +21,9 @@ class RecentPromptsProvider implements vscode.TreeDataProvider<string> {
 	}
 
 	getChildren(): string[] {
-		return recentPrompts.slice(0, 10); // Show max 10 recent prompts
+		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const maxPrompts = config.get<number>('maxPrompts', 10);
+		return recentPrompts.slice(0, maxPrompts);
 	}
 }
 
@@ -59,12 +61,17 @@ function updateStatusBar(): void {
 
 function addRecentPrompt(filePath: string): void {
 	const fileName = path.basename(filePath, '.md');
-	const displayText = `#${promptCount}`;
 	const timeText = fileName.substring(0, 16).replace('_', ' '); // Extract date/time
-	recentPrompts.unshift(`${displayText}\n${timeText}`);
-	if (recentPrompts.length > 10) {
-		recentPrompts = recentPrompts.slice(0, 10);
-	}
+	recentPrompts.unshift(`#1\n${timeText}`);
+	
+	// Re-number all prompts so newest is always #1
+	const config = vscode.workspace.getConfiguration('specstory-autosave');
+	const maxPrompts = config.get<number>('maxPrompts', 10);
+	
+	recentPrompts = recentPrompts.slice(0, maxPrompts).map((prompt, index) => {
+		const parts = prompt.split('\n');
+		return `#${index + 1}\n${parts[1]}`;
+	});
 }
 
 function showNotification(): void {
