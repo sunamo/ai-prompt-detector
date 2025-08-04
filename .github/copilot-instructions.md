@@ -21,7 +21,7 @@
 ### 📁 FILE NAMES - CRITICAL RULE!
 - **ALL instruction files must have format: `*.instructions.md`**
 - **NEVER use names like `ai-instructions.md`**
-- **CORRECT**: `ai.instructions.md`, `development.instructions.md`, `deployment.instructions.md`
+- **CORRECT**: `copilot-instructions.md`, `development.instructions.md`, `deployment.instructions.md`
 - **WRONG**: `ai-instructions.md`, `dev-instructions.md`, `instructions.md`
 - Always check that you have correct ending `.instructions.md`
 
@@ -229,7 +229,7 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 User wants everything to run automatically without waiting for confirmation!
 follow the sources for a better solution to my requirements. I have attached the folders C:\_\vscode-copilot-chat\ and C:\_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
 
-Use only the ai.instructions.md file to write instructions. Not ai-instructions.md as you keep trying to create. Write all instructions in English.
+Use only the copilot-instructions.md file to write instructions. Not ai-instructions.md as you keep trying to create. Write all instructions in English.
 
 Never do anything you're not asked to do. Don't ruin my project by doing something you're not even asked to do.
 
@@ -239,7 +239,7 @@ never run commands like code --extensionDevelopmentPath=. . First of all, I told
 
 Never add or change the watch command to package.json. I basically only use install.ps1 for building.
 
-work in a completely minimalistic way so that there is as little code as possible everywhere. do not create changelog.md or any other documentation files except ai.instructions.md and README.md
+work in a completely minimalistic way so that there is as little code as possible everywhere. do not create changelog.md or any other documentation files except copilot-instructions.md and README.md
 
 Install only the most essential packages. All files will be in typescript.
 
