@@ -110,11 +110,18 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			switch (data.type) {
 				case 'refresh':
 					writeLog('Manual refresh requested from activity bar', 'DEBUG');
+					writeLog(`Activity bar refresh - searching in workspace folders:`, 'DEBUG');
+					if (vscode.workspace.workspaceFolders) {
+						vscode.workspace.workspaceFolders.forEach((folder, index) => {
+							writeLog(`  Workspace ${index + 1}: ${folder.uri.fsPath}`, 'DEBUG');
+						});
+					}
+					
 					// Clear existing prompts and reload from all files
 					recentPrompts = [];
 					
 					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-						writeLog(`Found ${files.length} SpecStory files to process`, 'DEBUG');
+						writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'DEBUG');
 						
 		// Sort files by timestamp (newest first)
 		const sortedFiles = files.sort((a, b) => {
@@ -343,6 +350,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Register refresh command
 	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', async () => {
 		writeLog('Manual refresh command executed', 'INFO');
+		writeLog(`Searching in workspace folders:`, 'INFO');
+		if (vscode.workspace.workspaceFolders) {
+			vscode.workspace.workspaceFolders.forEach((folder, index) => {
+				writeLog(`  Workspace ${index + 1}: ${folder.uri.fsPath}`, 'INFO');
+			});
+		}
+		
 		// Clear existing prompts and reload from all files
 		recentPrompts = [];
 		
@@ -382,15 +396,43 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	// Check for existing SpecStory files at startup
 	writeLog('Starting search for SpecStory files...', 'INFO');
+	writeLog(`Current workspace folders:`, 'INFO');
+	if (vscode.workspace.workspaceFolders) {
+		vscode.workspace.workspaceFolders.forEach((folder, index) => {
+			writeLog(`  Workspace ${index + 1}: ${folder.uri.fsPath}`, 'INFO');
+		});
+	} else {
+		writeLog('  No workspace folders found!', 'INFO');
+	}
+	
 	try {
 		const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
 		writeLog(`Found ${files.length} existing SpecStory files at startup`, 'INFO');
-		writeLog(`Files found: ${files.map(f => f.fsPath).join(', ')}`, 'INFO');
 		
-		if (files.length === 0) {
-			// Try alternative patterns
+		if (files.length > 0) {
+			writeLog(`Files found:`, 'INFO');
+			files.forEach((file, index) => {
+				writeLog(`  ${index + 1}. ${file.fsPath}`, 'INFO');
+			});
+		} else {
+			writeLog('No SpecStory files found in current workspace', 'INFO');
+			// Try alternative patterns to debug
 			const altFiles = await vscode.workspace.findFiles('**/*specstory*/**/*.md');
-			writeLog(`Alternative search found ${altFiles.length} files: ${altFiles.map(f => f.fsPath).join(', ')}`, 'INFO');
+			writeLog(`Alternative search (*specstory*) found ${altFiles.length} files`, 'INFO');
+			if (altFiles.length > 0) {
+				altFiles.forEach((file, index) => {
+					writeLog(`  Alt ${index + 1}. ${file.fsPath}`, 'INFO');
+				});
+			}
+			
+			// Try searching for any .md files in .specstory folders
+			const anyMdFiles = await vscode.workspace.findFiles('**/.specstory/**/*.md');
+			writeLog(`Any .md files in .specstory folders: ${anyMdFiles.length}`, 'INFO');
+			if (anyMdFiles.length > 0) {
+				anyMdFiles.forEach((file, index) => {
+					writeLog(`  MD ${index + 1}. ${file.fsPath}`, 'INFO');
+				});
+			}
 		}
 		
 		// Sort files by timestamp (newest first)
