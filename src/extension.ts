@@ -91,7 +91,8 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
 
 	constructor(private readonly _extensionUri: vscode.Uri) {
-		writeLog('RecentPromptsProvider constructor called', 'DEBUG');
+		writeLog('RecentPromptsProvider constructor called', 'INFO');
+		writeLog(`Extension URI: ${_extensionUri.toString()}`, 'INFO');
 	}
 
 	public resolveWebviewView(
@@ -371,7 +372,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	// Force immediate log write to test
 	const timestamp = new Date().toISOString();
-	const testLogEntry = `[${timestamp}] INFO: EXTENSION ACTIVATION STARTED - v1.1.26`;
+	const testLogEntry = `[${timestamp}] INFO: EXTENSION ACTIVATION STARTED - CRITICAL DEBUG MODE`;
 	try {
 		const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
 		if (!fs.existsSync(logFolder)) {
@@ -396,9 +397,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register activity bar provider
 	const provider = new RecentPromptsProvider(context.extensionUri);
-	vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
-	writeLog('Activity bar provider registered', 'INFO');
-	writeLog(`Provider viewType: ${RecentPromptsProvider.viewType}`, 'DEBUG');
+	writeLog(`About to register webview provider with viewType: ${RecentPromptsProvider.viewType}`, 'INFO');
+	const registration = vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
+	writeLog('Activity bar provider registered successfully', 'INFO');
+	writeLog(`Provider viewType: ${RecentPromptsProvider.viewType}`, 'INFO');
+	writeLog(`Registration object exists: ${!!registration}`, 'INFO');
 
 	// Register refresh command
 	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', async () => {
@@ -531,8 +534,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(statusBarItem, watcher, outputChannel, refreshCommand);
-	writeLog('Extension activation complete');
+	context.subscriptions.push(statusBarItem, watcher, outputChannel, refreshCommand, registration);
+	writeLog('Extension activation complete - all components registered');
 }
 
 function updateStatusBar(): void {
