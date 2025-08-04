@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const HISTORY_DIR = 'C:/Proj_Net/portal-ui/.specstory/history/';
-
 export class SpecStoryPromptProvider implements vscode.TreeDataProvider<PromptItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<PromptItem | undefined | void> = new vscode.EventEmitter<PromptItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<PromptItem | undefined | void> = this._onDidChangeTreeData.event;
@@ -19,31 +17,40 @@ export class SpecStoryPromptProvider implements vscode.TreeDataProvider<PromptIt
 	}
 
 	getChildren(): Thenable<PromptItem[]> {
-		return Promise.resolve(getLatestPrompts());
+		return Promise.resolve(this.getLatestPrompts());
 	}
-}
 
-function getLatestPrompts(): PromptItem[] {
-	if (!fs.existsSync(HISTORY_DIR)) return [];
-	const files = fs.readdirSync(HISTORY_DIR)
-		.filter(f => f.endsWith('.md'))
-		.sort()
-		.reverse(); // newest first by filename
+	private getLatestPrompts(): PromptItem[] {
+		const prompts: PromptItem[] = [];
+		
+		// Check all workspace folders for .specstory/history
+		if (vscode.workspace.workspaceFolders) {
+			for (const folder of vscode.workspace.workspaceFolders) {
+				const historyDir = path.join(folder.uri.fsPath, '.specstory', 'history');
+				if (fs.existsSync(historyDir)) {
+					const files = fs.readdirSync(historyDir)
+						.filter(f => f.endsWith('.md'))
+						.sort()
+						.reverse(); // newest first
 
-	const prompts: PromptItem[] = [];
-	for (const file of files) {
-		const filePath = path.join(HISTORY_DIR, file);
-		const content = fs.readFileSync(filePath, 'utf8');
-		const matches = Array.from(content.matchAll(/^_\*\*User\*\*_[\r\n]+([\s\S]*?)(?:---|$)/gm));
-		for (const match of matches) {
-			const prompt = match[1].trim();
-			if (prompt) {
-				prompts.push(new PromptItem(prompt, filePath));
+					for (const file of files) {
+						const filePath = path.join(historyDir, file);
+						const content = fs.readFileSync(filePath, 'utf8');
+						const matches = Array.from(content.matchAll(/^_\*\*User\*\*_[\r\n]+([\s\S]*?)(?:---|$)/gm));
+						
+						for (const match of matches) {
+							const prompt = match[1].trim();
+							if (prompt && prompt.length > 10) { // Only meaningful prompts
+								prompts.push(new PromptItem(prompt.slice(0, 80) + '...', filePath));
+							}
+						}
+					}
+				}
 			}
 		}
+		
+		return prompts.slice(0, 20); // Show max 20 recent prompts
 	}
-	// newest prompts at the top
-	return prompts.reverse();
 }
 
 class PromptItem extends vscode.TreeItem {

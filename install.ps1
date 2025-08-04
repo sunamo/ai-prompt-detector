@@ -71,7 +71,7 @@ Write-Host "   ✅ Git commit and push completed" -ForegroundColor Green
 # Create VSIX package with current version name
 Write-Host "4. Creating VSIX package..." -ForegroundColor Yellow
 $vsixName = "specstory-autosave-$newVersion.vsix"
-vsce package --allow-star-activation --out $vsixName 2>$null
+vsce package --allow-star-activation --out $vsixName --no-git-tag-version 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ VSIX creation failed!" -ForegroundColor Red
     exit 1

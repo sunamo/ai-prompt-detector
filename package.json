@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.27",
+  "version": "1.1.28",
   "publisher": "sunamocz",
   "icon": "icon.png",
 	"engines": {
@@ -72,7 +72,7 @@
 		}
 	},
 	"scripts": {
-	   "vscode:prepublish": "pwsh ./install.ps1",
+	   "vscode:prepublish": "npx tsc -p ./",
 	   "compile": "pwsh ./install.ps1",
 	   "build": "pwsh ./install.ps1",
 	   "watch": "pwsh ./install.ps1"
