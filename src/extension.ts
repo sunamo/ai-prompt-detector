@@ -37,17 +37,23 @@ export function activate(context: vscode.ExtensionContext) {
 	const provider = new SpecStoryProvider();
 	vscode.window.registerTreeDataProvider('specstory-autosave-view', provider);
 
-	// Watch for new SpecStory files across entire workspace
-	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	
-	watcher.onDidCreate(uri => {
-		promptCount++;
-		updateStatusBar();
-		provider.refresh();
-		analyzeAndNotify(uri.fsPath);
-	});
+	// Watch for new SpecStory files in first workspace folder only
+	if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+		const firstWorkspaceFolder = vscode.workspace.workspaceFolders[0];
+		const pattern = new vscode.RelativePattern(firstWorkspaceFolder, '.specstory/history/*.md');
+		const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+		
+		watcher.onDidCreate(uri => {
+			promptCount++;
+			updateStatusBar();
+			provider.refresh();
+			analyzeAndNotify(uri.fsPath);
+		});
 
-	context.subscriptions.push(statusBarItem, watcher);
+		context.subscriptions.push(watcher);
+	}
+
+	context.subscriptions.push(statusBarItem);
 }
 
 function updateStatusBar(): void {
