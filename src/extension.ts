@@ -80,29 +80,203 @@ function isValidSpecStoryFile(filePath: string): boolean {
 	}
 }
 
-class RecentPromptsProvider implements vscode.TreeDataProvider<string> {
-	private _onDidChangeTreeData: vscode.EventEmitter<string | undefined | null | void> = new vscode.EventEmitter<string | undefined | null | void>();
-	readonly onDidChangeTreeData: vscode.Event<string | undefined | null | void> = this._onDidChangeTreeData.event;
+class RecentPromptsProvider implements vscode.WebviewViewProvider {
+	public static readonly viewType = 'specstory-autosave-view';
 
-	refresh(): void {
-		this._onDidChangeTreeData.fire();
+	private _view?: vscode.WebviewView;
+	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
+
+	constructor(private readonly _extensionUri: vscode.Uri) {}
+
+	public resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken,
+	) {
+		this._view = webviewView;
+
+		webviewView.webview.options = {
+			enableScripts: true,
+			localResourceRoots: [this._extensionUri]
+		};
+
+		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+		webviewView.webview.onDidReceiveMessage(data => {
+			switch (data.type) {
+				case 'refresh':
+					writeLog('Manual refresh requested from activity bar', 'DEBUG');
+					// Refresh file detection
+					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+						recentPrompts = [];
+						promptCount = 0;
+						files.forEach(file => {
+							writeLog(`Processing file: ${file.fsPath}`, 'DEBUG');
+							if (isValidSpecStoryFile(file.fsPath)) {
+								promptCount++;
+								addRecentPrompt(file.fsPath);
+							}
+						});
+						updateStatusBar();
+						this.refreshFromPrompts();
+						writeLog(`Refreshed with ${promptCount} prompts`);
+					});
+					break;
+			}
+		});
 	}
 
-	getTreeItem(element: string): vscode.TreeItem {
-		const item = new vscode.TreeItem(element, vscode.TreeItemCollapsibleState.None);
-		item.contextValue = 'promptItem';
-		return item;
+	public refresh(): void {
+		this.refreshFromPrompts();
 	}
 
-	getChildren(): string[] {
+	private refreshFromPrompts(): void {
+		// Convert recentPrompts array to our format
+		this.prompts = recentPrompts.map((prompt, index) => {
+			const shortPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
+			return {
+				number: `#${index + 1}`,
+				shortPrompt: shortPrompt,
+				fullContent: prompt
+			};
+		});
+		
+		writeLog(`Updating activity bar with ${this.prompts.length} prompts`, 'DEBUG');
+		this._updateView();
+	}
+
+	private _updateView(): void {
+		if (this._view) {
+			this._view.webview.html = this._getHtmlForWebview(this._view.webview);
+			writeLog('Activity Bar view updated', 'DEBUG');
+		}
+	}
+
+	private _getHtmlForWebview(webview: vscode.Webview): string {
+		const notificationsList = this.prompts.length > 0 
+			? this.prompts.map((prompt, index) => {
+				return `<div class="notification">
+					<div class="notification-header">
+						<span class="notification-time">${prompt.number}</span>
+					</div>
+					<div class="notification-content">
+						<div class="notification-title">${prompt.shortPrompt}</div>
+					</div>
+				</div>`;
+			}).join('')
+			: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
+
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 10);
-		const result = recentPrompts.slice(0, maxPrompts);
-		writeLog(`TreeDataProvider getChildren called, returning ${result.length} items:`, 'DEBUG');
-		result.forEach((item, i) => {
-			writeLog(`  TreeItem[${i}]: "${item}"`, 'DEBUG');
-		});
-		return result;
+
+		return `<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>AI Activity</title>
+			<style>
+				body {
+					font-family: var(--vscode-font-family);
+					font-size: var(--vscode-font-size);
+					line-height: 1.4;
+					color: var(--vscode-foreground);
+					background-color: var(--vscode-editor-background);
+					margin: 0;
+					padding: 8px;
+				}
+				.header {
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
+					margin-bottom: 8px;
+					padding-bottom: 8px;
+					border-bottom: 1px solid var(--vscode-widget-border);
+				}
+				.header-title {
+					font-size: 12px;
+					font-weight: bold;
+					color: var(--vscode-foreground);
+				}
+				.header-count {
+					font-size: 10px;
+					color: var(--vscode-descriptionForeground);
+				}
+				.notification {
+					background-color: var(--vscode-list-hoverBackground);
+					border: 1px solid var(--vscode-widget-border);
+					border-left: 3px solid var(--vscode-charts-blue);
+					margin: 4px 0;
+					border-radius: 4px;
+					overflow: hidden;
+					transition: background-color 0.2s ease;
+				}
+				.notification:hover {
+					background-color: var(--vscode-list-activeSelectionBackground);
+				}
+				.notification-header {
+					padding: 4px 8px;
+					background-color: var(--vscode-editor-selectionBackground);
+					border-bottom: 1px solid var(--vscode-widget-border);
+					text-align: center;
+				}
+				.notification-time {
+					font-size: 10px;
+					font-weight: bold;
+					color: var(--vscode-charts-blue);
+				}
+				.notification-content {
+					padding: 6px 8px;
+				}
+				.notification-title {
+					font-size: 11px;
+					font-weight: 500;
+					color: var(--vscode-foreground);
+					margin-bottom: 2px;
+				}
+				.no-notifications {
+					color: var(--vscode-descriptionForeground);
+					font-style: italic;
+					text-align: center;
+					padding: 20px;
+					font-size: 11px;
+				}
+				.no-notifications button {
+					margin-top: 8px;
+					padding: 4px 8px;
+					background: var(--vscode-button-background);
+					color: var(--vscode-button-foreground);
+					border: none;
+					border-radius: 2px;
+					cursor: pointer;
+				}
+				.settings-note {
+					font-size: 9px;
+					color: var(--vscode-descriptionForeground);
+					text-align: center;
+					margin-top: 8px;
+					padding-top: 8px;
+					border-top: 1px solid var(--vscode-widget-border);
+				}
+			</style>
+			<script>
+				const vscode = acquireVsCodeApi();
+				function refresh() {
+					vscode.postMessage({type: 'refresh'});
+				}
+			</script>
+		</head>
+		<body>
+			<div class="header">
+				<span class="header-title">Recent AI Prompts</span>
+				<span class="header-count">Max: ${maxPrompts}</span>
+			</div>
+			${notificationsList}
+			<div class="settings-note">
+				Showing latest ${Math.min(this.prompts.length, maxPrompts)} prompts
+			</div>
+		</body>
+		</html>`;
 	}
 }
 
@@ -120,8 +294,8 @@ export function activate(context: vscode.ExtensionContext) {
 	writeLog('Status bar created');
 
 	// Register activity bar provider
-	const provider = new RecentPromptsProvider();
-	vscode.window.registerTreeDataProvider('specstory-autosave-view', provider);
+	const provider = new RecentPromptsProvider(context.extensionUri);
+	vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
 	writeLog('Activity bar provider registered');
 
 	// Watch for new SpecStory files across entire workspace
