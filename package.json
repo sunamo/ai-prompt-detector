@@ -1,13 +1,9 @@
 {
-  "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.49",
+  "version": "1.1.15",
   "publisher": "sunamocz",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/sunamo/specstory-autosave2.git"
-  },
+  "icon": "icon.png",
 	"engines": {
 		"vscode": "^1.74.0"
 	},
@@ -18,60 +14,55 @@
 		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "specstory-autosave-activitybar",
-          "title": "SpecStory AutoSave + AI Copilot Prompt Detection",
-          "icon": "$(comment-discussion)"
-        }
-      ]
-    },
-    "views": {
-      "specstory-autosave-activitybar": [
-        {
-          "id": "specstory-autosave-view",
-          "name": "Recent AI Prompts",
-          "type": "webview",
-          "when": "true"
-        }
-      ]
-    },
-    "configuration": {
-	  "title": "SpecStory AutoSave + AI Copilot Prompt Detection",
-	  "properties": {
-		"specstory-autosave.customMessage": {
-		  "type": "string",
-		  "default": "",
-		  "description": "Custom message to display when AI prompt is detected (leave empty for smart detection)"
-		},
-		"specstory-autosave.maxPrompts": {
-		  "type": "number",
-		  "default": 50,
-		  "minimum": 1,
-		  "maximum": 200,
-		  "description": "Maximum number of recent prompts to display in activity bar"
-		},
-		"specstory-autosave.enableDebugLogs": {
-		  "type": "boolean",
-		  "default": false,
-		  "description": "Enable debug logging (shows detailed information in logs)"
+	"contributes": {
+		"commands": [
+			{
+				"command": "specstory-autosave.enable",
+				"title": "Enable AutoSave",
+				"category": "SpecStory"
+			},
+			{
+				"command": "specstory-autosave.disable",
+				"title": "Disable AutoSave",
+				"category": "SpecStory"
+			},
+			{
+				"command": "specstory-autosave.configure",
+				"title": "Configure AutoSave",
+				"category": "SpecStory"
+			}
+		],
+		"configuration": {
+			"title": "SpecStory AutoSave",
+			"properties": {
+				"specstory-autosave.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable automatic saving"
+				},
+				"specstory-autosave.interval": {
+					"type": "number",
+					"default": 5000,
+					"description": "Auto-save interval in milliseconds"
+				},
+				"specstory-autosave.filePatterns": {
+					"type": "array",
+					"default": ["**/*.md", "**/*.txt", "**/*.json"],
+					"description": "File patterns to auto-save"
+				}
+			}
 		}
-	  }
-    }
-  },
+	},
 	"scripts": {
-	   "vscode:prepublish": "node_modules\\.bin\\tsc.cmd -p ./",
-	   "compile": "pwsh ./install.ps1",
-	   "build": "pwsh ./install.ps1",
-	   "watch": "pwsh ./install.ps1"
+		"vscode:prepublish": ".\\install.bat",
+		"compile": ".\\install.bat",
+		"build": ".\\install.bat",
+		"watch": ".\\install.bat"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.74.0",
 		"@types/node": "20.x",
-		"typescript": "^5.4.5",
-		"@vscode/vsce": "^2.22.0"
+		"typescript": "^5.4.5"
 	},
 	"packageManager": "pnpm@9.0.0"
 }

@@ -252,3 +252,5 @@ Create files as small as possible, no more than 200 lines each.
 distinguish between those that are always displayed and debug logs. Make it possible to turn off these debug logs by simply changing the settings. Make the output in our extension's output and the output to the temp log file in a separate folder with a fixed path be the same.
 
 I added the folder C:\temp\specstory-autosave-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
+
+enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.
