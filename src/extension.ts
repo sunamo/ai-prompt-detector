@@ -97,14 +97,19 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 		context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	) {
+		writeLog('resolveWebviewView called - Activity bar is being initialized', 'INFO');
 		this._view = webviewView;
+		writeLog(`_view assigned, exists: ${!!this._view}`, 'DEBUG');
 
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: [this._extensionUri]
 		};
+		writeLog('Webview options set', 'DEBUG');
 
+		writeLog('Setting initial HTML for webview', 'DEBUG');
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+		writeLog('Initial HTML set for activity bar', 'INFO');
 
 		webviewView.webview.onDidReceiveMessage(data => {
 			switch (data.type) {
@@ -149,7 +154,10 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	}
 
 	public refresh(): void {
+		writeLog('PUBLIC refresh() method called', 'DEBUG');
+		writeLog(`Current recentPrompts length: ${recentPrompts.length}`, 'DEBUG');
 		this.refreshFromPrompts();
+		writeLog('PUBLIC refresh() method completed', 'DEBUG');
 	}
 
 	private refreshFromPrompts(): void {
@@ -176,19 +184,27 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 		});
 		
 		writeLog(`Activity bar will show ${this.prompts.length} prompts`, 'DEBUG');
+		writeLog(`Prompts array contents: ${this.prompts.map(p => p.number + ': ' + p.shortPrompt.substring(0, 30)).join(', ')}`, 'DEBUG');
 		this._updateView();
 	}
 
 	private _updateView(): void {
+		writeLog(`_updateView called, _view exists: ${!!this._view}`, 'DEBUG');
 		if (this._view) {
+			writeLog(`Updating webview HTML with ${this.prompts.length} prompts`, 'DEBUG');
 			this._view.webview.html = this._getHtmlForWebview(this._view.webview);
-			writeLog('Activity Bar view updated', 'DEBUG');
+			writeLog('Activity Bar view HTML updated', 'DEBUG');
+		} else {
+			writeLog('Cannot update view - _view is null!', 'ERROR');
 		}
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview): string {
+		writeLog(`_getHtmlForWebview called with ${this.prompts.length} prompts`, 'DEBUG');
+		
 		const notificationsList = this.prompts.length > 0 
 			? this.prompts.map((prompt, index) => {
+				writeLog(`Generating HTML for prompt ${index + 1}: ${prompt.number} - ${prompt.shortPrompt.substring(0, 30)}...`, 'DEBUG');
 				return `<div class="notification">
 					<div class="notification-header">
 						<span class="notification-time">${prompt.number}</span>
@@ -199,6 +215,9 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 				</div>`;
 			}).join('')
 			: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
+
+		writeLog(`Generated notifications HTML length: ${notificationsList.length} chars`, 'DEBUG');
+		writeLog(`Will show "${this.prompts.length > 0 ? 'prompts list' : 'no notifications message'}"`, 'DEBUG');
 
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
@@ -346,6 +365,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const provider = new RecentPromptsProvider(context.extensionUri);
 	vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
 	writeLog('Activity bar provider registered', 'INFO');
+	writeLog(`Provider viewType: ${RecentPromptsProvider.viewType}`, 'DEBUG');
 
 	// Register refresh command
 	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', async () => {
@@ -455,7 +475,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 		
 		updateStatusBar();
+		writeLog('About to call provider.refresh() to load prompts into activity bar', 'INFO');
 		provider.refresh(); // This will load prompts into activity bar
+		writeLog('provider.refresh() called - activity bar should now show prompts', 'INFO');
 		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
 		writeLog(`Session prompts: ${sessionPromptCount}, Total prompts: ${recentPrompts.length}`, 'INFO');
 	} catch (error) {
