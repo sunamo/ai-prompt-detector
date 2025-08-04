@@ -90,13 +90,13 @@ Write-Host "6. Installing new extension..." -ForegroundColor Yellow
 $result = Start-Process -FilePath "code-insiders" -ArgumentList "--install-extension", $vsixName, "--force" -WindowStyle Hidden -Wait -PassThru
 
 if ($result.ExitCode -eq 0) {
-    Write-Host "✅ Extension installed successfully!" -ForegroundColor Green
-    Write-Host "📝 Please restart VS Code Insiders to see the new version" -ForegroundColor Cyan
-    Write-Host "🤖 Status bar will show: AI: [count] (no version number)" -ForegroundColor Cyan
-    Write-Host "📋 Test with Ctrl+Shift+A or Enter in Copilot Chat" -ForegroundColor Cyan
-    Write-Host "🔖 Version: $newVersion" -ForegroundColor Cyan
+    Write-Host "Extension installed successfully!" -ForegroundColor Green
+    Write-Host "Please restart VS Code Insiders to see the new version" -ForegroundColor Cyan
+    Write-Host "Status bar will show extension info" -ForegroundColor Cyan
+    Write-Host "Test with Ctrl+Shift+A or Enter in Copilot Chat" -ForegroundColor Cyan
+    Write-Host "Version: $newVersion" -ForegroundColor Cyan
 } else {
-    Write-Host "❌ Installation failed!" -ForegroundColor Red
+    Write-Host "Installation failed!" -ForegroundColor Red
 }
 
 Write-Host "===================================================" -ForegroundColor Green

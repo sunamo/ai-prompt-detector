@@ -243,3 +243,5 @@ work in a completely minimalistic way so that there is as little code as possibl
 
 Install only the most essential packages. All files will be in typescript.
 
+Never create tests. We will not use unit tests or any other tests in the application.
+
