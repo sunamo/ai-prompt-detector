@@ -155,14 +155,12 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 					}
 				});
 				
-				// ADD DUMMY PROMPTS FOR TESTING if no real prompts found
-				if (recentPrompts.length === 0) {
-					writeLog('Webview: No real prompts found - adding dummy prompts for testing', 'INFO');
-					recentPrompts.push('dobrý den a nic nedělje');
-					recentPrompts.push('naschledanou a nic nedělej');
-					recentPrompts.push('ahoj a nic nedělej');
-					writeLog(`Webview: Added ${recentPrompts.length} dummy prompts for testing`, 'INFO');
-				}
+				// FORCE DUMMY PROMPTS FOR TESTING - ALWAYS ADD THEM
+				writeLog('Webview: FORCE adding dummy prompts for testing display', 'INFO');
+				recentPrompts.push('WEBVIEW DUMMY 1: dobrý den a nic nedělje');
+				recentPrompts.push('WEBVIEW DUMMY 2: naschledanou a nic nedělej');
+				recentPrompts.push('WEBVIEW DUMMY 3: ahoj a nic nedělej');
+				writeLog(`Webview: FORCE Total prompts after adding dummies: ${recentPrompts.length}`, 'INFO');
 				
 				writeLog(`After loading: ${recentPrompts.length} total prompts`, 'INFO');
 				this.refreshFromPrompts();
@@ -543,14 +541,12 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		});
 		
-		// ADD DUMMY PROMPTS FOR TESTING if no real prompts found
-		if (recentPrompts.length === 0) {
-			writeLog('No real prompts found - adding dummy prompts for testing', 'INFO');
-			recentPrompts.push('dobrý den a nic nedělje');
-			recentPrompts.push('naschledanou a nic nedělej');
-			recentPrompts.push('ahoj a nic nedělej');
-			writeLog(`Added ${recentPrompts.length} dummy prompts for testing`, 'INFO');
-		}
+		// FORCE DUMMY PROMPTS FOR TESTING - ALWAYS ADD THEM
+		writeLog('FORCE: Adding dummy prompts for testing display', 'INFO');
+		recentPrompts.push('DUMMY 1: dobrý den a nic nedělje');
+		recentPrompts.push('DUMMY 2: naschledanou a nic nedělej');
+		recentPrompts.push('DUMMY 3: ahoj a nic nedělej');
+		writeLog(`FORCE: Total prompts after adding dummies: ${recentPrompts.length}`, 'INFO');
 
 		updateStatusBar();
 		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
