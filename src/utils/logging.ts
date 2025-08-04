@@ -19,7 +19,7 @@ function ensureLogDirectory(): void {
 
 export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'INFO'): void {
 	const config = vscode.workspace.getConfiguration('specstory-autosave');
-	const debugEnabled = config.get<boolean>('debugLogging', false);
+	const debugEnabled = config.get<boolean>('enableDebugLogs', true);
 
 	// Skip debug messages if debugging is disabled
 	if (level === 'DEBUG' && !debugEnabled) {

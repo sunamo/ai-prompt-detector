@@ -58,7 +58,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', async () => {
 		writeLog('Manual refresh command executed', 'INFO');
 		await loadExistingPrompts();
-		refreshWebview();
+		// Only refresh webview if it exists
+		if (state.webviewView) {
+			refreshWebview();
+		} else {
+			writeLog('Webview not ready for manual refresh', 'DEBUG');
+		}
 		writeLog(`Refresh complete: ${state.recentPrompts.length} total prompts loaded`, 'INFO');
 	});
 
@@ -75,7 +80,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Trigger reload of all prompts when new file is created
 		loadExistingPrompts().then(() => {
 			updateStatusBar();
-			refreshWebview();
+			// Only refresh webview if it exists
+			if (state.webviewView) {
+				refreshWebview();
+			} else {
+				writeLog('Webview not ready for refresh after file creation', 'DEBUG');
+			}
 			showNotification();
 			writeLog(`Updated: ${state.recentPrompts.length} total prompts`);
 		});

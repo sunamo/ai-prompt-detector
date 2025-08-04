@@ -4,16 +4,23 @@ import { writeLog } from './logging';
 
 export function addRecentPrompt(filePath: string): void {
 	try {
+		writeLog(`Processing SpecStory file: ${filePath}`, 'DEBUG');
 		const content = fs.readFileSync(filePath, 'utf8');
 		const userMessages = extractUserMessages(content);
+		
+		writeLog(`Extracted ${userMessages.length} user messages from ${filePath}`, 'DEBUG');
 		
 		userMessages.forEach(message => {
 			const cleanMessage = message.trim();
 			if (cleanMessage.length > 0 && !state.recentPrompts.includes(cleanMessage)) {
 				state.recentPrompts.push(cleanMessage);
 				writeLog(`Added prompt from ${filePath}: "${cleanMessage.substring(0, 50)}..."`, 'DEBUG');
+			} else if (cleanMessage.length > 0) {
+				writeLog(`Skipped duplicate prompt: "${cleanMessage.substring(0, 50)}..."`, 'DEBUG');
 			}
 		});
+		
+		writeLog(`Total prompts after processing ${filePath}: ${state.recentPrompts.length}`, 'DEBUG');
 	} catch (error) {
 		writeLog(`Error reading file ${filePath}: ${error}`, 'ERROR');
 	}

@@ -64,6 +64,14 @@ export const useWebview = () => {
 		writeLog('PUBLIC refresh() method called', 'INFO');
 		writeLog(`Current state.recentPrompts length: ${state.recentPrompts.length}`, 'INFO');
 		writeLog(`webviewView exists: ${!!state.webviewView}`, 'INFO');
+		
+		// Only refresh if webview is ready
+		if (!state.webviewView) {
+			writeLog('Webview not ready yet, skipping refresh', 'INFO');
+			writeLog('=== PUBLIC REFRESH END (SKIPPED) ===', 'INFO');
+			return;
+		}
+		
 		refreshFromPrompts();
 		writeLog('PUBLIC refresh() method completed', 'INFO');
 		writeLog('=== PUBLIC REFRESH END ===', 'INFO');
