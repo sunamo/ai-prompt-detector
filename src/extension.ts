@@ -3,100 +3,167 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-let statusBarItem: vscode.StatusBarItem;
-let sessionPromptCount = 0;  // Count prompts in current VS Code session
-let recentPrompts: string[] = [];
-let logFile: string;
-let outputChannel: vscode.OutputChannel;
+// State management hooks
+interface ExtensionState {
+	statusBarItem: vscode.StatusBarItem | null;
+	sessionPromptCount: number;
+	recentPrompts: string[];
+	logFile: string;
+	outputChannel: vscode.OutputChannel | null;
+	webviewView: vscode.WebviewView | null;
+	extensionUri: vscode.Uri | null;
+}
 
-function initializeLogging(): void {
-	// Use fixed path that works for all users including guest accounts
-	const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
-	
-	console.log(`Creating log folder: ${logFolder}`);
-	if (!fs.existsSync(logFolder)) {
-		fs.mkdirSync(logFolder, { recursive: true });
-		console.log(`Log folder created: ${logFolder}`);
-	}
-	
-	// Get current date in Czech timezone (UTC+2 summer time)
-	const now = new Date();
-	// Get Czech date correctly - create date from formatted string
-	const czechTimeString = now.toLocaleDateString("en-CA", {timeZone: "Europe/Prague"}); // YYYY-MM-DD format
-	const dateStr = czechTimeString; // Already in YYYY-MM-DD format
-	logFile = path.join(logFolder, `extension-${dateStr}.log`);
-	
-	console.log(`Current UTC time: ${now.toISOString()}`);
-	console.log(`Czech date string: ${czechTimeString}`);
-	console.log(`Date string: ${dateStr}`);
-	console.log(`Log file path: ${logFile}`);
-	
-	// CRITICAL: Clear log file at start of each session
-	try {
-		fs.writeFileSync(logFile, ''); // Clear the file completely
-		console.log(`Log file cleared successfully: ${logFile}`);
-	} catch (error) {
-		console.error('Failed to clear log file:', error);
-		console.error('Error details:', error);
-	}
-	
-	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
-	console.log('Output channel created');
-	
-	// Force first log entry to ensure logging works - use Czech time
-	const czechTime = new Date(new Date().getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours
-	const czechTimestamp = czechTime.toISOString();
-	const firstEntry = `[${czechTimestamp}] INFO: === NEW SESSION STARTED ===\n`;
-	try {
-		fs.appendFileSync(logFile, firstEntry);
-		console.log('First log entry written successfully');
+// Global state
+let state: ExtensionState = {
+	statusBarItem: null,
+	sessionPromptCount: 0,
+	recentPrompts: [],
+	logFile: '',
+	outputChannel: null,
+	webviewView: null,
+	extensionUri: null
+};
+
+// State management hooks
+const useState = <T>(initialValue: T): [() => T, (value: T) => void] => {
+	let currentValue = initialValue;
+	return [
+		() => currentValue,
+		(newValue: T) => { currentValue = newValue; }
+	];
+};
+
+const useStatusBar = () => {
+	const updateStatusBar = () => {
+		if (!state.statusBarItem) return;
+		const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.28';
+		state.statusBarItem.text = `$(comment-discussion) ${state.sessionPromptCount} prompts | v${version}`;
+		state.statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${state.sessionPromptCount} prompts in current session`;
+	};
+
+	const initStatusBar = () => {
+		state.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+		updateStatusBar();
+		state.statusBarItem.show();
+		writeLog('Status bar created', 'INFO');
+	};
+
+	return { initStatusBar, updateStatusBar };
+};
+
+const usePrompts = () => {
+	const addPrompts = (prompts: string[]) => {
+		prompts.forEach(prompt => {
+			state.recentPrompts.push(prompt);
+		});
+	};
+
+	const clearPrompts = () => {
+		state.recentPrompts = [];
+	};
+
+	const getPrompts = () => [...state.recentPrompts];
+
+	const incrementSessionCount = () => {
+		state.sessionPromptCount++;
+	};
+
+	return { addPrompts, clearPrompts, getPrompts, incrementSessionCount };
+};
+
+const useLogging = () => {
+	const initializeLogging = (): void => {
+		// Use fixed path that works for all users including guest accounts
+		const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
 		
-		// Verify log was actually written by reading it back
-		setTimeout(() => {
-			try {
-				if (fs.existsSync(logFile)) {
-					const logContent = fs.readFileSync(logFile, 'utf8');
-					const logLines = logContent.split('\n').filter(line => line.trim());
-					
-					if (logLines.length > 0) {
-						const lastLine = logLines[logLines.length - 1];
-						const logTimestampMatch = lastLine.match(/\[([^\]]+)\]/);
+		console.log(`Creating log folder: ${logFolder}`);
+		if (!fs.existsSync(logFolder)) {
+			fs.mkdirSync(logFolder, { recursive: true });
+			console.log(`Log folder created: ${logFolder}`);
+		}
+		
+		// Get current date in Czech timezone (UTC+2 summer time)
+		const now = new Date();
+		// Get Czech date correctly - create date from formatted string
+		const czechTimeString = now.toLocaleDateString("en-CA", {timeZone: "Europe/Prague"}); // YYYY-MM-DD format
+		const dateStr = czechTimeString; // Already in YYYY-MM-DD format
+		state.logFile = path.join(logFolder, `extension-${dateStr}.log`);
+		
+		console.log(`Current UTC time: ${now.toISOString()}`);
+		console.log(`Czech date string: ${czechTimeString}`);
+		console.log(`Date string: ${dateStr}`);
+		console.log(`Log file path: ${state.logFile}`);
+		
+		// CRITICAL: Clear log file at start of each session
+		try {
+			fs.writeFileSync(state.logFile, ''); // Clear the file completely
+			console.log(`Log file cleared successfully: ${state.logFile}`);
+		} catch (error) {
+			console.error('Failed to clear log file:', error);
+			console.error('Error details:', error);
+		}
+		
+		state.outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
+		console.log('Output channel created');
+		
+		// Force first log entry to ensure logging works - use Czech time
+		const czechTime = new Date(new Date().getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours
+		const czechTimestamp = czechTime.toISOString();
+		const firstEntry = `[${czechTimestamp}] INFO: === NEW SESSION STARTED ===\n`;
+		try {
+			fs.appendFileSync(state.logFile, firstEntry);
+			console.log('First log entry written successfully');
+			
+			// Verify log was actually written by reading it back
+			setTimeout(() => {
+				try {
+					if (fs.existsSync(state.logFile)) {
+						const logContent = fs.readFileSync(state.logFile, 'utf8');
+						const logLines = logContent.split('\n').filter(line => line.trim());
 						
-						if (logTimestampMatch) {
-							const logTime = new Date(logTimestampMatch[1]);
-							const now = new Date();
-							const ageMinutes = (now.getTime() - logTime.getTime()) / (1000 * 60);
+						if (logLines.length > 0) {
+							const lastLine = logLines[logLines.length - 1];
+							const logTimestampMatch = lastLine.match(/\[([^\]]+)\]/);
 							
-							if (ageMinutes <= 5) {
-								console.log(`✅ Log verification passed - log is ${ageMinutes.toFixed(1)} minutes old`);
+							if (logTimestampMatch) {
+								const logTime = new Date(logTimestampMatch[1]);
+								const now = new Date();
+								const ageMinutes = (now.getTime() - logTime.getTime()) / (1000 * 60);
+								
+								if (ageMinutes <= 5) {
+									console.log(`✅ Log verification passed - log is ${ageMinutes.toFixed(1)} minutes old`);
+								} else {
+									console.error(`❌ LOG ERROR: Log is too old (${ageMinutes.toFixed(1)} minutes)! Logging may not be working properly.`);
+									vscode.window.showErrorMessage(`SpecStory Extension: Logging system error - logs are ${ageMinutes.toFixed(1)} minutes old!`);
+								}
 							} else {
-								console.error(`❌ LOG ERROR: Log is too old (${ageMinutes.toFixed(1)} minutes)! Logging may not be working properly.`);
-								vscode.window.showErrorMessage(`SpecStory Extension: Logging system error - logs are ${ageMinutes.toFixed(1)} minutes old!`);
+								console.error('❌ LOG ERROR: Cannot parse log timestamp');
+								vscode.window.showErrorMessage('SpecStory Extension: Log timestamp parsing error');
 							}
 						} else {
-							console.error('❌ LOG ERROR: Cannot parse log timestamp');
-							vscode.window.showErrorMessage('SpecStory Extension: Log timestamp parsing error');
+							console.error('❌ LOG ERROR: Log file is empty after writing');
+							vscode.window.showErrorMessage('SpecStory Extension: Log file is empty - logging failed');
 						}
 					} else {
-						console.error('❌ LOG ERROR: Log file is empty after writing');
-						vscode.window.showErrorMessage('SpecStory Extension: Log file is empty - logging failed');
+						console.error('❌ LOG ERROR: Log file does not exist after writing');
+						vscode.window.showErrorMessage('SpecStory Extension: Log file missing - logging failed');
 					}
-				} else {
-					console.error('❌ LOG ERROR: Log file does not exist after writing');
-					vscode.window.showErrorMessage('SpecStory Extension: Log file missing - logging failed');
+				} catch (verifyError) {
+					console.error('❌ LOG ERROR: Failed to verify log file:', verifyError);
+					vscode.window.showErrorMessage(`SpecStory Extension: Log verification failed - ${verifyError}`);
 				}
-			} catch (verifyError) {
-				console.error('❌ LOG ERROR: Failed to verify log file:', verifyError);
-				vscode.window.showErrorMessage(`SpecStory Extension: Log verification failed - ${verifyError}`);
-			}
-		}, 1000); // Wait 1 second for file system to flush
+			}, 1000); // Wait 1 second for file system to flush
+			
+		} catch (error) {
+			console.error('Failed to write first log entry:', error);
+		}
 		
-	} catch (error) {
-		console.error('Failed to write first log entry:', error);
-	}
-	
-	writeLog('Extension initialized - log file cleared', 'INFO');
-}
+		writeLog('Extension initialized - log file cleared', 'INFO');
+	};
+
+	return { initializeLogging };
+};
 
 function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): void {
 	const config = vscode.workspace.getConfiguration('specstory-autosave');
@@ -117,22 +184,22 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 	console.log(`LOG: ${czechLogEntry}`);
 	
 	// Write to VS Code output channel (with Czech time)
-	if (outputChannel) {
-		outputChannel.appendLine(czechLogEntry);
+	if (state.outputChannel) {
+		state.outputChannel.appendLine(czechLogEntry);
 	} else {
 		console.log('Output channel not available');
 	}
 	
 	// Write to temp file (with Czech time)
 	try {
-		if (logFile) {
-			fs.appendFileSync(logFile, czechLogEntry + '\n');
+		if (state.logFile) {
+			fs.appendFileSync(state.logFile, czechLogEntry + '\n');
 		} else {
 			console.error('Log file path not set!');
 		}
 	} catch (error) {
 		console.error('Failed to write log:', error);
-		console.error('Log file path:', logFile);
+		console.error('Log file path:', state.logFile);
 		console.error('Log entry:', czechLogEntry);
 	}
 }
@@ -171,136 +238,130 @@ function isValidSpecStoryFile(filePath: string): boolean {
 	}
 }
 
-class RecentPromptsProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = 'specstory-autosave-view';
+// Webview hooks
+const useWebview = () => {
+	const createWebviewProvider = (): vscode.WebviewViewProvider => {
+		return {
+			resolveWebviewView: (
+				webviewView: vscode.WebviewView,
+				context: vscode.WebviewViewResolveContext,
+				_token: vscode.CancellationToken,
+			) => {
+				writeLog('=== RESOLVE WEBVIEW VIEW START ===', 'INFO');
+				writeLog('resolveWebviewView called - Activity bar is being initialized', 'INFO');
+				writeLog(`Global state.recentPrompts.length at resolve time: ${state.recentPrompts.length}`, 'INFO');
+				
+				state.webviewView = webviewView;
+				writeLog(`webviewView assigned, exists: ${!!state.webviewView}`, 'INFO');
 
-	private _view?: vscode.WebviewView;
-	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
+				webviewView.webview.options = {
+					enableScripts: true,
+					localResourceRoots: state.extensionUri ? [state.extensionUri] : []
+				};
+				writeLog('Webview options set', 'INFO');
 
-	constructor(private readonly _extensionUri: vscode.Uri) {
-		// FORCE console logging to debug webview registration issues
-		console.log('=== RECENT PROMPTS PROVIDER CONSTRUCTOR ===');
-		writeLog('RecentPromptsProvider constructor called', 'INFO');
-		writeLog(`Extension URI: ${_extensionUri.toString()}`, 'INFO');
-		console.log(`Extension URI: ${_extensionUri.toString()}`);
-	}
-
-	public resolveWebviewView(
-		webviewView: vscode.WebviewView,
-		context: vscode.WebviewViewResolveContext,
-		_token: vscode.CancellationToken,
-	) {
-		writeLog('=== RESOLVE WEBVIEW VIEW START ===', 'INFO');
-		writeLog('resolveWebviewView called - Activity bar is being initialized', 'INFO');
-		writeLog(`Global recentPrompts.length at resolve time: ${recentPrompts.length}`, 'INFO');
-		
-		this._view = webviewView;
-		writeLog(`_view assigned, exists: ${!!this._view}`, 'INFO');
-
-		webviewView.webview.options = {
-			enableScripts: true,
-			localResourceRoots: [this._extensionUri]
-		};
-		writeLog('Webview options set', 'INFO');
-
-		// CRITICAL: Force immediate data loading and wait for completion
-		writeLog('Forcing immediate data loading for webview', 'INFO');
-		
-		// Always force reload from files to ensure fresh data
-		vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-			writeLog(`Webview resolve: Found ${files.length} SpecStory files to process`, 'INFO');
-			
-			// Clear and reload
-			recentPrompts = [];
-			
-			// Sort files by timestamp (newest first)
-			const sortedFiles = files.sort((a, b) => {
-				const nameA = path.basename(a.fsPath);
-				const nameB = path.basename(b.fsPath);
-				const timestampA = extractTimestampFromFileName(nameA);
-				const timestampB = extractTimestampFromFileName(nameB);
-				return timestampB.getTime() - timestampA.getTime();
-			});
-			
-			// Process all files to extract prompts
-			sortedFiles.forEach(file => {
-				if (isValidSpecStoryFile(file.fsPath)) {
-					addRecentPrompt(file.fsPath);
-				}
-			});
-			
-			writeLog(`After loading: ${recentPrompts.length} total prompts`, 'INFO');
-			
-			// Now refresh the webview with loaded data
-			writeLog('Data loaded, refreshing webview display', 'INFO');
-			this.refreshFromPrompts();
-		});
-
-		webviewView.webview.onDidReceiveMessage(data => {
-			switch (data.type) {
-				case 'refresh':
-					writeLog('Manual refresh requested from activity bar', 'INFO');
+				// CRITICAL: Force immediate data loading and wait for completion
+				writeLog('Forcing immediate data loading for webview', 'INFO');
+				
+				// Always force reload from files to ensure fresh data
+				vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+					writeLog(`Webview resolve: Found ${files.length} SpecStory files to process`, 'INFO');
 					
-					// Clear existing prompts and reload from all files
-					recentPrompts = [];
+					// Clear and reload
+					state.recentPrompts = [];
 					
-					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-						writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'INFO');
-						
-		// Sort files by timestamp (newest first)
-		const sortedFiles = files.sort((a, b) => {
-			const nameA = path.basename(a.fsPath);
-			const nameB = path.basename(b.fsPath);
-			// Extract timestamp from filename for proper chronological sorting
-			const timestampA = extractTimestampFromFileName(nameA);
-			const timestampB = extractTimestampFromFileName(nameB);
-			return timestampB.getTime() - timestampA.getTime(); // Newest first
-		});						// Process all files to extract prompts
-						sortedFiles.forEach(file => {
-							if (isValidSpecStoryFile(file.fsPath)) {
-								addRecentPrompt(file.fsPath);
-							}
-						});
-						
-						updateStatusBar();
-						this.refreshFromPrompts();
-						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+					// Sort files by timestamp (newest first)
+					const sortedFiles = files.sort((a, b) => {
+						const nameA = path.basename(a.fsPath);
+						const nameB = path.basename(b.fsPath);
+						const timestampA = extractTimestampFromFileName(nameA);
+						const timestampB = extractTimestampFromFileName(nameB);
+						return timestampB.getTime() - timestampA.getTime();
 					});
-					break;
-			}
-		});
-		
-		writeLog('=== RESOLVE WEBVIEW VIEW END ===', 'INFO');
-	}
+					
+					// Process all files to extract prompts
+					sortedFiles.forEach(file => {
+						if (isValidSpecStoryFile(file.fsPath)) {
+							addRecentPrompt(file.fsPath);
+						}
+					});
+					
+					writeLog(`After loading: ${state.recentPrompts.length} total prompts`, 'INFO');
+					
+					// Now refresh the webview with loaded data
+					writeLog('Data loaded, refreshing webview display', 'INFO');
+					refreshWebview();
+				});
 
-	public refresh(): void {
+				webviewView.webview.onDidReceiveMessage(data => {
+					switch (data.type) {
+						case 'refresh':
+							writeLog('Manual refresh requested from activity bar', 'INFO');
+							
+							// Clear existing prompts and reload from all files
+							state.recentPrompts = [];
+							
+							vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+								writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'INFO');
+								
+								// Sort files by timestamp (newest first)
+								const sortedFiles = files.sort((a, b) => {
+									const nameA = path.basename(a.fsPath);
+									const nameB = path.basename(b.fsPath);
+									// Extract timestamp from filename for proper chronological sorting
+									const timestampA = extractTimestampFromFileName(nameA);
+									const timestampB = extractTimestampFromFileName(nameB);
+									return timestampB.getTime() - timestampA.getTime(); // Newest first
+								});
+								
+								// Process all files to extract prompts
+								sortedFiles.forEach(file => {
+									if (isValidSpecStoryFile(file.fsPath)) {
+										addRecentPrompt(file.fsPath);
+									}
+								});
+								
+								updateStatusBar();
+								refreshWebview();
+								writeLog(`Refresh complete: ${state.recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+							});
+							break;
+					}
+				});
+				
+				writeLog('=== RESOLVE WEBVIEW VIEW END ===', 'INFO');
+			}
+		};
+	};
+
+	const refreshWebview = (): void => {
 		writeLog('=== PUBLIC REFRESH START ===', 'INFO');
 		writeLog('PUBLIC refresh() method called', 'INFO');
-		writeLog(`Current recentPrompts length: ${recentPrompts.length}`, 'INFO');
-		writeLog(`_view exists: ${!!this._view}`, 'INFO');
-		this.refreshFromPrompts();
+		writeLog(`Current state.recentPrompts length: ${state.recentPrompts.length}`, 'INFO');
+		writeLog(`webviewView exists: ${!!state.webviewView}`, 'INFO');
+		refreshFromPrompts();
 		writeLog('PUBLIC refresh() method completed', 'INFO');
 		writeLog('=== PUBLIC REFRESH END ===', 'INFO');
-	}
+	};
 
-	private refreshFromPrompts(): void {
+	const refreshFromPrompts = (): void => {
 		writeLog(`=== REFRESH FROM PROMPTS START ===`, 'INFO');
-		writeLog(`recentPrompts.length: ${recentPrompts.length}`, 'INFO');
-		writeLog(`_view exists: ${!!this._view}`, 'INFO');
+		writeLog(`state.recentPrompts.length: ${state.recentPrompts.length}`, 'INFO');
+		writeLog(`webviewView exists: ${!!state.webviewView}`, 'INFO');
 		
 		// Apply maxPrompts limit and convert to display format
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 		
-		writeLog(`refreshFromPrompts called with ${recentPrompts.length} total prompts`, 'DEBUG');
+		writeLog(`refreshFromPrompts called with ${state.recentPrompts.length} total prompts`, 'DEBUG');
 		
 		// Take only the most recent prompts
-		const limitedPrompts = recentPrompts.slice(0, maxPrompts);
+		const limitedPrompts = state.recentPrompts.slice(0, maxPrompts);
 		
 		writeLog(`Limited to ${limitedPrompts.length} prompts (max: ${maxPrompts})`, 'DEBUG');
 		
 		// Convert to display format with proper numbering
-		this.prompts = limitedPrompts.map((prompt, index) => {
+		const prompts = limitedPrompts.map((prompt: string, index: number) => {
 			const shortPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
 			writeLog(`Creating prompt #${index + 1}: "${shortPrompt.substring(0, 50)}..."`, 'DEBUG');
 			return {
@@ -310,176 +371,188 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			};
 		});
 		
-		writeLog(`Activity bar will show ${this.prompts.length} prompts`, 'INFO');
-		writeLog(`First 3 prompts: ${this.prompts.slice(0, 3).map(p => p.number + ': ' + p.shortPrompt.substring(0, 30)).join(' | ')}`, 'INFO');
+		writeLog(`Activity bar will show ${prompts.length} prompts`, 'INFO');
+		writeLog(`First 3 prompts: ${prompts.slice(0, 3).map(p => p.number + ': ' + p.shortPrompt.substring(0, 30)).join(' | ')}`, 'INFO');
 		
-		writeLog(`About to call _updateView()`, 'INFO');
-		this._updateView();
+		writeLog(`About to call updateView()`, 'INFO');
+		updateView(prompts);
 		writeLog(`=== REFRESH FROM PROMPTS END ===`, 'INFO');
-	}
+	};
 
-	private _updateView(): void {
+	const updateView = (prompts: Array<{number: string; shortPrompt: string; fullContent: string}>): void => {
 		writeLog(`=== UPDATE VIEW START ===`, 'INFO');
-		writeLog(`_updateView called, _view exists: ${!!this._view}`, 'INFO');
-		writeLog(`this.prompts.length: ${this.prompts.length}`, 'INFO');
+		writeLog(`updateView called, webviewView exists: ${!!state.webviewView}`, 'INFO');
+		writeLog(`prompts.length: ${prompts.length}`, 'INFO');
 		
-		if (this._view) {
-			writeLog(`Updating webview HTML with ${this.prompts.length} prompts`, 'INFO');
+		if (state.webviewView) {
+			writeLog(`Updating webview HTML with ${prompts.length} prompts`, 'INFO');
 			
-			const htmlContent = this._getHtmlForWebview(this._view.webview);
+			const htmlContent = getHtmlForWebview(prompts);
 			writeLog(`Generated HTML length: ${htmlContent.length} characters`, 'INFO');
 			writeLog(`HTML preview: ${htmlContent.substring(0, 200)}...`, 'DEBUG');
 			
-			this._view.webview.html = htmlContent;
+			state.webviewView.webview.html = htmlContent;
 			writeLog('Activity Bar view HTML updated successfully', 'INFO');
 		} else {
-			writeLog('Cannot update view - _view is null, webview not yet resolved', 'INFO');
+			writeLog('Cannot update view - webviewView is null, webview not yet resolved', 'INFO');
 		}
 		writeLog(`=== UPDATE VIEW END ===`, 'INFO');
-	}
+	};
 
-	private _getHtmlForWebview(webview: vscode.Webview): string {
-		writeLog(`=== GET HTML START ===`, 'INFO');
-		writeLog(`_getHtmlForWebview called with ${this.prompts.length} prompts`, 'INFO');
-		
-		const notificationsList = this.prompts.length > 0 
-			? this.prompts.map((prompt, index) => {
-				writeLog(`Generating HTML for prompt ${index + 1}: ${prompt.number} - ${prompt.shortPrompt.substring(0, 30)}...`, 'DEBUG');
-				return `<div class="notification">
-					<div class="notification-header">
-						<span class="notification-time">${prompt.number}</span>
-					</div>
-					<div class="notification-content">
-						<div class="notification-title">${prompt.shortPrompt}</div>
-					</div>
-				</div>`;
-			}).join('')
-			: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
+	return { createWebviewProvider, refreshWebview };
+};
 
-		writeLog(`Generated notifications HTML length: ${notificationsList.length} chars`, 'INFO');
-		writeLog(`Will show: ${this.prompts.length > 0 ? `${this.prompts.length} prompts` : 'no notifications message'}`, 'INFO');
-		writeLog(`Notifications HTML preview: ${notificationsList.substring(0, 200)}...`, 'DEBUG');
+// HTML generation function
+const getHtmlForWebview = (prompts: Array<{number: string; shortPrompt: string; fullContent: string}>): string => {
+	writeLog(`=== GET HTML START ===`, 'INFO');
+	writeLog(`getHtmlForWebview called with ${prompts.length} prompts`, 'INFO');
+	
+	const notificationsList = prompts.length > 0 
+		? prompts.map((prompt, index) => {
+			writeLog(`Generating HTML for prompt ${index + 1}: ${prompt.number} - ${prompt.shortPrompt.substring(0, 30)}...`, 'DEBUG');
+			return `<div class="notification">
+				<div class="notification-header">
+					<span class="notification-time">${prompt.number}</span>
+				</div>
+				<div class="notification-content">
+					<div class="notification-title">${prompt.shortPrompt}</div>
+				</div>
+			</div>`;
+		}).join('')
+		: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
 
-		const config = vscode.workspace.getConfiguration('specstory-autosave');
-		const maxPrompts = config.get<number>('maxPrompts', 50);
+	writeLog(`Generated notifications HTML length: ${notificationsList.length} chars`, 'INFO');
+	writeLog(`Will show: ${prompts.length > 0 ? `${prompts.length} prompts` : 'no notifications message'}`, 'INFO');
+	writeLog(`Notifications HTML preview: ${notificationsList.substring(0, 200)}...`, 'DEBUG');
 
-		const fullHtml = `<!DOCTYPE html>
-		<html lang="en">
-		<head>
-			<meta charset="UTF-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<title>AI Activity</title>
-			<style>
-				body {
-					font-family: var(--vscode-font-family);
-					font-size: var(--vscode-font-size);
-					line-height: 1.4;
-					color: var(--vscode-foreground);
-					background-color: var(--vscode-editor-background);
-					margin: 0;
-					padding: 8px;
-				}
-				.header {
-					display: flex;
-					justify-content: space-between;
-					align-items: center;
-					margin-bottom: 8px;
-					padding-bottom: 8px;
-					border-bottom: 1px solid var(--vscode-widget-border);
-				}
-				.header-title {
-					font-size: 12px;
-					font-weight: bold;
-					color: var(--vscode-foreground);
-				}
-				.header-count {
-					font-size: 10px;
-					color: var(--vscode-descriptionForeground);
-				}
-				.notification {
-					background-color: var(--vscode-list-hoverBackground);
-					border: 1px solid var(--vscode-widget-border);
-					border-left: 3px solid var(--vscode-charts-blue);
-					margin: 4px 0;
-					border-radius: 4px;
-					overflow: hidden;
-					transition: background-color 0.2s ease;
-				}
-				.notification:hover {
-					background-color: var(--vscode-list-activeSelectionBackground);
-				}
-				.notification-header {
-					padding: 4px 8px;
-					background-color: var(--vscode-editor-selectionBackground);
-					border-bottom: 1px solid var(--vscode-widget-border);
-					text-align: center;
-				}
-				.notification-time {
-					font-size: 10px;
-					font-weight: bold;
-					color: var(--vscode-charts-blue);
-				}
-				.notification-content {
-					padding: 6px 8px;
-				}
-				.notification-title {
-					font-size: 11px;
-					font-weight: 500;
-					color: var(--vscode-foreground);
-					margin-bottom: 2px;
-				}
-				.no-notifications {
-					color: var(--vscode-descriptionForeground);
-					font-style: italic;
-					text-align: center;
-					padding: 20px;
-					font-size: 11px;
-				}
-				.no-notifications button {
-					margin-top: 8px;
-					padding: 4px 8px;
-					background: var(--vscode-button-background);
-					color: var(--vscode-button-foreground);
-					border: none;
-					border-radius: 2px;
-					cursor: pointer;
-				}
-				.settings-note {
-					font-size: 9px;
-					color: var(--vscode-descriptionForeground);
-					text-align: center;
-					margin-top: 8px;
-					padding-top: 8px;
-					border-top: 1px solid var(--vscode-widget-border);
-				}
-			</style>
-			<script>
-				const vscode = acquireVsCodeApi();
-				function refresh() {
-					vscode.postMessage({type: 'refresh'});
-				}
-			</script>
-		</head>
-		<body>
-			<div class="header">
-				<span class="header-title">Recent AI Prompts</span>
-				<span class="header-count">Max: ${maxPrompts}</span>
-			</div>
-			${notificationsList}
-			<div class="settings-note">
-				Showing latest ${Math.min(this.prompts.length, maxPrompts)} prompts
-			</div>
-		</body>
-		</html>`;
-		
-		writeLog(`Full HTML length: ${fullHtml.length} characters`, 'INFO');
-		writeLog(`=== GET HTML END ===`, 'INFO');
-		return fullHtml;
-	}
-}
+	const config = vscode.workspace.getConfiguration('specstory-autosave');
+	const maxPrompts = config.get<number>('maxPrompts', 50);
+
+	const fullHtml = `<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>AI Activity</title>
+		<style>
+			body {
+				font-family: var(--vscode-font-family);
+				font-size: var(--vscode-font-size);
+				line-height: 1.4;
+				color: var(--vscode-foreground);
+				background-color: var(--vscode-editor-background);
+				margin: 0;
+				padding: 8px;
+			}
+			.header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 8px;
+				padding-bottom: 8px;
+				border-bottom: 1px solid var(--vscode-widget-border);
+			}
+			.header-title {
+				font-size: 12px;
+				font-weight: bold;
+				color: var(--vscode-foreground);
+			}
+			.header-count {
+				font-size: 10px;
+				color: var(--vscode-descriptionForeground);
+			}
+			.notification {
+				background-color: var(--vscode-list-hoverBackground);
+				border: 1px solid var(--vscode-widget-border);
+				border-left: 3px solid var(--vscode-charts-blue);
+				margin: 4px 0;
+				border-radius: 4px;
+				overflow: hidden;
+				transition: background-color 0.2s ease;
+			}
+			.notification:hover {
+				background-color: var(--vscode-list-activeSelectionBackground);
+			}
+			.notification-header {
+				padding: 4px 8px;
+				background-color: var(--vscode-editor-selectionBackground);
+				border-bottom: 1px solid var(--vscode-widget-border);
+				text-align: center;
+			}
+			.notification-time {
+				font-size: 10px;
+				font-weight: bold;
+				color: var(--vscode-charts-blue);
+			}
+			.notification-content {
+				padding: 6px 8px;
+			}
+			.notification-title {
+				font-size: 11px;
+				font-weight: 500;
+				color: var(--vscode-foreground);
+				margin-bottom: 2px;
+			}
+			.no-notifications {
+				color: var(--vscode-descriptionForeground);
+				font-style: italic;
+				text-align: center;
+				padding: 20px;
+				font-size: 11px;
+			}
+			.no-notifications button {
+				margin-top: 8px;
+				padding: 4px 8px;
+				background: var(--vscode-button-background);
+				color: var(--vscode-button-foreground);
+				border: none;
+				border-radius: 2px;
+				cursor: pointer;
+			}
+			.settings-note {
+				font-size: 9px;
+				color: var(--vscode-descriptionForeground);
+				text-align: center;
+				margin-top: 8px;
+				padding-top: 8px;
+				border-top: 1px solid var(--vscode-widget-border);
+			}
+		</style>
+		<script>
+			const vscode = acquireVsCodeApi();
+			function refresh() {
+				vscode.postMessage({type: 'refresh'});
+			}
+		</script>
+	</head>
+	<body>
+		<div class="header">
+			<span class="header-title">Recent AI Prompts</span>
+			<span class="header-count">Max: ${maxPrompts}</span>
+		</div>
+		${notificationsList}
+		<div class="settings-note">
+			Showing latest ${Math.min(prompts.length, maxPrompts)} prompts
+		</div>
+	</body>
+	</html>`;
+	
+	writeLog(`Full HTML length: ${fullHtml.length} characters`, 'INFO');
+	writeLog(`=== GET HTML END ===`, 'INFO');
+	return fullHtml;
+};
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('=== SPECSTORY EXTENSION ACTIVATION START ===');
+	
+	// Store extension URI in state
+	state.extensionUri = context.extensionUri;
+	
+	// Initialize hooks
+	const { initializeLogging } = useLogging();
+	const { initStatusBar, updateStatusBar } = useStatusBar();
+	const { addPrompts, clearPrompts, getPrompts, incrementSessionCount } = usePrompts();
+	const { createWebviewProvider, refreshWebview } = useWebview();
 	
 	// Initialize logging FIRST - clear previous session
 	initializeLogging();
@@ -487,17 +560,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	writeLog('VS Code session started', 'INFO');
 
 	// Create status bar item
-	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	updateStatusBar();
-	statusBarItem.show();
+	initStatusBar();
 	writeLog('Status bar created', 'INFO');
 
 	// Register activity bar provider
-	const provider = new RecentPromptsProvider(context.extensionUri);
-	writeLog(`About to register webview provider with viewType: ${RecentPromptsProvider.viewType}`, 'INFO');
-	const registration = vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
+	const provider = createWebviewProvider();
+	const viewType = 'specstory-autosave-view';
+	writeLog(`About to register webview provider with viewType: ${viewType}`, 'INFO');
+	const registration = vscode.window.registerWebviewViewProvider(viewType, provider);
 	writeLog('Activity bar provider registered successfully', 'INFO');
-	writeLog(`Provider viewType: ${RecentPromptsProvider.viewType}`, 'INFO');
+	writeLog(`Provider viewType: ${viewType}`, 'INFO');
 	writeLog(`Registration object exists: ${!!registration}`, 'INFO');
 
 	// Register refresh command
@@ -511,7 +583,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 		
 		// Clear existing prompts and reload from all files
-		recentPrompts = [];
+		clearPrompts();
 		
 		try {
 			const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
@@ -535,8 +607,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			});
 			
 			updateStatusBar();
-			provider.refresh();
-			writeLog(`Refresh complete: ${recentPrompts.length} total prompts loaded`, 'INFO');
+			refreshWebview();
+			writeLog(`Refresh complete: ${state.recentPrompts.length} total prompts loaded`, 'INFO');
 		} catch (error) {
 			writeLog(`Error during refresh: ${error}`, 'ERROR');
 		}
@@ -608,8 +680,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 		
 		updateStatusBar();
-		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
-		writeLog(`Session prompts: ${sessionPromptCount}, Total prompts: ${recentPrompts.length}`, 'INFO');
+		writeLog(`Loaded ${state.recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+		writeLog(`Session prompts: ${state.sessionPromptCount}, Total prompts: ${state.recentPrompts.length}`, 'INFO');
 		writeLog('Note: Activity bar will load prompts when user first opens it', 'INFO');
 	} catch (error) {
 		writeLog(`Error loading existing SpecStory files: ${error}`, 'ERROR');
@@ -621,24 +693,25 @@ export async function activate(context: vscode.ExtensionContext) {
 		if (isValidSpecStoryFile(uri.fsPath)) {
 			writeLog(`New SpecStory export detected: ${path.basename(uri.fsPath)}`, 'INFO');
 			addRecentPrompt(uri.fsPath);
-			sessionPromptCount++; // Increment session prompt count
+			incrementSessionCount(); // Increment session prompt count
 			updateStatusBar();
-			provider.refresh();
+			refreshWebview();
 			showNotification();
-			writeLog(`Session prompts: ${sessionPromptCount}, total prompts: ${recentPrompts.length}`);
+			writeLog(`Session prompts: ${state.sessionPromptCount}, total prompts: ${state.recentPrompts.length}`);
 		} else {
 			writeLog(`Ignored non-SpecStory file: ${path.basename(uri.fsPath)}`, 'DEBUG');
 		}
 	});
 
-	context.subscriptions.push(statusBarItem, watcher, outputChannel, refreshCommand, registration);
+	context.subscriptions.push(state.statusBarItem!, watcher, state.outputChannel!, refreshCommand, registration);
 	writeLog('Extension activation complete - all components registered');
 }
 
 function updateStatusBar(): void {
+	if (!state.statusBarItem) return;
 	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.28';
-	statusBarItem.text = `$(comment-discussion) ${sessionPromptCount} prompts | v${version}`;
-	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${sessionPromptCount} prompts in current session`;
+	state.statusBarItem.text = `$(comment-discussion) ${state.sessionPromptCount} prompts | v${version}`;
+	state.statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${state.sessionPromptCount} prompts in current session`;
 }
 
 function addRecentPrompt(filePath: string): void {
@@ -663,10 +736,10 @@ function addRecentPrompt(filePath: string): void {
 		// Since files are processed newest first, and prompts within file are already newest first,
 		// we append each file's prompts to maintain proper chronological order
 		extractedPrompts.forEach(prompt => {
-			recentPrompts.push(prompt);
+			state.recentPrompts.push(prompt);
 		});
 		
-		writeLog(`Total prompts after adding file: ${recentPrompts.length}`, 'INFO');
+		writeLog(`Total prompts after adding file: ${state.recentPrompts.length}`, 'INFO');
 		writeLog(`=== ADD RECENT PROMPT END ===`, 'INFO');
 		
 	} catch (error) {
