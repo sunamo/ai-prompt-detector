@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.17",
+  "version": "1.1.26",
   "publisher": "sunamocz",
   "icon": "icon.png",
 	"engines": {
@@ -15,7 +15,24 @@
 		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
-	"contributes": {
+  "contributes": {
+	"viewsContainers": {
+	  "activitybar": [
+		{
+		  "id": "specstory-autosave-activitybar",
+		  "title": "SpecStory AutoSave + AI Copilot Prompt Detection",
+		  "icon": "icon.png"
+		}
+	  ]
+	},
+	"views": {
+	  "specstory-autosave-activitybar": [
+		{
+		  "id": "specstory-autosave-view",
+		  "name": "SpecStory AutoSave + AI Copilot Prompt Detection"
+		}
+	  ]
+	},
 		"commands": [
 			{
 				"command": "specstory-autosave.enable",
@@ -55,10 +72,10 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "tsc -p ./",
-		"compile": "tsc -p ./",
-		"build": "tsc -p ./",
-		"watch": "tsc -watch -p ./"
+	   "vscode:prepublish": "pwsh ./install.ps1",
+	   "compile": "pwsh ./install.ps1",
+	   "build": "pwsh ./install.ps1",
+	   "watch": "pwsh ./install.ps1"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.74.0",

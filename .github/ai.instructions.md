@@ -245,3 +245,5 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
+For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywhere, no shorter or other versions
+

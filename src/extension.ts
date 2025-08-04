@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { AutoSaveManager } from './autoSaveManager';
 import { ConfigurationManager } from './configurationManager';
 import { StatusBarManager } from './statusBarManager';
+import { SpecStoryPromptProvider } from './activityBarProvider';
 
 let autoSaveManager: AutoSaveManager;
 let configurationManager: ConfigurationManager;
@@ -14,6 +15,11 @@ export function activate(context: vscode.ExtensionContext) {
 	configurationManager = new ConfigurationManager();
 	statusBarManager = new StatusBarManager();
 	autoSaveManager = new AutoSaveManager(configurationManager, statusBarManager);
+
+	// Register activity bar provider
+	const promptProvider = new SpecStoryPromptProvider();
+	vscode.window.registerTreeDataProvider('specstory-autosave-view', promptProvider);
+	context.subscriptions.push(promptProvider);
 
 	// Register commands
 	const enableCommand = vscode.commands.registerCommand('specstory-autosave.enable', () => {
