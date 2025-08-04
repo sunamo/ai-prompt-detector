@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.21",
+  "version": "1.1.22",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -54,9 +54,39 @@
 					"type": "array",
 					"default": ["**/*.md", "**/*.txt", "**/*.json"],
 					"description": "File patterns to auto-save"
+				},
+				"specstory-autosave.maxPrompts": {
+					"type": "number",
+					"default": 50,
+					"description": "Maximum number of prompts to display"
+				},
+				"specstory-autosave.enableDebugLogs": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable debug logging"
+				},
+				"specstory-autosave.customMessage": {
+					"type": "string",
+					"default": "",
+					"description": "Custom notification message"
 				}
 			}
-		}
+		},
+		"views": {
+			"explorer": [
+				{
+					"id": "specstory-autosave-view",
+					"name": "Recent AI Prompts",
+					"when": "true"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "specstory-autosave-view",
+				"contents": "No AI prompts detected yet.\n[Refresh](command:workbench.action.reloadWindow)"
+			}
+		]
 	},
 	"scripts": {
 		"compile": "tsc -p ./",
