@@ -101,7 +101,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
 
 	constructor(private readonly _extensionUri: vscode.Uri) {
-		// FORCE logging regardless of settings to debug webview issues
+		// FORCE console logging to debug webview registration issues
 		console.log('=== RECENT PROMPTS PROVIDER CONSTRUCTOR ===');
 		writeLog('RecentPromptsProvider constructor called', 'INFO');
 		writeLog(`Extension URI: ${_extensionUri.toString()}`, 'INFO');
@@ -381,27 +381,12 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
+	console.log('=== SPECSTORY EXTENSION ACTIVATION START ===');
 	
-	// Force immediate log write to test - CLEAR previous session
-	const timestamp = new Date().toISOString();
-	const testLogEntry = `[${timestamp}] INFO: === NEW EXTENSION SESSION STARTED ===`;
-	try {
-		const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
-		if (!fs.existsSync(logFolder)) {
-			fs.mkdirSync(logFolder, { recursive: true });
-		}
-		const logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
-		fs.writeFileSync(logFile, testLogEntry + '\n'); // CLEAR and write first entry
-		console.log('=== LOG FILE CLEARED FOR NEW SESSION ===');
-	} catch (error) {
-		console.error('Failed test log write:', error);
-	}
-	
-	// Initialize logging with forced write
+	// Initialize logging FIRST - clear previous session
 	initializeLogging();
-	writeLog('Extension activated - ' + new Date().toLocaleString(), 'INFO');
-	console.log('Extension activated - logs initialized');
+	writeLog('=== EXTENSION ACTIVATION START ===', 'INFO');
+	writeLog('VS Code session started', 'INFO');
 
 	// Create status bar item
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
