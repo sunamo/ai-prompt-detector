@@ -113,14 +113,15 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
 						writeLog(`Found ${files.length} SpecStory files to process`, 'DEBUG');
 						
-						// Sort files by timestamp (newest first)
-						const sortedFiles = files.sort((a, b) => {
-							const nameA = path.basename(a.fsPath);
-							const nameB = path.basename(b.fsPath);
-							return nameB.localeCompare(nameA); // Newest first
-						});
-						
-						// Process all files to extract prompts
+		// Sort files by timestamp (newest first)
+		const sortedFiles = files.sort((a, b) => {
+			const nameA = path.basename(a.fsPath);
+			const nameB = path.basename(b.fsPath);
+			// Extract timestamp from filename for proper chronological sorting
+			const timestampA = extractTimestampFromFileName(nameA);
+			const timestampB = extractTimestampFromFileName(nameB);
+			return timestampB.getTime() - timestampA.getTime(); // Newest first
+		});						// Process all files to extract prompts
 						sortedFiles.forEach(file => {
 							writeLog(`Processing file: ${file.fsPath}`, 'DEBUG');
 							if (isValidSpecStoryFile(file.fsPath)) {
@@ -330,7 +331,10 @@ export function activate(context: vscode.ExtensionContext) {
 		const sortedFiles = files.sort((a, b) => {
 			const nameA = path.basename(a.fsPath);
 			const nameB = path.basename(b.fsPath);
-			return nameB.localeCompare(nameA); // Newest first
+			// Extract timestamp from filename for proper chronological sorting
+			const timestampA = extractTimestampFromFileName(nameA);
+			const timestampB = extractTimestampFromFileName(nameB);
+			return timestampB.getTime() - timestampA.getTime(); // Newest first
 		});
 		
 		// Process all files to extract prompts
@@ -384,8 +388,10 @@ function addRecentPrompt(filePath: string): void {
 		
 		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'DEBUG');
 		
-		// Add all prompts from this file to the beginning (newest first)
-		extractedPrompts.reverse().forEach(prompt => {
+		// Add all prompts from this file to the beginning (newest prompts from newest files first)
+		// Since files are processed newest first, and prompts within file are already newest first,
+		// we prepend each file's prompts to maintain proper order
+		extractedPrompts.forEach(prompt => {
 			recentPrompts.unshift(prompt);
 		});
 		
@@ -394,6 +400,19 @@ function addRecentPrompt(filePath: string): void {
 	} catch (error) {
 		writeLog(`Error processing SpecStory file ${filePath}: ${error}`, 'ERROR');
 	}
+}
+
+function extractTimestampFromFileName(fileName: string): Date {
+	// Extract timestamp from SpecStory filename like "2025-08-03_07-59Z-description.md"
+	const match = fileName.match(/(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})Z/);
+	if (match) {
+		const [, date, hour, minute] = match;
+		const [year, month, day] = date.split('-').map(Number);
+		return new Date(year, month - 1, day, Number(hour), Number(minute), 0);
+	}
+	
+	// Fallback to epoch time if parsing fails (will be sorted last)
+	return new Date(0);
 }
 
 function extractPromptsFromContent(content: string): string[] {
@@ -442,7 +461,12 @@ function extractPromptsFromContent(content: string): string[] {
 			}
 		}
 		
-		writeLog(`Successfully extracted ${prompts.length} user prompts`, 'DEBUG');
+		// CRITICAL: Reverse prompts so newest prompts in file come first
+		// In SpecStory files, prompts are chronological (oldest first), but we want newest first
+		const reversedPrompts = prompts.reverse();
+		writeLog(`Successfully extracted and reversed ${reversedPrompts.length} user prompts`, 'DEBUG');
+		
+		return reversedPrompts;
 		
 	} catch (error) {
 		writeLog(`Error extracting prompts from content: ${error}`, 'ERROR');
