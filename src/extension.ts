@@ -210,6 +210,9 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 		writeLog('Webview just resolved - loading existing prompts immediately', 'INFO');
 		writeLog(`Current recentPrompts.length: ${recentPrompts.length}`, 'INFO');
 		
+		// Always refresh from current prompts first (immediate display)
+		this.refreshFromPrompts();
+		
 		// If no prompts loaded yet, force immediate reload from files
 		if (recentPrompts.length === 0) {
 			writeLog('No prompts in memory - loading from files immediately', 'INFO');
@@ -236,11 +239,11 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 				});
 				
 				writeLog(`After loading: ${recentPrompts.length} total prompts`, 'INFO');
+				// Refresh again with loaded data
 				this.refreshFromPrompts();
 			});
 		} else {
-			writeLog(`Found ${recentPrompts.length} existing prompts, displaying them now`, 'INFO');
-			this.refreshFromPrompts();
+			writeLog(`Found ${recentPrompts.length} existing prompts, already displayed`, 'INFO');
 		}
 
 		webviewView.webview.onDidReceiveMessage(data => {
