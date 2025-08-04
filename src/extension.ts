@@ -97,19 +97,22 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 		context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	) {
+		writeLog('=== RESOLVE WEBVIEW VIEW START ===', 'INFO');
 		writeLog('resolveWebviewView called - Activity bar is being initialized', 'INFO');
+		writeLog(`Global recentPrompts.length at resolve time: ${recentPrompts.length}`, 'INFO');
+		
 		this._view = webviewView;
-		writeLog(`_view assigned, exists: ${!!this._view}`, 'DEBUG');
+		writeLog(`_view assigned, exists: ${!!this._view}`, 'INFO');
 
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: [this._extensionUri]
 		};
-		writeLog('Webview options set', 'DEBUG');
+		writeLog('Webview options set', 'INFO');
 
-		writeLog('Setting initial HTML for webview', 'DEBUG');
-		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-		writeLog('Initial HTML set for activity bar', 'INFO');
+		// CRITICAL: Load existing prompts when webview is first created
+		writeLog('Webview just resolved - loading existing prompts immediately', 'INFO');
+		this.refreshFromPrompts(); // This will set the initial HTML with existing prompts
 
 		webviewView.webview.onDidReceiveMessage(data => {
 			switch (data.type) {
@@ -151,16 +154,25 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 					break;
 			}
 		});
+		
+		writeLog('=== RESOLVE WEBVIEW VIEW END ===', 'INFO');
 	}
 
 	public refresh(): void {
-		writeLog('PUBLIC refresh() method called', 'DEBUG');
-		writeLog(`Current recentPrompts length: ${recentPrompts.length}`, 'DEBUG');
+		writeLog('=== PUBLIC REFRESH START ===', 'INFO');
+		writeLog('PUBLIC refresh() method called', 'INFO');
+		writeLog(`Current recentPrompts length: ${recentPrompts.length}`, 'INFO');
+		writeLog(`_view exists: ${!!this._view}`, 'INFO');
 		this.refreshFromPrompts();
-		writeLog('PUBLIC refresh() method completed', 'DEBUG');
+		writeLog('PUBLIC refresh() method completed', 'INFO');
+		writeLog('=== PUBLIC REFRESH END ===', 'INFO');
 	}
 
 	private refreshFromPrompts(): void {
+		writeLog(`=== REFRESH FROM PROMPTS START ===`, 'INFO');
+		writeLog(`recentPrompts.length: ${recentPrompts.length}`, 'INFO');
+		writeLog(`_view exists: ${!!this._view}`, 'INFO');
+		
 		// Apply maxPrompts limit and convert to display format
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
@@ -183,24 +195,37 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			};
 		});
 		
-		writeLog(`Activity bar will show ${this.prompts.length} prompts`, 'DEBUG');
-		writeLog(`Prompts array contents: ${this.prompts.map(p => p.number + ': ' + p.shortPrompt.substring(0, 30)).join(', ')}`, 'DEBUG');
+		writeLog(`Activity bar will show ${this.prompts.length} prompts`, 'INFO');
+		writeLog(`First 3 prompts: ${this.prompts.slice(0, 3).map(p => p.number + ': ' + p.shortPrompt.substring(0, 30)).join(' | ')}`, 'INFO');
+		
+		writeLog(`About to call _updateView()`, 'INFO');
 		this._updateView();
+		writeLog(`=== REFRESH FROM PROMPTS END ===`, 'INFO');
 	}
 
 	private _updateView(): void {
-		writeLog(`_updateView called, _view exists: ${!!this._view}`, 'DEBUG');
+		writeLog(`=== UPDATE VIEW START ===`, 'INFO');
+		writeLog(`_updateView called, _view exists: ${!!this._view}`, 'INFO');
+		writeLog(`this.prompts.length: ${this.prompts.length}`, 'INFO');
+		
 		if (this._view) {
-			writeLog(`Updating webview HTML with ${this.prompts.length} prompts`, 'DEBUG');
-			this._view.webview.html = this._getHtmlForWebview(this._view.webview);
-			writeLog('Activity Bar view HTML updated', 'DEBUG');
+			writeLog(`Updating webview HTML with ${this.prompts.length} prompts`, 'INFO');
+			
+			const htmlContent = this._getHtmlForWebview(this._view.webview);
+			writeLog(`Generated HTML length: ${htmlContent.length} characters`, 'INFO');
+			writeLog(`HTML preview: ${htmlContent.substring(0, 200)}...`, 'DEBUG');
+			
+			this._view.webview.html = htmlContent;
+			writeLog('Activity Bar view HTML updated successfully', 'INFO');
 		} else {
-			writeLog('Cannot update view - _view is null!', 'ERROR');
+			writeLog('Cannot update view - _view is null, webview not yet resolved', 'INFO');
 		}
+		writeLog(`=== UPDATE VIEW END ===`, 'INFO');
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview): string {
-		writeLog(`_getHtmlForWebview called with ${this.prompts.length} prompts`, 'DEBUG');
+		writeLog(`=== GET HTML START ===`, 'INFO');
+		writeLog(`_getHtmlForWebview called with ${this.prompts.length} prompts`, 'INFO');
 		
 		const notificationsList = this.prompts.length > 0 
 			? this.prompts.map((prompt, index) => {
@@ -216,13 +241,14 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			}).join('')
 			: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
 
-		writeLog(`Generated notifications HTML length: ${notificationsList.length} chars`, 'DEBUG');
-		writeLog(`Will show "${this.prompts.length > 0 ? 'prompts list' : 'no notifications message'}"`, 'DEBUG');
+		writeLog(`Generated notifications HTML length: ${notificationsList.length} chars`, 'INFO');
+		writeLog(`Will show: ${this.prompts.length > 0 ? `${this.prompts.length} prompts` : 'no notifications message'}`, 'INFO');
+		writeLog(`Notifications HTML preview: ${notificationsList.substring(0, 200)}...`, 'DEBUG');
 
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 
-		return `<!DOCTYPE html>
+		const fullHtml = `<!DOCTYPE html>
 		<html lang="en">
 		<head>
 			<meta charset="UTF-8">
@@ -330,6 +356,10 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			</div>
 		</body>
 		</html>`;
+		
+		writeLog(`Full HTML length: ${fullHtml.length} characters`, 'INFO');
+		writeLog(`=== GET HTML END ===`, 'INFO');
+		return fullHtml;
 	}
 }
 
@@ -475,11 +505,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 		
 		updateStatusBar();
-		writeLog('About to call provider.refresh() to load prompts into activity bar', 'INFO');
-		provider.refresh(); // This will load prompts into activity bar
-		writeLog('provider.refresh() called - activity bar should now show prompts', 'INFO');
 		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
 		writeLog(`Session prompts: ${sessionPromptCount}, Total prompts: ${recentPrompts.length}`, 'INFO');
+		writeLog('Note: Activity bar will load prompts when user first opens it', 'INFO');
 	} catch (error) {
 		writeLog(`Error loading existing SpecStory files: ${error}`, 'ERROR');
 	}
@@ -512,7 +540,8 @@ function updateStatusBar(): void {
 
 function addRecentPrompt(filePath: string): void {
 	try {
-		writeLog(`Processing SpecStory file: ${filePath}`, 'DEBUG');
+		writeLog(`=== ADD RECENT PROMPT START ===`, 'INFO');
+		writeLog(`Processing SpecStory file: ${filePath}`, 'INFO');
 		
 		// Read and parse the SpecStory file content
 		const content = fs.readFileSync(filePath, 'utf8');
@@ -520,7 +549,7 @@ function addRecentPrompt(filePath: string): void {
 		
 		const extractedPrompts = extractPromptsFromContent(content);
 		
-		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'DEBUG');
+		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'INFO');
 		
 		// Log each prompt being added
 		extractedPrompts.forEach((prompt, index) => {
@@ -534,7 +563,8 @@ function addRecentPrompt(filePath: string): void {
 			recentPrompts.push(prompt);
 		});
 		
-		writeLog(`Total prompts after adding file: ${recentPrompts.length}`, 'DEBUG');
+		writeLog(`Total prompts after adding file: ${recentPrompts.length}`, 'INFO');
+		writeLog(`=== ADD RECENT PROMPT END ===`, 'INFO');
 		
 	} catch (error) {
 		writeLog(`Error processing SpecStory file ${filePath}: ${error}`, 'ERROR');
