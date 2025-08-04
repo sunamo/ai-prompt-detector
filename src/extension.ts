@@ -305,6 +305,20 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 export function activate(context: vscode.ExtensionContext) {
 	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 	
+	// Force immediate log write to test
+	const timestamp = new Date().toISOString();
+	const testLogEntry = `[${timestamp}] INFO: EXTENSION ACTIVATION STARTED - v1.1.26`;
+	try {
+		const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
+		if (!fs.existsSync(logFolder)) {
+			fs.mkdirSync(logFolder, { recursive: true });
+		}
+		const logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
+		fs.appendFileSync(logFile, testLogEntry + '\n');
+	} catch (error) {
+		console.error('Failed test log write:', error);
+	}
+	
 	// Initialize logging with forced write
 	initializeLogging();
 	writeLog('Extension activated - ' + new Date().toLocaleString(), 'INFO');
