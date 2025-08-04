@@ -388,11 +388,11 @@ function addRecentPrompt(filePath: string): void {
 		
 		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'DEBUG');
 		
-		// Add all prompts from this file to the beginning (newest prompts from newest files first)
+		// Add all prompts from this file to the end (maintain file order: newest file first)
 		// Since files are processed newest first, and prompts within file are already newest first,
-		// we prepend each file's prompts to maintain proper order
+		// we append each file's prompts to maintain proper chronological order
 		extractedPrompts.forEach(prompt => {
-			recentPrompts.unshift(prompt);
+			recentPrompts.push(prompt);
 		});
 		
 		writeLog(`Total prompts after adding file: ${recentPrompts.length}`, 'DEBUG');

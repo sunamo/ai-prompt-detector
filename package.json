@@ -1,7 +1,7 @@
 {
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.15",
+  "version": "1.1.17",
   "publisher": "sunamocz",
   "icon": "icon.png",
 	"engines": {
