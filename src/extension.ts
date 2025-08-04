@@ -90,7 +90,9 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	private _view?: vscode.WebviewView;
 	private prompts: { number: string; shortPrompt: string; fullContent: string; }[] = [];
 
-	constructor(private readonly _extensionUri: vscode.Uri) {}
+	constructor(private readonly _extensionUri: vscode.Uri) {
+		writeLog('RecentPromptsProvider constructor called', 'DEBUG');
+	}
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -112,24 +114,26 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 
 		// CRITICAL: Load existing prompts when webview is first created
 		writeLog('Webview just resolved - loading existing prompts immediately', 'INFO');
-		this.refreshFromPrompts(); // This will set the initial HTML with existing prompts
+		
+		// Force immediate refresh to show existing prompts
+		if (recentPrompts.length > 0) {
+			writeLog(`Found ${recentPrompts.length} existing prompts, displaying them now`, 'INFO');
+			this.refreshFromPrompts();
+		} else {
+			writeLog('No existing prompts found, showing empty state', 'INFO');
+			this._updateView(); // Show empty state
+		}
 
 		webviewView.webview.onDidReceiveMessage(data => {
 			switch (data.type) {
 				case 'refresh':
-					writeLog('Manual refresh requested from activity bar', 'DEBUG');
-					writeLog(`Activity bar refresh - searching in workspace folders:`, 'DEBUG');
-					if (vscode.workspace.workspaceFolders) {
-						vscode.workspace.workspaceFolders.forEach((folder, index) => {
-							writeLog(`  Workspace ${index + 1}: ${folder.uri.fsPath}`, 'DEBUG');
-						});
-					}
+					writeLog('Manual refresh requested from activity bar', 'INFO');
 					
 					// Clear existing prompts and reload from all files
 					recentPrompts = [];
 					
 					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-						writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'DEBUG');
+						writeLog(`Activity bar refresh: Found ${files.length} SpecStory files to process`, 'INFO');
 						
 		// Sort files by timestamp (newest first)
 		const sortedFiles = files.sort((a, b) => {
@@ -141,7 +145,6 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			return timestampB.getTime() - timestampA.getTime(); // Newest first
 		});						// Process all files to extract prompts
 						sortedFiles.forEach(file => {
-							writeLog(`Processing file: ${file.fsPath}`, 'DEBUG');
 							if (isValidSpecStoryFile(file.fsPath)) {
 								addRecentPrompt(file.fsPath);
 							}
@@ -149,7 +152,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 						
 						updateStatusBar();
 						this.refreshFromPrompts();
-						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${sortedFiles.length} files`);
+						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
 					});
 					break;
 			}
