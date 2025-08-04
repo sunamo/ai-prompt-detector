@@ -1,2 +1,6 @@
 **
 !out/**
+!icon.png
+!README.md
+!LICENSE
+!package.json

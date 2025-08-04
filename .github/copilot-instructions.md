@@ -2,6 +2,8 @@
 
 ## ⚠️ CRITICAL RULES - STRICTLY FOLLOW!
 
+As a copilot, you never change versions. The version changes fundamentally only install.ps1
+
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
 - **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
 - **ONLY cs.json localization file** is allowed to contain non-English text
