@@ -13,23 +13,83 @@ function initializeLogging(): void {
 	// Use fixed path that works for all users including guest accounts
 	const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
 	
+	console.log(`Creating log folder: ${logFolder}`);
 	if (!fs.existsSync(logFolder)) {
 		fs.mkdirSync(logFolder, { recursive: true });
+		console.log(`Log folder created: ${logFolder}`);
 	}
 	
-	logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
+	// Get current date in Czech timezone (UTC+1/UTC+2)
+	const now = new Date();
+	const czechTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // UTC+1 basic offset
+	const dateStr = czechTime.toISOString().split('T')[0];
+	logFile = path.join(logFolder, `extension-${dateStr}.log`);
+	
+	console.log(`Log file path: ${logFile}`);
 	
 	// CRITICAL: Clear log file at start of each session
 	try {
 		fs.writeFileSync(logFile, ''); // Clear the file completely
-		console.log(`Log file cleared: ${logFile}`);
+		console.log(`Log file cleared successfully: ${logFile}`);
 	} catch (error) {
 		console.error('Failed to clear log file:', error);
+		console.error('Error details:', error);
 	}
 	
 	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
+	console.log('Output channel created');
 	
-	writeLog('=== NEW SESSION STARTED ===', 'INFO');
+	// Force first log entry to ensure logging works
+	const timestamp = new Date().toISOString();
+	const firstEntry = `[${timestamp}] INFO: === NEW SESSION STARTED ===\n`;
+	try {
+		fs.appendFileSync(logFile, firstEntry);
+		console.log('First log entry written successfully');
+		
+		// Verify log was actually written by reading it back
+		setTimeout(() => {
+			try {
+				if (fs.existsSync(logFile)) {
+					const logContent = fs.readFileSync(logFile, 'utf8');
+					const logLines = logContent.split('\n').filter(line => line.trim());
+					
+					if (logLines.length > 0) {
+						const lastLine = logLines[logLines.length - 1];
+						const logTimestampMatch = lastLine.match(/\[([^\]]+)\]/);
+						
+						if (logTimestampMatch) {
+							const logTime = new Date(logTimestampMatch[1]);
+							const now = new Date();
+							const ageMinutes = (now.getTime() - logTime.getTime()) / (1000 * 60);
+							
+							if (ageMinutes <= 5) {
+								console.log(`✅ Log verification passed - log is ${ageMinutes.toFixed(1)} minutes old`);
+							} else {
+								console.error(`❌ LOG ERROR: Log is too old (${ageMinutes.toFixed(1)} minutes)! Logging may not be working properly.`);
+								vscode.window.showErrorMessage(`SpecStory Extension: Logging system error - logs are ${ageMinutes.toFixed(1)} minutes old!`);
+							}
+						} else {
+							console.error('❌ LOG ERROR: Cannot parse log timestamp');
+							vscode.window.showErrorMessage('SpecStory Extension: Log timestamp parsing error');
+						}
+					} else {
+						console.error('❌ LOG ERROR: Log file is empty after writing');
+						vscode.window.showErrorMessage('SpecStory Extension: Log file is empty - logging failed');
+					}
+				} else {
+					console.error('❌ LOG ERROR: Log file does not exist after writing');
+					vscode.window.showErrorMessage('SpecStory Extension: Log file missing - logging failed');
+				}
+			} catch (verifyError) {
+				console.error('❌ LOG ERROR: Failed to verify log file:', verifyError);
+				vscode.window.showErrorMessage(`SpecStory Extension: Log verification failed - ${verifyError}`);
+			}
+		}, 1000); // Wait 1 second for file system to flush
+		
+	} catch (error) {
+		console.error('Failed to write first log entry:', error);
+	}
+	
 	writeLog('Extension initialized - log file cleared', 'INFO');
 }
 
@@ -45,18 +105,27 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 	const timestamp = new Date().toISOString();
 	const logEntry = `[${timestamp}] ${level}: ${message}`;
 	
+	// Always write to console for debugging
+	console.log(`LOG: ${logEntry}`);
+	
 	// Write to VS Code output channel
 	if (outputChannel) {
 		outputChannel.appendLine(logEntry);
+	} else {
+		console.log('Output channel not available');
 	}
 	
 	// Write to temp file
 	try {
 		if (logFile) {
 			fs.appendFileSync(logFile, logEntry + '\n');
+		} else {
+			console.error('Log file path not set!');
 		}
 	} catch (error) {
 		console.error('Failed to write log:', error);
+		console.error('Log file path:', logFile);
+		console.error('Log entry:', logEntry);
 	}
 }
 
