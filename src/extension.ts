@@ -408,12 +408,14 @@ export async function activate(context: vscode.ExtensionContext) {
 			writeLog(`Existing file: ${file.fsPath}`, 'INFO');
 			if (isValidSpecStoryFile(file.fsPath)) {
 				addRecentPrompt(file.fsPath);
+				// Don't increment sessionPromptCount for existing files - only for new ones in this session
 			}
 		});
 		
 		updateStatusBar();
 		provider.refresh(); // This will load prompts into activity bar
 		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+		writeLog(`Session prompts: ${sessionPromptCount}, Total prompts: ${recentPrompts.length}`, 'INFO');
 	} catch (error) {
 		writeLog(`Error loading existing SpecStory files: ${error}`, 'ERROR');
 	}
