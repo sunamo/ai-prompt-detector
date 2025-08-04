@@ -27,7 +27,7 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 	const config = vscode.workspace.getConfiguration('specstory-autosave');
 	const enableDebugLogs = config.get<boolean>('enableDebugLogs', false);
 	
-	// Skip debug logs if disabled
+	// Skip only DEBUG logs if disabled, always write INFO and ERROR
 	if (level === 'DEBUG' && !enableDebugLogs) {
 		return;
 	}
@@ -36,11 +36,15 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 	const logEntry = `[${timestamp}] ${level}: ${message}`;
 	
 	// Write to VS Code output channel
-	outputChannel.appendLine(logEntry);
+	if (outputChannel) {
+		outputChannel.appendLine(logEntry);
+	}
 	
 	// Write to temp file
 	try {
-		fs.appendFileSync(logFile, logEntry + '\n');
+		if (logFile) {
+			fs.appendFileSync(logFile, logEntry + '\n');
+		}
 	} catch (error) {
 		console.error('Failed to write log:', error);
 	}
@@ -301,20 +305,21 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 export function activate(context: vscode.ExtensionContext) {
 	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 	
-	// Initialize logging
+	// Initialize logging with forced write
 	initializeLogging();
-	writeLog('Extension activated');
+	writeLog('Extension activated - ' + new Date().toLocaleString(), 'INFO');
+	console.log('Extension activated - logs initialized');
 
 	// Create status bar item
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	updateStatusBar();
 	statusBarItem.show();
-	writeLog('Status bar created');
+	writeLog('Status bar created', 'INFO');
 
 	// Register activity bar provider
 	const provider = new RecentPromptsProvider(context.extensionUri);
 	vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
-	writeLog('Activity bar provider registered');
+	writeLog('Activity bar provider registered', 'INFO');
 
 	// Watch for new SpecStory files across entire workspace
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
