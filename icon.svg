@@ -1,0 +1,41 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with VS Code Activity Bar compatible color -->
+  <circle cx="64" cy="64" r="58" fill="none" stroke="#858585" stroke-width="3" opacity="0.8"/>
+  
+  <!-- Main chat bubble with better visibility -->
+  <rect x="25" y="30" width="38" height="24" rx="6" fill="none" stroke="#858585" stroke-width="2.5"/>
+  <path d="M 25 50 L 20 58 L 30 54 Z" fill="#858585" opacity="0.8"/>
+  
+  <!-- Chat message lines inside main bubble -->
+  <line x1="30" y1="36" x2="55" y2="36" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  <line x1="30" y1="42" x2="50" y2="42" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  <line x1="30" y1="48" x2="45" y2="48" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  
+  <!-- Secondary chat bubble (response) -->
+  <rect x="65" y="45" width="38" height="24" rx="6" fill="none" stroke="#858585" stroke-width="2.5"/>
+  <path d="M 103 65 L 108 73 L 98 69 Z" fill="#858585" opacity="0.8"/>
+  
+  <!-- Chat message lines inside secondary bubble -->
+  <line x1="70" y1="51" x2="95" y2="51" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  <line x1="70" y1="57" x2="90" y2="57" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  <line x1="70" y1="63" x2="85" y2="63" stroke="#858585" stroke-width="1.5" opacity="0.7"/>
+  
+  <!-- AI/Auto indicator (small gear) -->
+  <g transform="translate(90,30) scale(0.6)">
+    <circle cx="0" cy="0" r="6" fill="none" stroke="#858585" stroke-width="2"/>
+    <circle cx="0" cy="0" r="2.5" fill="#858585" opacity="0.6"/>
+    <rect x="-1" y="-9" width="2" height="4" fill="#858585"/>
+    <rect x="-1" y="5" width="2" height="4" fill="#858585"/>
+    <rect x="-9" y="-1" width="4" height="2" fill="#858585"/>
+    <rect x="5" y="-1" width="4" height="2" fill="#858585"/>
+  </g>
+  
+  <!-- Activity indicator (dots showing active state) -->
+  <circle cx="35" cy="85" r="2.5" fill="#858585" opacity="0.9"/>
+  <circle cx="45" cy="85" r="2.5" fill="#858585" opacity="0.7"/>
+  <circle cx="55" cy="85" r="2.5" fill="#858585" opacity="0.5"/>
+  
+  <!-- Notification badge (small indicator) -->
+  <circle cx="90" cy="45" r="4" fill="#858585" opacity="0.8"/>
+  <text x="90" y="48" text-anchor="middle" font-family="Arial, sans-serif" font-size="6" fill="white">!</text>
+</svg>

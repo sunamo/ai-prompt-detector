@@ -1,0 +1,50 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "compile",
+			"group": "build",
+			"presentation": {
+				"panel": "shared",
+				"reveal": "silent",
+				"clear": false
+			},
+			"isBackground": false,
+			"problemMatcher": "$tsc"
+		},
+		{
+			"type": "npm",
+			"script": "watch",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"panel": "shared",
+				"reveal": "never",
+				"clear": false
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "typescript",
+				"source": "ts",
+				"applyTo": "closedDocuments",
+				"fileLocation": [
+					"relative",
+					"${workspaceRoot}"
+				],
+				"pattern": "$tsc-watch",
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "(\\s*)\\[?(\\d{1,2}:\\d{1,2}:\\d{1,2}(\\s\\w+)?\\]?)(\\s*)(.*compilation\\s(started|complete)|File\\s+change\\s+detected)"
+					},
+					"endsPattern": {
+						"regexp": "(?:Found\\s+(\\d+)\\s+(error|errors)|\\[?(\\d{1,2}:\\d{1,2}:\\d{1,2}(\\s\\w+)?\\]?)\\s*Compilation\\s+complete)"
+					}
+				}
+			}
+		}
+	]
+}

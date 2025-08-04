@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+*.vsix
+.vscode-test/
+.vscode-insiders-test/
+.nyc_output/
+coverage/
