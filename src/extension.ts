@@ -106,20 +106,32 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			switch (data.type) {
 				case 'refresh':
 					writeLog('Manual refresh requested from activity bar', 'DEBUG');
-					// Refresh file detection
+					// Clear existing prompts and reload from all files
+					recentPrompts = [];
+					promptCount = 0;
+					
 					vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-						recentPrompts = [];
-						promptCount = 0;
-						files.forEach(file => {
+						writeLog(`Found ${files.length} SpecStory files to process`, 'DEBUG');
+						
+						// Sort files by timestamp (newest first)
+						const sortedFiles = files.sort((a, b) => {
+							const nameA = path.basename(a.fsPath);
+							const nameB = path.basename(b.fsPath);
+							return nameB.localeCompare(nameA); // Newest first
+						});
+						
+						// Process all files to extract prompts
+						sortedFiles.forEach(file => {
 							writeLog(`Processing file: ${file.fsPath}`, 'DEBUG');
 							if (isValidSpecStoryFile(file.fsPath)) {
-								promptCount++;
 								addRecentPrompt(file.fsPath);
+								promptCount++; // Count files, not individual prompts
 							}
 						});
+						
 						updateStatusBar();
 						this.refreshFromPrompts();
-						writeLog(`Refreshed with ${promptCount} prompts`);
+						writeLog(`Refresh complete: ${recentPrompts.length} total prompts from ${promptCount} files`);
 					});
 					break;
 			}
@@ -131,8 +143,15 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	}
 
 	private refreshFromPrompts(): void {
-		// Convert recentPrompts array to our format
-		this.prompts = recentPrompts.map((prompt, index) => {
+		// Apply maxPrompts limit and convert to display format
+		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const maxPrompts = config.get<number>('maxPrompts', 50);
+		
+		// Take only the most recent prompts
+		const limitedPrompts = recentPrompts.slice(0, maxPrompts);
+		
+		// Convert to display format with proper numbering
+		this.prompts = limitedPrompts.map((prompt, index) => {
 			const shortPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
 			return {
 				number: `#${index + 1}`,
@@ -141,7 +160,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			};
 		});
 		
-		writeLog(`Updating activity bar with ${this.prompts.length} prompts`, 'DEBUG');
+		writeLog(`Updating activity bar with ${this.prompts.length} prompts (limited from ${recentPrompts.length} total)`, 'DEBUG');
 		this._updateView();
 	}
 
@@ -167,7 +186,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			: '<div class="no-notifications">No AI prompts detected yet...<br><button onclick="refresh()">🔄 Refresh</button></div>';
 
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
-		const maxPrompts = config.get<number>('maxPrompts', 10);
+		const maxPrompts = config.get<number>('maxPrompts', 50);
 
 		return `<!DOCTYPE html>
 		<html lang="en">
@@ -306,29 +325,39 @@ export function activate(context: vscode.ExtensionContext) {
 	// Check for existing SpecStory files at startup
 	vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
 		writeLog(`Found ${files.length} existing SpecStory files at startup`);
-		files.forEach(file => {
+		
+		// Sort files by timestamp (newest first)
+		const sortedFiles = files.sort((a, b) => {
+			const nameA = path.basename(a.fsPath);
+			const nameB = path.basename(b.fsPath);
+			return nameB.localeCompare(nameA); // Newest first
+		});
+		
+		// Process all files to extract prompts
+		sortedFiles.forEach(file => {
 			writeLog(`Existing file: ${file.fsPath}`, 'DEBUG');
 			if (isValidSpecStoryFile(file.fsPath)) {
-				promptCount++;
+				promptCount++; // Count files
 				addRecentPrompt(file.fsPath);
 			}
 		});
+		
 		updateStatusBar();
 		provider.refresh();
-		writeLog(`Loaded ${promptCount} existing prompts`);
+		writeLog(`Loaded ${recentPrompts.length} total prompts from ${promptCount} files`);
 	});
 	
 	watcher.onDidCreate(uri => {
 		writeLog(`File created event: ${uri.fsPath}`);
 		// Validate this is actually a SpecStory export file
 		if (isValidSpecStoryFile(uri.fsPath)) {
-			promptCount++;
+			promptCount++; // Increment file count
 			writeLog(`New SpecStory export detected: ${path.basename(uri.fsPath)}`, 'INFO');
 			addRecentPrompt(uri.fsPath);
 			updateStatusBar();
 			provider.refresh();
 			showNotification();
-			writeLog(`Prompt count updated to: ${promptCount}`);
+			writeLog(`File count updated to: ${promptCount}, total prompts: ${recentPrompts.length}`);
 		} else {
 			writeLog(`Ignored non-SpecStory file: ${path.basename(uri.fsPath)}`, 'DEBUG');
 		}
@@ -339,39 +368,87 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function updateStatusBar(): void {
-	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.38';
-	statusBarItem.text = `$(comment-discussion) ${promptCount} | v${version}`;
-	statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
+	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.47';
+	const totalPrompts = recentPrompts.length;
+	statusBarItem.text = `$(comment-discussion) ${totalPrompts} prompts | v${version}`;
+	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection - ${totalPrompts} prompts from ${promptCount} files`;
 }
 
 function addRecentPrompt(filePath: string): void {
-	const fileName = path.basename(filePath, '.md');
-	writeLog(`Processing prompt file: ${fileName}`, 'DEBUG');
+	try {
+		writeLog(`Processing SpecStory file: ${filePath}`, 'DEBUG');
+		
+		// Read and parse the SpecStory file content
+		const content = fs.readFileSync(filePath, 'utf8');
+		const extractedPrompts = extractPromptsFromContent(content);
+		
+		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'DEBUG');
+		
+		// Add all prompts from this file to the beginning (newest first)
+		extractedPrompts.reverse().forEach(prompt => {
+			recentPrompts.unshift(prompt);
+		});
+		
+		writeLog(`Total prompts after adding file: ${recentPrompts.length}`, 'DEBUG');
+		
+	} catch (error) {
+		writeLog(`Error processing SpecStory file ${filePath}: ${error}`, 'ERROR');
+	}
+}
+
+function extractPromptsFromContent(content: string): string[] {
+	const prompts: string[] = [];
 	
-	const timeText = fileName.substring(0, 16).replace('_', ' '); // Extract date/time
-	writeLog(`Extracted time text: "${timeText}"`, 'DEBUG');
+	try {
+		// Split content by user/assistant markers
+		const sections = content.split(/(?=_\*\*User\*\*_|_\*\*Assistant\*\*_)/);
+		
+		for (const section of sections) {
+			// Look for user sections
+			if (section.includes('_**User**_')) {
+				// Extract text after the user marker
+				const lines = section.split('\n');
+				const userPrompt: string[] = [];
+				let foundUserMarker = false;
+				
+				for (const line of lines) {
+					if (line.includes('_**User**_')) {
+						foundUserMarker = true;
+						continue;
+					}
+					
+					if (foundUserMarker) {
+						// Stop at separator or assistant marker
+						if (line.includes('---') || line.includes('_**Assistant**_')) {
+							break;
+						}
+						
+						// Add non-empty lines to prompt
+						const trimmedLine = line.trim();
+						if (trimmedLine) {
+							userPrompt.push(trimmedLine);
+						}
+					}
+				}
+				
+				// Join the prompt lines and add if not empty
+				if (userPrompt.length > 0) {
+					const fullPrompt = userPrompt.join(' ').trim();
+					if (fullPrompt.length > 0) {
+						prompts.push(fullPrompt);
+						writeLog(`Extracted prompt: "${fullPrompt.substring(0, 100)}..."`, 'DEBUG');
+					}
+				}
+			}
+		}
+		
+		writeLog(`Successfully extracted ${prompts.length} user prompts`, 'DEBUG');
+		
+	} catch (error) {
+		writeLog(`Error extracting prompts from content: ${error}`, 'ERROR');
+	}
 	
-	const newPrompt = `#1\n${timeText}`;
-	recentPrompts.unshift(newPrompt);
-	writeLog(`Added new prompt: "${newPrompt}"`, 'DEBUG');
-	
-	// Re-number all prompts so newest is always #1
-	const config = vscode.workspace.getConfiguration('specstory-autosave');
-	const maxPrompts = config.get<number>('maxPrompts', 10);
-	
-	recentPrompts = recentPrompts.slice(0, maxPrompts).map((prompt, index) => {
-		const parts = prompt.split('\n');
-		const numbered = `#${index + 1}\n${parts[1]}`;
-		writeLog(`Renumbered prompt ${index}: "${numbered}"`, 'DEBUG');
-		return numbered;
-	});
-	
-	writeLog(`Final prompt list (${recentPrompts.length} items):`, 'DEBUG');
-	recentPrompts.forEach((prompt, i) => {
-		writeLog(`  [${i}]: "${prompt}"`, 'DEBUG');
-	});
-	
-	writeLog(`Prompt list updated, showing ${recentPrompts.length} prompts (max: ${maxPrompts})`, 'INFO');
+	return prompts;
 }
 
 function showNotification(): void {
