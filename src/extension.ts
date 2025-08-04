@@ -75,6 +75,28 @@ export async function activate(context: vscode.ExtensionContext) {
 	await loadExistingPrompts();
 	writeLog(`Loaded ${state.recentPrompts.length} total prompts at startup`, 'INFO');
 	
+	// TEST: Check specific file manually
+	const testFilePath = 'C:\\Proj_Net\\portal-ui\\.specstory\\history\\2025-08-03_07-59Z-user-greeting-and-request-for-assistance.md';
+	try {
+		const fs = require('fs');
+		if (fs.existsSync(testFilePath)) {
+			writeLog(`TEST: File ${testFilePath} exists`, 'INFO');
+			const { addRecentPrompt } = require('./utils/promptProcessing');
+			const beforeCount = state.recentPrompts.length;
+			addRecentPrompt(testFilePath);
+			const afterCount = state.recentPrompts.length;
+			writeLog(`TEST: Before=${beforeCount}, After=${afterCount}, Added=${afterCount - beforeCount}`, 'INFO');
+			if (state.recentPrompts.length > 0) {
+				writeLog(`TEST: First prompt: "${state.recentPrompts[0].substring(0, 100)}..."`, 'INFO');
+				writeLog(`TEST: Last prompt: "${state.recentPrompts[state.recentPrompts.length - 1].substring(0, 100)}..."`, 'INFO');
+			}
+		} else {
+			writeLog(`TEST: File ${testFilePath} does NOT exist`, 'INFO');
+		}
+	} catch (error) {
+		writeLog(`TEST: Error testing file: ${error}`, 'ERROR');
+	}
+	
 	watcher.onDidCreate(uri => {
 		writeLog(`File created event: ${uri.fsPath}`);
 		// Trigger reload of all prompts when new file is created

@@ -30,8 +30,12 @@ export const usePrompts = () => {
 			
 			// Process each file and extract user prompts
 			sortedFiles.forEach(file => {
+				writeLog(`Checking file: ${file.fsPath}`, 'DEBUG');
 				if (isValidSpecStoryFile(file.fsPath)) {
+					writeLog(`File ${file.fsPath} is valid SpecStory file, processing...`, 'DEBUG');
 					addRecentPrompt(file.fsPath);
+				} else {
+					writeLog(`File ${file.fsPath} is NOT a valid SpecStory file`, 'DEBUG');
 				}
 			});
 			
