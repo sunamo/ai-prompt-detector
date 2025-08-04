@@ -128,14 +128,39 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 
 		// CRITICAL: Load existing prompts when webview is first created
 		writeLog('Webview just resolved - loading existing prompts immediately', 'INFO');
+		writeLog(`Current recentPrompts.length: ${recentPrompts.length}`, 'INFO');
 		
-		// Force immediate refresh to show existing prompts
-		if (recentPrompts.length > 0) {
+		// If no prompts loaded yet, force immediate reload from files
+		if (recentPrompts.length === 0) {
+			writeLog('No prompts in memory - loading from files immediately', 'INFO');
+			vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+				writeLog(`Webview resolve: Found ${files.length} SpecStory files to process`, 'INFO');
+				
+				// Clear and reload
+				recentPrompts = [];
+				
+				// Sort files by timestamp (newest first)
+				const sortedFiles = files.sort((a, b) => {
+					const nameA = path.basename(a.fsPath);
+					const nameB = path.basename(b.fsPath);
+					const timestampA = extractTimestampFromFileName(nameA);
+					const timestampB = extractTimestampFromFileName(nameB);
+					return timestampB.getTime() - timestampA.getTime();
+				});
+				
+				// Process all files to extract prompts
+				sortedFiles.forEach(file => {
+					if (isValidSpecStoryFile(file.fsPath)) {
+						addRecentPrompt(file.fsPath);
+					}
+				});
+				
+				writeLog(`After loading: ${recentPrompts.length} total prompts`, 'INFO');
+				this.refreshFromPrompts();
+			});
+		} else {
 			writeLog(`Found ${recentPrompts.length} existing prompts, displaying them now`, 'INFO');
 			this.refreshFromPrompts();
-		} else {
-			writeLog('No existing prompts found, showing empty state', 'INFO');
-			this._updateView(); // Show empty state
 		}
 
 		webviewView.webview.onDidReceiveMessage(data => {
