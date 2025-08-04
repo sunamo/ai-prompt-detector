@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.42",
+  "version": "1.1.43",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -56,6 +56,11 @@
 		  "type": "string",
 		  "default": "",
 		  "description": "Path to folder for extension logs (leave empty to use system temp folder)"
+		},
+		"specstory-autosave.enableDebugLogs": {
+		  "type": "boolean",
+		  "default": false,
+		  "description": "Enable debug logging (shows detailed information in logs)"
 		}
 	  }
     }

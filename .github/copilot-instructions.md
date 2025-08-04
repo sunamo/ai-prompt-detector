@@ -249,3 +249,5 @@ For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywher
 
 Create files as small as possible, no more than 200 lines each.
 
+distinguish between those that are always displayed and debug logs. Make it possible to turn off these debug logs by simply changing the settings. Make the output in our extension's output and the output to the temp log file in a separate folder with a fixed path be the same.
+

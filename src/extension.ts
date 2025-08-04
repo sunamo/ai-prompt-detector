@@ -7,6 +7,7 @@ let statusBarItem: vscode.StatusBarItem;
 let promptCount = 0;
 let recentPrompts: string[] = [];
 let logFile: string;
+let outputChannel: vscode.OutputChannel;
 
 function initializeLogging(): void {
 	const config = vscode.workspace.getConfiguration('specstory-autosave');
@@ -19,15 +20,29 @@ function initializeLogging(): void {
 	}
 	
 	logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
+	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
+	
 	writeLog('Extension initialized', 'INFO');
 }
 
 function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): void {
-	const timestamp = new Date().toISOString();
-	const logEntry = `[${timestamp}] ${level}: ${message}\n`;
+	const config = vscode.workspace.getConfiguration('specstory-autosave');
+	const enableDebugLogs = config.get<boolean>('enableDebugLogs', false);
 	
+	// Skip debug logs if disabled
+	if (level === 'DEBUG' && !enableDebugLogs) {
+		return;
+	}
+	
+	const timestamp = new Date().toISOString();
+	const logEntry = `[${timestamp}] ${level}: ${message}`;
+	
+	// Write to VS Code output channel
+	outputChannel.appendLine(logEntry);
+	
+	// Write to temp file
 	try {
-		fs.appendFileSync(logFile, logEntry);
+		fs.appendFileSync(logFile, logEntry + '\n');
 	} catch (error) {
 		console.error('Failed to write log:', error);
 	}
@@ -86,7 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
 		writeLog(`Prompt count updated to: ${promptCount}`);
 	});
 
-	context.subscriptions.push(statusBarItem, watcher);
+	context.subscriptions.push(statusBarItem, watcher, outputChannel);
 	writeLog('Extension activation complete');
 }
 
