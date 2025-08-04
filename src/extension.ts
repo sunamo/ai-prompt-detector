@@ -150,12 +150,17 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 		const config = vscode.workspace.getConfiguration('specstory-autosave');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 		
+		writeLog(`refreshFromPrompts called with ${recentPrompts.length} total prompts`, 'DEBUG');
+		
 		// Take only the most recent prompts
 		const limitedPrompts = recentPrompts.slice(0, maxPrompts);
+		
+		writeLog(`Limited to ${limitedPrompts.length} prompts (max: ${maxPrompts})`, 'DEBUG');
 		
 		// Convert to display format with proper numbering
 		this.prompts = limitedPrompts.map((prompt, index) => {
 			const shortPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
+			writeLog(`Creating prompt #${index + 1}: "${shortPrompt.substring(0, 50)}..."`, 'DEBUG');
 			return {
 				number: `#${index + 1}`,
 				shortPrompt: shortPrompt,
@@ -163,7 +168,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 			};
 		});
 		
-		writeLog(`Updating activity bar with ${this.prompts.length} prompts (limited from ${recentPrompts.length} total)`, 'DEBUG');
+		writeLog(`Activity bar will show ${this.prompts.length} prompts`, 'DEBUG');
 		this._updateView();
 	}
 
@@ -302,7 +307,7 @@ class RecentPromptsProvider implements vscode.WebviewViewProvider {
 	}
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 	
 	// Force immediate log write to test
@@ -336,12 +341,13 @@ export function activate(context: vscode.ExtensionContext) {
 	writeLog('Activity bar provider registered', 'INFO');
 
 	// Register refresh command
-	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', () => {
+	const refreshCommand = vscode.commands.registerCommand('specstory-autosave.refresh', async () => {
 		writeLog('Manual refresh command executed', 'INFO');
 		// Clear existing prompts and reload from all files
 		recentPrompts = [];
 		
-		vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
+		try {
+			const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
 			writeLog(`Refresh: Found ${files.length} SpecStory files to process`, 'INFO');
 			
 			// Sort files by timestamp (newest first)
@@ -364,7 +370,9 @@ export function activate(context: vscode.ExtensionContext) {
 			updateStatusBar();
 			provider.refresh();
 			writeLog(`Refresh complete: ${recentPrompts.length} total prompts loaded`, 'INFO');
-		});
+		} catch (error) {
+			writeLog(`Error during refresh: ${error}`, 'ERROR');
+		}
 	});
 
 	// Watch for new SpecStory files across entire workspace
@@ -373,8 +381,17 @@ export function activate(context: vscode.ExtensionContext) {
 	writeLog(`Workspace folders: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ') || 'none'}`);
 	
 	// Check for existing SpecStory files at startup
-	vscode.workspace.findFiles('**/.specstory/history/*.md').then(files => {
-		writeLog(`Found ${files.length} existing SpecStory files at startup`);
+	writeLog('Starting search for SpecStory files...', 'INFO');
+	try {
+		const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
+		writeLog(`Found ${files.length} existing SpecStory files at startup`, 'INFO');
+		writeLog(`Files found: ${files.map(f => f.fsPath).join(', ')}`, 'INFO');
+		
+		if (files.length === 0) {
+			// Try alternative patterns
+			const altFiles = await vscode.workspace.findFiles('**/*specstory*/**/*.md');
+			writeLog(`Alternative search found ${altFiles.length} files: ${altFiles.map(f => f.fsPath).join(', ')}`, 'INFO');
+		}
 		
 		// Sort files by timestamp (newest first)
 		const sortedFiles = files.sort((a, b) => {
@@ -388,7 +405,7 @@ export function activate(context: vscode.ExtensionContext) {
 		
 		// Process all files to extract prompts
 		sortedFiles.forEach(file => {
-			writeLog(`Existing file: ${file.fsPath}`, 'DEBUG');
+			writeLog(`Existing file: ${file.fsPath}`, 'INFO');
 			if (isValidSpecStoryFile(file.fsPath)) {
 				addRecentPrompt(file.fsPath);
 			}
@@ -396,8 +413,10 @@ export function activate(context: vscode.ExtensionContext) {
 		
 		updateStatusBar();
 		provider.refresh(); // This will load prompts into activity bar
-		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`);
-	});
+		writeLog(`Loaded ${recentPrompts.length} total prompts from ${sortedFiles.length} files`, 'INFO');
+	} catch (error) {
+		writeLog(`Error loading existing SpecStory files: ${error}`, 'ERROR');
+	}
 	
 	watcher.onDidCreate(uri => {
 		writeLog(`File created event: ${uri.fsPath}`);
@@ -431,9 +450,16 @@ function addRecentPrompt(filePath: string): void {
 		
 		// Read and parse the SpecStory file content
 		const content = fs.readFileSync(filePath, 'utf8');
+		writeLog(`File content length: ${content.length} characters`, 'DEBUG');
+		
 		const extractedPrompts = extractPromptsFromContent(content);
 		
 		writeLog(`Extracted ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, 'DEBUG');
+		
+		// Log each prompt being added
+		extractedPrompts.forEach((prompt, index) => {
+			writeLog(`Adding prompt ${index + 1}: "${prompt.substring(0, 100)}..."`, 'DEBUG');
+		});
 		
 		// Add all prompts from this file to the end (maintain file order: newest file first)
 		// Since files are processed newest first, and prompts within file are already newest first,
@@ -466,12 +492,18 @@ function extractPromptsFromContent(content: string): string[] {
 	const prompts: string[] = [];
 	
 	try {
+		writeLog(`Starting extraction from content (${content.length} chars)`, 'DEBUG');
+		
 		// Split content by user/assistant markers
 		const sections = content.split(/(?=_\*\*User\*\*_|_\*\*Assistant\*\*_)/);
+		writeLog(`Split content into ${sections.length} sections`, 'DEBUG');
 		
-		for (const section of sections) {
+		for (let i = 0; i < sections.length; i++) {
+			const section = sections[i];
 			// Look for user sections
 			if (section.includes('_**User**_')) {
+				writeLog(`Processing user section ${i + 1}`, 'DEBUG');
+				
 				// Extract text after the user marker
 				const lines = section.split('\n');
 				const userPrompt: string[] = [];
@@ -480,12 +512,14 @@ function extractPromptsFromContent(content: string): string[] {
 				for (const line of lines) {
 					if (line.includes('_**User**_')) {
 						foundUserMarker = true;
+						writeLog(`Found User marker in line: "${line.trim()}"`, 'DEBUG');
 						continue;
 					}
 					
 					if (foundUserMarker) {
 						// Stop at separator or assistant marker
 						if (line.includes('---') || line.includes('_**Assistant**_')) {
+							writeLog(`Stopping at separator/assistant marker: "${line.trim()}"`, 'DEBUG');
 							break;
 						}
 						
@@ -502,7 +536,7 @@ function extractPromptsFromContent(content: string): string[] {
 					const fullPrompt = userPrompt.join(' ').trim();
 					if (fullPrompt.length > 0) {
 						prompts.push(fullPrompt);
-						writeLog(`Extracted prompt: "${fullPrompt.substring(0, 100)}..."`, 'DEBUG');
+						writeLog(`Extracted prompt (${fullPrompt.length} chars): "${fullPrompt.substring(0, 100)}..."`, 'DEBUG');
 					}
 				}
 			}
