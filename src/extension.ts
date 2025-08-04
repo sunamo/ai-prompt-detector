@@ -43,10 +43,9 @@ function initializeLogging(): void {
 	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
 	console.log('Output channel created');
 	
-	// Force first log entry to ensure logging works
-	const timestamp = new Date().toISOString();
-	const logCzechTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Prague"}));
-	const czechTimestamp = logCzechTime.toISOString();
+	// Force first log entry to ensure logging works - use Czech time
+	const czechTime = new Date(new Date().getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours
+	const czechTimestamp = czechTime.toISOString();
 	const firstEntry = `[${czechTimestamp}] INFO: === NEW SESSION STARTED ===\n`;
 	try {
 		fs.appendFileSync(logFile, firstEntry);
@@ -108,12 +107,10 @@ function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): 
 		return;
 	}
 	
-	const timestamp = new Date().toISOString();
-	const logEntry = `[${timestamp}] ${level}: ${message}`;
-	
-	// Also create Czech time version for display
-	const logCzechTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Prague"}));
-	const czechTimestamp = logCzechTime.toISOString();
+	// Create Czech time properly - add 2 hours to UTC (summer time)
+	const now = new Date();
+	const czechTime = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours in milliseconds
+	const czechTimestamp = czechTime.toISOString();
 	const czechLogEntry = `[${czechTimestamp}] ${level}: ${message}`;
 	
 	// Always write to console for debugging (with Czech time)
