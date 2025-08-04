@@ -19,15 +19,15 @@ function initializeLogging(): void {
 		console.log(`Log folder created: ${logFolder}`);
 	}
 	
-	// Get current date in Czech timezone (UTC+1/UTC+2)
+	// Get current date in Czech timezone (UTC+2 summer time)
 	const now = new Date();
-	// Czech time: UTC+1 winter, UTC+2 summer (automatically handled by toLocaleString)
-	const czechTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Prague"}));
-	const dateStr = czechTime.toISOString().split('T')[0];
+	// Get Czech date correctly - create date from formatted string
+	const czechTimeString = now.toLocaleDateString("en-CA", {timeZone: "Europe/Prague"}); // YYYY-MM-DD format
+	const dateStr = czechTimeString; // Already in YYYY-MM-DD format
 	logFile = path.join(logFolder, `extension-${dateStr}.log`);
 	
 	console.log(`Current UTC time: ${now.toISOString()}`);
-	console.log(`Czech time: ${czechTime.toISOString()}`);
+	console.log(`Czech date string: ${czechTimeString}`);
 	console.log(`Date string: ${dateStr}`);
 	console.log(`Log file path: ${logFile}`);
 	
