@@ -10,10 +10,8 @@ let logFile: string;
 let outputChannel: vscode.OutputChannel;
 
 function initializeLogging(): void {
-	const config = vscode.workspace.getConfiguration('specstory-autosave');
-	const customLogFolder = config.get<string>('logFolder', '');
-	
-	const logFolder = customLogFolder || path.join(os.tmpdir(), 'specstory-autosave');
+	// Use fixed path that works for all users including guest accounts
+	const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
 	
 	if (!fs.existsSync(logFolder)) {
 		fs.mkdirSync(logFolder, { recursive: true });
