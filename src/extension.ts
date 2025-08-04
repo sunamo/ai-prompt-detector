@@ -5,6 +5,26 @@ import * as path from 'path';
 let statusBarItem: vscode.StatusBarItem;
 let promptCount = 0;
 
+class SpecStoryProvider implements vscode.TreeDataProvider<string> {
+	private _onDidChangeTreeData: vscode.EventEmitter<string | undefined | null | void> = new vscode.EventEmitter<string | undefined | null | void>();
+	readonly onDidChangeTreeData: vscode.Event<string | undefined | null | void> = this._onDidChangeTreeData.event;
+
+	refresh(): void {
+		this._onDidChangeTreeData.fire();
+	}
+
+	getTreeItem(element: string): vscode.TreeItem {
+		return new vscode.TreeItem(element, vscode.TreeItemCollapsibleState.None);
+	}
+
+	getChildren(element?: string): string[] {
+		if (!element) {
+			return [`Detected prompts: ${promptCount}`, 'Monitoring workspace...'];
+		}
+		return [];
+	}
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('SpecStory AutoSave + AI Copilot Prompt Detection is now active');
 
@@ -13,12 +33,17 @@ export function activate(context: vscode.ExtensionContext) {
 	updateStatusBar();
 	statusBarItem.show();
 
+	// Register activity bar provider
+	const provider = new SpecStoryProvider();
+	vscode.window.registerTreeDataProvider('specstory-autosave-view', provider);
+
 	// Watch for new SpecStory files across entire workspace
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
 	watcher.onDidCreate(uri => {
 		promptCount++;
 		updateStatusBar();
+		provider.refresh();
 		analyzeAndNotify(uri.fsPath);
 	});
 
@@ -26,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function updateStatusBar(): void {
-	const version = vscode.extensions.getExtension('specstory.autosave')?.packageJSON.version || '1.0.0';
+	const version = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.35';
 	statusBarItem.text = `$(comment-discussion) ${promptCount} | v${version}`;
 	statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
 }
