@@ -1,0 +1,41 @@
+# Just boost brightness/contrast of original icon, keep original shape
+Add-Type -AssemblyName System.Drawing
+
+# Load original
+$original = [System.Drawing.Image]::FromFile("icon-backup.png")
+
+# Create new image same size
+$enhanced = New-Object System.Drawing.Bitmap($original.Width, $original.Height)
+$g = [System.Drawing.Graphics]::FromImage($enhanced)
+
+# Set high quality
+$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+
+# Just boost brightness and contrast, no background
+$colorMatrix = New-Object System.Drawing.Imaging.ColorMatrix
+$colorMatrix.Matrix00 = 1.4  # Red boost
+$colorMatrix.Matrix11 = 1.4  # Green boost
+$colorMatrix.Matrix22 = 1.4  # Blue boost  
+$colorMatrix.Matrix33 = 1.0  # Keep alpha unchanged
+$colorMatrix.Matrix40 = 0.1  # Slight brightness boost
+$colorMatrix.Matrix41 = 0.1  
+$colorMatrix.Matrix42 = 0.1
+$colorMatrix.Matrix44 = 1.0
+
+$attributes = New-Object System.Drawing.Imaging.ImageAttributes
+$attributes.SetColorMatrix($colorMatrix)
+
+# Draw original with enhancement, preserving transparency
+$g.DrawImage($original, [System.Drawing.Rectangle]::new(0, 0, $original.Width, $original.Height), 0, 0, $original.Width, $original.Height, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+
+# Save enhanced version
+$enhanced.Save("icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+
+# Cleanup
+$g.Dispose()
+$enhanced.Dispose() 
+$original.Dispose()
+$attributes.Dispose()
+
+Write-Host "✅ Icon brightness/contrast enhanced while keeping original shape!" -ForegroundColor Green
