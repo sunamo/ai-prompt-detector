@@ -7,6 +7,12 @@ let recentPrompts: string[] = []; // SpecStory exported prompts from .md files
 let aiPromptCounter: number = 0; // Counter for AI prompts to GitHub Copilot
 let statusBarItem: vscode.StatusBarItem; // VS Code status bar item
 
+// Auto-save configuration (hardcoded to true)
+const AUTO_SAVE_ENABLED = true;
+const AUTO_SAVE_INTERVAL = 5000; // 5 seconds
+const AUTO_SAVE_PATTERNS = ['**/*.md', '**/*.txt', '**/*.json'];
+let autoSaveTimer: NodeJS.Timeout | undefined;
+
 // Funkce pro validaci SpecStory souborů
 function isValidSpecStoryFile(filePath: string): boolean {
 	try {
@@ -164,9 +170,13 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 	private createPromptsHtml(): string {
 		let promptsHtml = '';
 		
+		// Get max prompts from settings
+		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const maxPrompts = config.get<number>('maxPrompts', 50);
+		
 		if (recentPrompts.length > 0) {
-			// Zobraz maximálně 20 posledních promptů
-			const displayPrompts = recentPrompts.slice(0, 20);
+			// Zobraz maximálně podle nastavení
+			const displayPrompts = recentPrompts.slice(0, maxPrompts);
 			
 			promptsHtml = displayPrompts.map((prompt, index) => {
 				// Zkrať prompt na rozumnou délku pro zobrazení
@@ -255,7 +265,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 <body>
 
 <div class="header-bar">
-	📊 Total: ${recentPrompts.length} prompts (max 20) | ⚙️ Change max count in settings
+	📊 Total: ${recentPrompts.length} prompts (max ${maxPrompts}) | ⚙️ Change max count in settings
 </div>
 
 ${promptsHtml}
@@ -312,6 +322,17 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Listen for configuration changes
+	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('specstory-autosave.maxPrompts')) {
+			const config = vscode.workspace.getConfiguration('specstory-autosave');
+			const maxPrompts = config.get<number>('maxPrompts', 50);
+			outputChannel.appendLine(`⚙️ Settings changed: maxPrompts = ${maxPrompts}`);
+			// Refresh webview to show new limit
+			promptsProvider.refresh();
+		}
+	});
+
 	// Monitor AI prompt counter - detect Copilot activity
 	const disposable = vscode.commands.registerCommand('type', (args) => {
 		// Increment counter when user types in Copilot or sends prompts
@@ -328,9 +349,59 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 		return vscode.commands.executeCommand('default:type', args);
 	});
+
+	// Auto-save functionality (hardcoded enabled)
+	if (AUTO_SAVE_ENABLED) {
+		outputChannel.appendLine(`💾 AUTO-SAVE: Enabled with interval ${AUTO_SAVE_INTERVAL}ms`);
+		outputChannel.appendLine(`💾 AUTO-SAVE: Patterns: ${AUTO_SAVE_PATTERNS.join(', ')}`);
+		
+		const startAutoSave = () => {
+			if (autoSaveTimer) {
+				clearInterval(autoSaveTimer);
+			}
+			
+			autoSaveTimer = setInterval(async () => {
+				try {
+					// Save all dirty editors that match our patterns
+					const dirtyEditors = vscode.window.visibleTextEditors.filter(editor => 
+						editor.document.isDirty && 
+						AUTO_SAVE_PATTERNS.some(pattern => 
+							editor.document.fileName.includes('.md') || 
+							editor.document.fileName.includes('.txt') || 
+							editor.document.fileName.includes('.json')
+						)
+					);
+					
+					if (dirtyEditors.length > 0) {
+						outputChannel.appendLine(`💾 AUTO-SAVE: Saving ${dirtyEditors.length} dirty files`);
+						
+						for (const editor of dirtyEditors) {
+							await editor.document.save();
+							outputChannel.appendLine(`💾 AUTO-SAVE: Saved ${path.basename(editor.document.fileName)}`);
+						}
+					}
+				} catch (error) {
+					outputChannel.appendLine(`❌ AUTO-SAVE: Error saving files: ${error}`);
+				}
+			}, AUTO_SAVE_INTERVAL);
+		};
+		
+		startAutoSave();
+	}
 	
 	// Přidej do subscriptions pro cleanup
-	context.subscriptions.push(outputChannel, registration, watcher, disposable, statusBarItem);
+	context.subscriptions.push(outputChannel, registration, watcher, configWatcher, disposable, statusBarItem);
+	
+	// Cleanup auto-save timer on deactivation
+	context.subscriptions.push({
+		dispose: () => {
+			if (autoSaveTimer) {
+				clearInterval(autoSaveTimer);
+				autoSaveTimer = undefined;
+				outputChannel.appendLine('💾 AUTO-SAVE: Timer cleared');
+			}
+		}
+	});
 	
 	outputChannel.appendLine(`🚀 PROMPTS: Aktivace dokončena - celkem ${recentPrompts.length} promptů`);
 	outputChannel.appendLine('🚀 PROMPTS: Otevři Activity Bar panel SpecStory AI!');
@@ -376,7 +447,15 @@ async function loadExistingPrompts(): Promise<void> {
 
 export function deactivate() {
 	console.log('🚀 DEAKTIVACE: Extension se vypíná');
+	
+	// Clear auto-save timer
+	if (autoSaveTimer) {
+		clearInterval(autoSaveTimer);
+		autoSaveTimer = undefined;
+	}
+	
 	if (outputChannel) {
+		outputChannel.appendLine('💾 AUTO-SAVE: Extension deactivated, timer cleared');
 		outputChannel.appendLine('🚀 DUMMY: Extension deactivated');
 	}
 }
