@@ -108,38 +108,52 @@ function loadPromptsFromFile(filePath: string): void {
 // ACTIVITY BAR PROVIDER S REÁLNÝMI PROMPTY
 class PromptsProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'specstory-autosave-view';
+	private _view?: vscode.WebviewView;
 
 	constructor() {
 		console.log('🎯 PROMPTS: Provider vytvořen');
 	}
 
-	public resolveWebviewView(webviewView: vscode.WebviewView) {
+	public resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken,
+	) {
 		console.log('🎯 PROMPTS: resolveWebviewView called');
+		
+		this._view = webviewView;
 		
 		webviewView.webview.options = {
 			enableScripts: false,
 			localResourceRoots: []
 		};
 
-		this.updateWebview(webviewView);
+		// OKAMŽITĚ nastav HTML
+		this.updateWebview();
 		
 		if (outputChannel) {
 			outputChannel.appendLine('🎯 PROMPTS: Webview nastaven s reálnými prompty');
+			outputChannel.appendLine(`🎯 PROMPTS: Počet promptů k zobrazení: ${recentPrompts.length}`);
 		}
 	}
 
-	public refresh(webviewView?: vscode.WebviewView): void {
-		if (webviewView) {
-			this.updateWebview(webviewView);
+	public refresh(): void {
+		if (this._view) {
+			this.updateWebview();
 		}
 	}
 
-	private updateWebview(webviewView: vscode.WebviewView): void {
+	private updateWebview(): void {
+		if (!this._view) {
+			console.log('🎯 PROMPTS: Webview ještě není připravený');
+			return;
+		}
+		
 		const html = this.createPromptsHtml();
-		webviewView.webview.html = html;
+		this._view.webview.html = html;
 		
 		if (outputChannel) {
-			outputChannel.appendLine(`🎯 PROMPTS: Zobrazeno ${recentPrompts.length} promptů`);
+			outputChannel.appendLine(`🎯 PROMPTS: HTML nastaven, zobrazeno ${recentPrompts.length} promptů`);
 		}
 	}
 
@@ -248,17 +262,20 @@ export async function activate(context: vscode.ExtensionContext) {
 	outputChannel.show();
 	outputChannel.appendLine('🚀 PROMPTS: Extension spouštění...');
 	
-	// Načti existující SpecStory soubory
+	// NEJDŘÍVE načti prompty
 	await loadExistingPrompts();
+	outputChannel.appendLine(`🚀 PROMPTS: Po načtení máme ${recentPrompts.length} promptů`);
 	
-	// Vytvoř provider pro Activity Bar
+	// POTOM vytvoř a registruj provider
 	const promptsProvider = new PromptsProvider();
 	
-	// Registruj provider v VS Code
+	outputChannel.appendLine(`🚀 PROMPTS: Registruji provider s viewType: ${PromptsProvider.viewType}`);
 	const registration = vscode.window.registerWebviewViewProvider(
 		PromptsProvider.viewType,
 		promptsProvider
 	);
+	
+	outputChannel.appendLine('🚀 PROMPTS: Provider zaregistrován úspěšně');
 	
 	// Sleduj nové SpecStory soubory
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
@@ -267,15 +284,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		if (isValidSpecStoryFile(uri.fsPath)) {
 			outputChannel.appendLine(`📝 Nový SpecStory soubor: ${path.basename(uri.fsPath)}`);
 			loadPromptsFromFile(uri.fsPath);
-			// Refresh webview if possible
+			// Refresh webview
+			promptsProvider.refresh();
 		}
 	});
 	
 	// Přidej do subscriptions pro cleanup
 	context.subscriptions.push(outputChannel, registration, watcher);
 	
-	outputChannel.appendLine('🚀 PROMPTS: Provider zaregistrován');
-	outputChannel.appendLine(`🚀 PROMPTS: Načteno ${recentPrompts.length} promptů`);
+	outputChannel.appendLine(`🚀 PROMPTS: Aktivace dokončena - celkem ${recentPrompts.length} promptů`);
+	outputChannel.appendLine('🚀 PROMPTS: Otevři Activity Bar panel SpecStory AI!');
 	
 	console.log('🚀 AKTIVACE: Extension úspěšně aktivován');
 }
