@@ -128,12 +128,25 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			localResourceRoots: []
 		};
 
-		// OKAMŽITĚ nastav HTML
-		this.updateWebview();
+		// RADIKÁLNÍ TEST - nejjednodušší možný HTML
+		const simpleHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="color: white; padding: 20px; font-family: Arial;">
+<h1>🚀 FUNGUJE!</h1>
+<p><strong>dobrý den a nic nedělje</strong></p>
+<p>Extension je aktivní a webview funguje!</p>
+<p>Počet promptů: ${recentPrompts.length}</p>
+</body>
+</html>`;
+
+		webviewView.webview.html = simpleHtml;
+		
+		console.log('🎯 PROMPTS: Jednoduchý HTML nastaven');
 		
 		if (outputChannel) {
-			outputChannel.appendLine('🎯 PROMPTS: Webview nastaven s reálnými prompty');
-			outputChannel.appendLine(`🎯 PROMPTS: Počet promptů k zobrazení: ${recentPrompts.length}`);
+			outputChannel.appendLine('🎯 PROMPTS: RADIKÁLNÍ TEST - jednoduchý HTML nastaven');
+			outputChannel.appendLine(`🎯 PROMPTS: Počet promptů: ${recentPrompts.length}`);
 		}
 	}
 
