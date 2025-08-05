@@ -207,23 +207,6 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			font-size: 12px;
 			line-height: 1.4;
 		}
-		.header {
-			background-color: #2d2d30;
-			padding: 8px;
-			border-radius: 4px;
-			margin-bottom: 10px;
-			text-align: center;
-			border-left: 3px solid #007acc;
-		}
-		.header h2 {
-			margin: 0;
-			color: #4ec9b0;
-			font-size: 14px;
-		}
-		.header small {
-			color: #888;
-			font-size: 10px;
-		}
 		.prompt-item {
 			background-color: #252526;
 			border: 1px solid #3c3c3c;
@@ -254,7 +237,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			color: #888;
 		}
 		.status {
-			margin-top: 15px;
+			margin-bottom: 15px;
 			padding: 8px;
 			background-color: #0e639c;
 			border-radius: 3px;
@@ -266,16 +249,11 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
 
-<div class="header">
-	<h2>📋 SpecStory AI Prompts</h2>
-	<small>Celkem: ${recentPrompts.length} promptů</small>
-</div>
-
-${promptsHtml}
-
 <div class="status">
 	📊 Celkem: ${recentPrompts.length} promptů | 👁️ Zobrazeno: max 20 | ⚙️ Max počet změň v nastavení
 </div>
+
+${promptsHtml}
 
 </body>
 </html>`;
