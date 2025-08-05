@@ -38,22 +38,9 @@ $bubblePath.AddArc($bubbleRect.Right - $bubbleCorner, $bubbleRect.Bottom - $bubb
 $bubblePath.AddArc($bubbleRect.X, $bubbleRect.Bottom - $bubbleCorner, $bubbleCorner, $bubbleCorner, 90, 90)
 $bubblePath.CloseFigure()
 
-# Chat bubble tail (small triangle pointing down-left, centered below bubble)
-$tailTipX = $bubbleX + 20  # Position tail tip relative to bubble
-$tailTipY = $bubbleY + $bubbleHeight + 8
-$tailPoints = [System.Drawing.Point[]]@(
-    [System.Drawing.Point]::new($tailTipX, $tailTipY),           # tip
-    [System.Drawing.Point]::new($tailTipX + 8, $bubbleY + $bubbleHeight),    # right base
-    [System.Drawing.Point]::new($tailTipX + 18, $bubbleY + $bubbleHeight + 3) # left base
-)
-$tailPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-$tailPath.AddPolygon($tailPoints)
-
-# Draw chat bubble
+# Draw chat bubble (without tail - just clean rounded rectangle)
 $graphics.FillPath($chatBrush, $bubblePath)
 $graphics.DrawPath($outlinePen, $bubblePath)
-$graphics.FillPath($chatBrush, $tailPath)
-$graphics.DrawPath($outlinePen, $tailPath)
 
 # AI indicator - three dots perfectly centered in bubble
 $dotSize = 4
