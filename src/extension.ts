@@ -128,25 +128,14 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			localResourceRoots: []
 		};
 
-		// RADIKÁLNÍ TEST - nejjednodušší možný HTML
-		const simpleHtml = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="color: white; padding: 20px; font-family: Arial;">
-<h1>🚀 FUNGUJE!</h1>
-<p><strong>dobrý den a nic nedělje</strong></p>
-<p>Extension je aktivní a webview funguje!</p>
-<p>Počet promptů: ${recentPrompts.length}</p>
-</body>
-</html>`;
-
-		webviewView.webview.html = simpleHtml;
+		// ZOBRAZ REÁLNÉ PROMPTY Z .MD SOUBORŮ
+		this.updateWebview();
 		
-		console.log('🎯 PROMPTS: Jednoduchý HTML nastaven');
+		console.log('🎯 PROMPTS: Reálné prompty nastaveny');
 		
 		if (outputChannel) {
-			outputChannel.appendLine('🎯 PROMPTS: RADIKÁLNÍ TEST - jednoduchý HTML nastaven');
-			outputChannel.appendLine(`🎯 PROMPTS: Počet promptů: ${recentPrompts.length}`);
+			outputChannel.appendLine('🎯 PROMPTS: Zobrazuji reálné prompty z SpecStory souborů');
+			outputChannel.appendLine(`🎯 PROMPTS: Počet promptů k zobrazení: ${recentPrompts.length}`);
 		}
 	}
 
@@ -174,15 +163,24 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 		let promptsHtml = '';
 		
 		if (recentPrompts.length > 0) {
-			// Zobraz maximálně 10 posledních promptů
-			const displayPrompts = recentPrompts.slice(0, 10);
+			// Zobraz maximálně 20 posledních promptů
+			const displayPrompts = recentPrompts.slice(0, 20);
 			
 			promptsHtml = displayPrompts.map((prompt, index) => {
-				const shortPrompt = prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt;
+				// Zkrať prompt na rozumnou délku pro zobrazení
+				const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
+				
+				// Escapuj HTML znaky pro bezpečnost
+				const safePrompt = shortPrompt
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;');
+				
 				return `
 <div class="prompt-item">
-	<div class="prompt-number">Prompt #${index + 1}</div>
-	<div class="prompt-text">${shortPrompt}</div>
+	<div class="prompt-number">#${index + 1}</div>
+	<div class="prompt-text">${safePrompt}</div>
 </div>`;
 			}).join('');
 		} else {
@@ -202,35 +200,53 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 	<style>
 		body {
 			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-			background-color: #252526;
+			background-color: #1e1e1e;
 			color: #cccccc;
 			margin: 0;
-			padding: 10px;
-			font-size: 13px;
+			padding: 8px;
+			font-size: 12px;
+			line-height: 1.4;
 		}
 		.header {
 			background-color: #2d2d30;
-			padding: 10px;
-			border-radius: 5px;
-			margin-bottom: 15px;
+			padding: 8px;
+			border-radius: 4px;
+			margin-bottom: 10px;
 			text-align: center;
+			border-left: 3px solid #007acc;
+		}
+		.header h2 {
+			margin: 0;
+			color: #4ec9b0;
+			font-size: 14px;
+		}
+		.header small {
+			color: #888;
+			font-size: 10px;
 		}
 		.prompt-item {
-			background-color: #1e1e1e;
+			background-color: #252526;
 			border: 1px solid #3c3c3c;
 			border-left: 4px solid #007acc;
-			margin: 8px 0;
-			padding: 12px;
+			margin: 6px 0;
+			padding: 8px;
 			border-radius: 3px;
+			transition: background-color 0.2s;
+		}
+		.prompt-item:hover {
+			background-color: #2d2d30;
 		}
 		.prompt-number {
 			font-weight: bold;
 			color: #569cd6;
-			margin-bottom: 5px;
+			margin-bottom: 4px;
+			font-size: 11px;
 		}
 		.prompt-text {
 			color: #d4d4d4;
-			line-height: 1.4;
+			font-size: 11px;
+			line-height: 1.3;
+			word-wrap: break-word;
 		}
 		.no-prompts {
 			text-align: center;
@@ -238,28 +254,33 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			color: #888;
 		}
 		.status {
-			margin-top: 20px;
-			padding: 10px;
+			margin-top: 15px;
+			padding: 8px;
 			background-color: #0e639c;
 			border-radius: 3px;
 			text-align: center;
 			color: white;
+			font-size: 10px;
 		}
 	</style>
 </head>
 <body>
 
 <div class="header">
-	<h2 style="margin: 0; color: #4ec9b0;">📋 SpecStory AI Prompts</h2>
+	<h2>📋 SpecStory AI Prompts</h2>
 	<small>Celkem: ${recentPrompts.length} promptů</small>
 </div>
 
 ${promptsHtml}
 
 <div class="status">
-	✅ Extension aktivní<br>
-	📁 Načteno: ${recentPrompts.length} promptů<br>
-	📅 ${new Date().toLocaleString('cs-CZ')}
+	✅ Extension aktivní | 📁 Načteno: ${recentPrompts.length} promptů<br>
+	📅 ${new Date().toLocaleString('cs-CZ', { 
+		day: '2-digit', 
+		month: '2-digit', 
+		hour: '2-digit', 
+		minute: '2-digit' 
+	})}
 </div>
 
 </body>
