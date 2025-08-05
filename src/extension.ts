@@ -95,6 +95,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	writeLog(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`, false);
 	writeLog('🚀 PROMPTS: Open Activity Bar panel SpecStory AI!', false);
 	
+	// Automatically open the activity bar panel
+	setTimeout(async () => {
+		try {
+			await vscode.commands.executeCommand('specstory-autosave-view.focus');
+			writeLog('📋 Activity bar panel opened automatically', false);
+		} catch (error) {
+			writeLog(`❌ Failed to open activity bar automatically: ${error}`, false);
+			// Fallback: try to open the view container
+			try {
+				await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
+				writeLog('📋 Activity bar container opened as fallback', false);
+			} catch (fallbackError) {
+				writeLog(`❌ Fallback also failed: ${fallbackError}`, false);
+			}
+		}
+	}, 1000);
+	
 	// Check log health after 10 seconds
 	setTimeout(() => {
 		checkLogHealth();
