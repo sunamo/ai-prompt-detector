@@ -1,65 +1,52 @@
-# SpecStory AutoSave + AI Copilot Prompt Detection
+# SpecStory AutoSave
 
-Extension for VS Code that automatically detects AI prompts from SpecStory conversation exports and displays them in an Activity Bar view with quality verification notifications.
+VS Code extension pro automatické ukládání souborů a správu příběhů.
 
-## Features
+## Funkce
 
-- **Functional Architecture**: Built with React-like hooks pattern for better modularity
-- **Activity Bar Integration**: Shows recent AI prompts in dedicated sidebar view
-- **Real-time Detection**: Monitors `.specstory/history/` folders for new conversation exports
-- **Quality Notifications**: Smart contextual messages for AI-generated code verification
-- **Czech Timezone Logging**: All logs use Czech time (UTC+2) for local debugging
+- Automatické ukládání souborů v definovaných intervalech
+- Konfigurovatelné vzory souborů pro ukládání
+- Jednoduché ovládání pomocí příkazů
+- Podpora pro .md, .txt, .json a další formáty
 
-## Architecture
+## Použití
 
-### Hooks System
-- `useWebview()` - Activity bar webview management
-- `useStatusBar()` - Status bar updates and display
-- `usePrompts()` - Prompt loading and processing
-- `useLogging()` - Output channel and file logging
+1. Nainstalujte rozšíření
+2. Otevřete Command Palette (`Ctrl+Shift+P`)
+3. Spusťte příkaz `SpecStory: Enable AutoSave`
 
-### Utils Modules
-- `logging.ts` - Centralized logging with Czech timezone
-- `statusBar.ts` - Status bar update functions
-- `promptProcessing.ts` - SpecStory file parsing and prompt extraction
-- `htmlGenerator.ts` - Webview HTML generation
-- `fileValidation.ts` - SpecStory file format validation
-- `timeUtils.ts` - Timestamp parsing from filenames
+## Konfigurace
 
-### State Management
-- `state.ts` - Global extension state interface and object
+Rozšíření lze konfigurovat přes VS Code Settings:
 
-## Version 1.1.66
+- `specstory-autosave.enabled`: Povolit automatické ukládání
+- `specstory-autosave.interval`: Interval ukládání v milisekundách
+- `specstory-autosave.filePatterns`: Vzory souborů pro automatické ukládání
 
-✅ Converted from class-based to functional architecture  
-✅ Modularized hooks into separate files  
-✅ Centralized utility functions  
-✅ Maintained all original functionality (244 prompts detection)  
-✅ Activity bar integration working  
-✅ Czech timezone logging preserved  
+## Příkazy
 
-## Configuration
+- `SpecStory: Enable AutoSave`: Zapnout automatické ukládání
+- `SpecStory: Disable AutoSave`: Vypnout automatické ukládání  
+- `SpecStory: Configure AutoSave`: Otevřít nastavení
 
-```json
-{
-  "specstory-autosave.debugLogging": false,
-  "specstory-autosave.maxPrompts": 50,
-  "specstory-autosave.customMessage": "Check AI suggestions carefully!"
-}
-```
+## Vývoj
 
-## Usage
-
-1. Open workspace with `.specstory/history/` folder
-2. View "Recent AI Prompts" in Activity Bar
-3. Extension automatically detects new SpecStory exports
-4. Click refresh button to reload prompts manually
-
-## Development
+Projekt používá pnpm jako package manager.
 
 ```bash
+# Instalace závislostí
 pnpm install
-.\install.ps1  # Build, commit, package and install
+
+# Kompilace
+pnpm run compile
+
+# Sledování změn
+pnpm run watch
+
+# Spuštění testů
+pnpm run test
 ```
+
+## Licence
 
 MIT
