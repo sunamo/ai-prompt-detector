@@ -2,71 +2,158 @@ import * as vscode from 'vscode';
 
 let outputChannel: vscode.OutputChannel;
 
-class UltraSimpleProvider implements vscode.WebviewViewProvider {
+// ÚPLNĚ NOVÝ ACTIVITY BAR PROVIDER S DUMMY OBSAHEM
+class DummyActivityBarProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'specstory-autosave-view';
 
-	constructor(private readonly _extensionUri: vscode.Uri) {
-		console.log('🚀 ULTRA SIMPLE: Constructor called');
+	constructor() {
+		console.log('🎯 DUMMY: Activity Bar Provider vytvořen');
 	}
 
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
-		console.log('🚀 ULTRA SIMPLE: resolveWebviewView called');
+		console.log('🎯 DUMMY: resolveWebviewView ZAČÍNÁ');
 		
-		webviewView.webview.options = { enableScripts: false };
+		// Nastavení webview - bez skriptů
+		webviewView.webview.options = {
+			enableScripts: false,
+			localResourceRoots: []
+		};
+
+		// DUMMY OBSAH - hardcoded HTML s test prompty
+		const dummyHtml = this.createDummyHtml();
+		webviewView.webview.html = dummyHtml;
 		
-		// ABSOLUTNĚ NEJJEDNODUŠŠÍ HTML - ŽÁDNÉ VARIABLES, ŽÁDNÁ LOGIKA
-		webviewView.webview.html = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="color: white; background: #1e1e1e; font-family: Consolas; padding: 15px;">
+		console.log('🎯 DUMMY: HTML nastaven, délka:', dummyHtml.length);
+		
+		if (outputChannel) {
+			outputChannel.appendLine('🎯 DUMMY: Webview HTML byl nastaven');
+			outputChannel.appendLine('🎯 DUMMY: Obsah obsahuje "dobrý den a nic nedělje"');
+		}
+	}
 
-<h1 style="color: #4CAF50;">🎯 ULTRA SIMPLE TEST</h1>
+	private createDummyHtml(): string {
+		return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpecStory Dummy</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background-color: #252526;
+			color: #cccccc;
+			margin: 0;
+			padding: 10px;
+			font-size: 13px;
+		}
+		.header {
+			background-color: #2d2d30;
+			padding: 10px;
+			border-radius: 5px;
+			margin-bottom: 15px;
+			text-align: center;
+		}
+		.prompt-item {
+			background-color: #1e1e1e;
+			border: 1px solid #3c3c3c;
+			border-left: 4px solid #007acc;
+			margin: 8px 0;
+			padding: 12px;
+			border-radius: 3px;
+		}
+		.prompt-number {
+			font-weight: bold;
+			color: #569cd6;
+			margin-bottom: 5px;
+		}
+		.prompt-text {
+			color: #d4d4d4;
+			line-height: 1.4;
+		}
+		.status {
+			margin-top: 20px;
+			padding: 10px;
+			background-color: #0e639c;
+			border-radius: 3px;
+			text-align: center;
+			color: white;
+		}
+	</style>
+</head>
+<body>
 
-<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
-<strong style="color: #FFD700;">#1:</strong> dobrý den a nic nedělje
+<div class="header">
+	<h2 style="margin: 0; color: #4ec9b0;">📋 SpecStory Prompts</h2>
+	<small>Dummy test content v1.1.57</small>
 </div>
 
-<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
-<strong style="color: #FFD700;">#2:</strong> FUNGUJE TO KONEČNĚ!
+<div class="prompt-item">
+	<div class="prompt-number">Prompt #1</div>
+	<div class="prompt-text">dobrý den a nic nedělje</div>
 </div>
 
-<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
-<strong style="color: #FFD700;">#3:</strong> Extension je ŽIVÝ!
+<div class="prompt-item">
+	<div class="prompt-number">Prompt #2</div>
+	<div class="prompt-text">naschledanou a nic nedělej</div>
 </div>
 
-<p style="color: #888; margin-top: 20px;">
-Pokud tohle vidíš, extension funguje!<br>
-Čas aktivace: HNED TEĎ
-</p>
+<div class="prompt-item">
+	<div class="prompt-number">Prompt #3</div>
+	<div class="prompt-text">ahoj a nic nedělej</div>
+</div>
+
+<div class="prompt-item">
+	<div class="prompt-number">Prompt #4</div>
+	<div class="prompt-text">DUMMY TEST: Extension je aktivní a funguje perfektně!</div>
+</div>
+
+<div class="prompt-item">
+	<div class="prompt-number">Prompt #5</div>
+	<div class="prompt-text">Pokud tohle vidíš, Activity Bar provider pracuje správně</div>
+</div>
+
+<div class="status">
+	✅ Extension loaded successfully<br>
+	🚀 Activity Bar Provider active<br>
+	📅 Generated: ${new Date().toLocaleString('cs-CZ')}
+</div>
 
 </body>
 </html>`;
-
-		console.log('🚀 ULTRA SIMPLE: HTML nastaveno');
-		if (outputChannel) {
-			outputChannel.appendLine('🚀 HTML byl nastaven na webview');
-		}
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('🚀🚀🚀 ULTRA SIMPLE ACTIVATION START 🚀🚀🚀');
+	console.log('🚀 AKTIVACE: Extension se spouští...');
 	
-	outputChannel = vscode.window.createOutputChannel('SpecStory Ultra Simple');
+	// Vytvoř output channel pro debugging
+	outputChannel = vscode.window.createOutputChannel('SpecStory Dummy Test');
 	outputChannel.show();
-	outputChannel.appendLine('🚀 ULTRA SIMPLE: Extension starting...');
+	outputChannel.appendLine('🚀 DUMMY EXTENSION: Spouštění...');
 	
-	const provider = new UltraSimpleProvider(context.extensionUri);
-	const registration = vscode.window.registerWebviewViewProvider('specstory-autosave-view', provider);
+	// Vytvoř nový dummy provider
+	const dummyProvider = new DummyActivityBarProvider();
 	
+	// Registruj provider v VS Code
+	const registration = vscode.window.registerWebviewViewProvider(
+		DummyActivityBarProvider.viewType,
+		dummyProvider
+	);
+	
+	// Přidej do subscriptions pro cleanup
 	context.subscriptions.push(outputChannel, registration);
 	
-	outputChannel.appendLine('🚀 ULTRA SIMPLE: Provider registered successfully');
-	outputChannel.appendLine('🚀 ULTRA SIMPLE: Jdi do Activity Bar a otevři SpecStory panel!');
+	outputChannel.appendLine('🚀 DUMMY: Provider zaregistrován');
+	outputChannel.appendLine('🚀 DUMMY: Jdi do Activity Bar a otevři SpecStory panel!');
+	outputChannel.appendLine('🚀 DUMMY: Měl bys vidět "dobrý den a nic nedělje" jako první prompt');
 	
-	console.log('🚀🚀🚀 ULTRA SIMPLE ACTIVATION COMPLETE 🚀🚀🚀');
+	console.log('🚀 AKTIVACE: Extension úspěšně aktivován');
 }
 
 export function deactivate() {
-	console.log('🚀 ULTRA SIMPLE: Extension deactivated');
+	console.log('🚀 DEAKTIVACE: Extension se vypíná');
+	if (outputChannel) {
+		outputChannel.appendLine('🚀 DUMMY: Extension deactivated');
+	}
 }
