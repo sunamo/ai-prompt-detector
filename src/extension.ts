@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { initLogger, writeLog } from './logger';
+import { initLogger, writeLog, checkLogHealth } from './logger';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryParser';
-import { detectPotentialPrompt, processPotentialPrompt } from './promptDetector';
+import { detectCopilotEnter, processCopilotPrompt, isCopilotContext } from './promptDetector';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 import { PromptsProvider } from './activityBarProvider';
 
@@ -60,30 +60,24 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	const textDocumentWatcher = vscode.workspace.onDidChangeTextDocument(e => {
-		try {
-			const changes = e.contentChanges;
-			for (const change of changes) {
-				const text = change.text;
+	// IMMEDIATE Enter key detection for Copilot Chat
+	const enterDetector = vscode.commands.registerCommand('type', (args) => {
+		if (detectCopilotEnter(args)) {
+			writeLog(`⌨️ ENTER DETECTED`, true);
+			
+			// Check if we're in Copilot context
+			if (isCopilotContext()) {
+				writeLog(`🎯 COPILOT CONTEXT CONFIRMED - Processing immediately`, true);
 				
-				if (detectPotentialPrompt(text)) {
-					writeLog(`🔍 POTENTIAL AI PROMPT: "${text.substring(0, 50)}..."`, true);
-					
-					setTimeout(() => {
-						const editor = vscode.window.activeTextEditor;
-						if (editor && editor.document === e.document) {
-							const currentLine = editor.document.lineAt(editor.selection.active.line);
-							const lineText = currentLine.text.trim();
-							if (lineText.length > 15) {
-								processPotentialPrompt(lineText, recentPrompts, aiPromptCounter, updateStatusBar, promptsProvider);
-							}
-						}
-					}, 500);
-				}
+				// IMMEDIATE processing - no delay
+				processCopilotPrompt(recentPrompts, aiPromptCounter, updateStatusBar, promptsProvider);
+			} else {
+				writeLog(`❌ NOT IN COPILOT CONTEXT - ignoring`, true);
 			}
-		} catch (error) {
-			writeLog(`❌ Error in text watcher: ${error}`, false);
 		}
+		
+		// Continue with default typing behavior
+		return vscode.commands.executeCommand('default:type', args);
 	});
 
 	startAutoSave();
@@ -93,13 +87,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		registration, 
 		watcher, 
 		configWatcher, 
-		textDocumentWatcher, 
+		enterDetector, 
 		statusBarItem,
 		createAutoSaveDisposable()
 	);
 	
 	writeLog(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`, false);
 	writeLog('🚀 PROMPTS: Open Activity Bar panel SpecStory AI!', false);
+	
+	// Check log health after 10 seconds
+	setTimeout(() => {
+		checkLogHealth();
+	}, 10000);
 }
 
 async function loadExistingPrompts(): Promise<void> {

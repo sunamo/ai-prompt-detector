@@ -53,3 +53,29 @@ export function writeLog(message: string, isDebug: boolean = false): void {
 		}
 	}
 }
+
+export function checkLogHealth(): void {
+	try {
+		const logFile = path.join(LOG_DIR, `extension-${new Date().toISOString().split('T')[0]}.log`);
+		if (fs.existsSync(logFile)) {
+			const stats = fs.statSync(logFile);
+			const now = new Date();
+			const fileAge = now.getTime() - stats.mtime.getTime();
+			const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+			
+			if (fileAge > fiveMinutes) {
+				const error = `❌ LOG HEALTH CHECK FAILED: Log file is ${Math.round(fileAge / 60000)} minutes old - logging not working!`;
+				console.error(error);
+				if (outputChannel) {
+					outputChannel.appendLine(error);
+				}
+			} else {
+				writeLog(`✅ LOG HEALTH CHECK: Log file is fresh (${Math.round(fileAge / 1000)} seconds old)`, true);
+			}
+		} else {
+			writeLog(`⚠️ LOG HEALTH CHECK: Log file does not exist yet`, true);
+		}
+	} catch (error) {
+		console.error('Failed to check log health:', error);
+	}
+}
