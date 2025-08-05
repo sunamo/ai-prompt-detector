@@ -274,13 +274,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 ${promptsHtml}
 
 <div class="status">
-	✅ Extension aktivní | 📁 Načteno: ${recentPrompts.length} promptů<br>
-	📅 ${new Date().toLocaleString('cs-CZ', { 
-		day: '2-digit', 
-		month: '2-digit', 
-		hour: '2-digit', 
-		minute: '2-digit' 
-	})}
+	📊 Celkem: ${recentPrompts.length} promptů | 👁️ Zobrazeno: max 20 | ⚙️ Max počet změň v nastavení
 </div>
 
 </body>
