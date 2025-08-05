@@ -1,161 +1,72 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
-let statusBarItem: vscode.StatusBarItem;
-let logFile: string;
 let outputChannel: vscode.OutputChannel;
 
-function initializeLogging(): void {
-	// Use fixed path that works for all users including guest accounts
-	const logFolder = path.join('C:', 'temp', 'specstory-autosave-logs');
-	
-	if (!fs.existsSync(logFolder)) {
-		fs.mkdirSync(logFolder, { recursive: true });
-	}
-	
-	logFile = path.join(logFolder, `extension-${new Date().toISOString().split('T')[0]}.log`);
-	
-	// CRITICAL: Clear log file at start of each session
-	try {
-		fs.writeFileSync(logFile, ''); // Clear the file completely
-		console.log(`Log file cleared: ${logFile}`);
-	} catch (error) {
-		console.error('Failed to clear log file:', error);
-	}
-	
-	outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
-	
-	writeLog('=== NEW SESSION STARTED ===', 'INFO');
-	writeLog('Extension initialized - log file cleared', 'INFO');
-}
-
-function writeLog(message: string, level: 'INFO' | 'ERROR' | 'DEBUG' = 'INFO'): void {
-	const config = vscode.workspace.getConfiguration('specstory-autosave');
-	const enableDebugLogs = config.get<boolean>('enableDebugLogs', false);
-	
-	// Skip only DEBUG logs if disabled, always write INFO and ERROR
-	if (level === 'DEBUG' && !enableDebugLogs) {
-		return;
-	}
-	
-	const timestamp = new Date().toISOString();
-	const logEntry = `[${timestamp}] ${level}: ${message}`;
-	
-	// Write to VS Code output channel
-	if (outputChannel) {
-		outputChannel.appendLine(logEntry);
-	}
-	
-	// Write to temp file
-	try {
-		if (logFile) {
-			fs.appendFileSync(logFile, logEntry + '\n');
-		}
-	} catch (error) {
-		console.error('Failed to write log:', error);
-	}
-}
-
-class RecentPromptsProvider implements vscode.WebviewViewProvider {
+class UltraSimpleProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'specstory-autosave-view';
 
-	private _view?: vscode.WebviewView;
-
 	constructor(private readonly _extensionUri: vscode.Uri) {
-		writeLog('RecentPromptsProvider constructor called', 'INFO');
+		console.log('🚀 ULTRA SIMPLE: Constructor called');
 	}
 
-	public resolveWebviewView(
-		webviewView: vscode.WebviewView,
-		context: vscode.WebviewViewResolveContext,
-		_token: vscode.CancellationToken,
-	) {
-		writeLog('RADIKÁLNÍ: resolveWebviewView called', 'INFO');
+	public resolveWebviewView(webviewView: vscode.WebviewView) {
+		console.log('🚀 ULTRA SIMPLE: resolveWebviewView called');
 		
-		this._view = webviewView;
+		webviewView.webview.options = { enableScripts: false };
+		
+		// ABSOLUTNĚ NEJJEDNODUŠŠÍ HTML - ŽÁDNÉ VARIABLES, ŽÁDNÁ LOGIKA
+		webviewView.webview.html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="color: white; background: #1e1e1e; font-family: Consolas; padding: 15px;">
 
-		webviewView.webview.options = {
-			enableScripts: true,
-			localResourceRoots: [this._extensionUri]
-		};
+<h1 style="color: #4CAF50;">🎯 ULTRA SIMPLE TEST</h1>
 
-		// RADIKÁLNÍ ŘEŠENÍ: Okamžitě nastav HTML s test prompty
-		const html = `<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="UTF-8">
-			<style>
-				body { font-family: var(--vscode-font-family); padding: 8px; color: var(--vscode-foreground); }
-				.prompt { margin: 8px 0; padding: 8px; border: 1px solid #444; border-radius: 4px; }
-				.header { font-weight: bold; color: #007ACC; }
-			</style>
-		</head>
-		<body>
-			<h3>SpecStory Prompts (v1.1.53)</h3>
-			<div class="prompt">
-				<div class="header">#1</div>
-				<div>dobrý den a nic nedělje</div>
-			</div>
-			<div class="prompt">
-				<div class="header">#2</div>
-				<div>naschledanou a nic nedělej</div>
-			</div>
-			<div class="prompt">
-				<div class="header">#3</div>
-				<div>ahoj a nic nedělej</div>
-			</div>
-			<div class="prompt">
-				<div class="header">#4</div>
-				<div>RADIKÁLNÍ TEST: Extension funguje!</div>
-			</div>
-		</body>
-		</html>`;
+<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
+<strong style="color: #FFD700;">#1:</strong> dobrý den a nic nedělje
+</div>
 
-		webviewView.webview.html = html;
-		writeLog('RADIKÁLNÍ: HTML nastaven okamžitě!', 'INFO');
-	}
+<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
+<strong style="color: #FFD700;">#2:</strong> FUNGUJE TO KONEČNĚ!
+</div>
 
-	public refresh(): void {
-		writeLog('RADIKÁLNÍ: refresh() called', 'INFO');
-		if (this._view) {
-			// Znovu nastav HTML
-			this.resolveWebviewView(this._view, {} as any, {} as any);
+<div style="border: 1px solid #555; margin: 10px 0; padding: 10px; border-radius: 5px;">
+<strong style="color: #FFD700;">#3:</strong> Extension je ŽIVÝ!
+</div>
+
+<p style="color: #888; margin-top: 20px;">
+Pokud tohle vidíš, extension funguje!<br>
+Čas aktivace: HNED TEĎ
+</p>
+
+</body>
+</html>`;
+
+		console.log('🚀 ULTRA SIMPLE: HTML nastaveno');
+		if (outputChannel) {
+			outputChannel.appendLine('🚀 HTML byl nastaven na webview');
 		}
 	}
 }
 
-export async function activate(context: vscode.ExtensionContext) {
-	console.log('=== RADIKÁLNÍ AKTIVACE ===');
+export function activate(context: vscode.ExtensionContext) {
+	console.log('🚀🚀🚀 ULTRA SIMPLE ACTIVATION START 🚀🚀🚀');
 	
-	// Initialize logging FIRST
-	initializeLogging();
-	writeLog('=== RADIKÁLNÍ START ===', 'INFO');
-
-	// Create status bar item
-	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarItem.text = `$(comment-discussion) SpecStory v1.1.54`;
-	statusBarItem.tooltip = `SpecStory AutoSave + AI Copilot Prompt Detection`;
-	statusBarItem.show();
-	writeLog('Status bar created', 'INFO');
-
-	// Register activity bar provider
-	const provider = new RecentPromptsProvider(context.extensionUri);
-	const registration = vscode.window.registerWebviewViewProvider(RecentPromptsProvider.viewType, provider);
-	writeLog('Activity bar provider registered', 'INFO');
-
-	context.subscriptions.push(statusBarItem, outputChannel, registration);
-	writeLog('RADIKÁLNÍ: Extension activation complete');
-}
-
-function updateStatusBar(): void {
-	// Minimální status bar
-	if (statusBarItem) {
-		statusBarItem.text = `$(comment-discussion) SpecStory v1.1.54`;
-	}
+	outputChannel = vscode.window.createOutputChannel('SpecStory Ultra Simple');
+	outputChannel.show();
+	outputChannel.appendLine('🚀 ULTRA SIMPLE: Extension starting...');
+	
+	const provider = new UltraSimpleProvider(context.extensionUri);
+	const registration = vscode.window.registerWebviewViewProvider('specstory-autosave-view', provider);
+	
+	context.subscriptions.push(outputChannel, registration);
+	
+	outputChannel.appendLine('🚀 ULTRA SIMPLE: Provider registered successfully');
+	outputChannel.appendLine('🚀 ULTRA SIMPLE: Jdi do Activity Bar a otevři SpecStory panel!');
+	
+	console.log('🚀🚀🚀 ULTRA SIMPLE ACTIVATION COMPLETE 🚀🚀🚀');
 }
 
 export function deactivate() {
-	writeLog('Extension deactivated');
+	console.log('🚀 ULTRA SIMPLE: Extension deactivated');
 }
