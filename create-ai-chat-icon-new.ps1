@@ -44,9 +44,9 @@ $graphics.DrawPath($outlinePen, $bubblePath)
 # Create complete 5-pointed star shape as one transparent cut-out
 $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
 $starCenterX = $bubbleX + ($bubbleWidth / 2)
-$starCenterY = $bubbleY + ($bubbleHeight / 2)
-$outerRadius = 15
-$innerRadius = 6
+$starCenterY = $bubbleY + ($bubbleHeight / 2) + 3  # Move star down by 3 pixels for perfect centering
+$outerRadius = 25  # Much larger star to fill most of the bubble
+$innerRadius = 10  # Proportionally larger inner radius
 
 # Create complete star path
 $starPath = New-Object System.Drawing.Drawing2D.GraphicsPath
