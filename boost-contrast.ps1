@@ -14,13 +14,13 @@ $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 
 # Just boost brightness and contrast, no background
 $colorMatrix = New-Object System.Drawing.Imaging.ColorMatrix
-$colorMatrix.Matrix00 = 1.4  # Red boost
-$colorMatrix.Matrix11 = 1.4  # Green boost
-$colorMatrix.Matrix22 = 1.4  # Blue boost  
+$colorMatrix.Matrix00 = 2.0  # Much higher red boost
+$colorMatrix.Matrix11 = 2.0  # Much higher green boost
+$colorMatrix.Matrix22 = 2.0  # Much higher blue boost  
 $colorMatrix.Matrix33 = 1.0  # Keep alpha unchanged
-$colorMatrix.Matrix40 = 0.1  # Slight brightness boost
-$colorMatrix.Matrix41 = 0.1  
-$colorMatrix.Matrix42 = 0.1
+$colorMatrix.Matrix40 = 0.3  # Higher brightness boost
+$colorMatrix.Matrix41 = 0.3  
+$colorMatrix.Matrix42 = 0.3
 $colorMatrix.Matrix44 = 1.0
 
 $attributes = New-Object System.Drawing.Imaging.ImageAttributes
