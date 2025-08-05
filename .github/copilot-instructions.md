@@ -4,6 +4,12 @@
 
 As a copilot, you never change versions. The version changes fundamentally only install.ps1
 
+### 🖥️ VS CODE UI TERMINOLOGY - CRITICAL!
+- **STATUS BAR** = Bottom bar in VS Code (shows branch, errors, etc.) - use `vscode.window.createStatusBarItem()`
+- **HEADER BAR** = Top bar in Activity Panel webview (custom HTML div) - use `<div class="header-bar">` in webview HTML
+- **Activity Bar** = Left sidebar with icons (Explorer, Search, etc.)
+- **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
+
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
 - **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
 - **ONLY cs.json localization file** is allowed to contain non-English text

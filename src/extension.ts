@@ -5,6 +5,7 @@ import * as path from 'path';
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = []; // SpecStory exported prompts from .md files
 let aiPromptCounter: number = 0; // Counter for AI prompts to GitHub Copilot
+let statusBarItem: vscode.StatusBarItem; // VS Code status bar item
 
 // Funkce pro validaci SpecStory souborů
 function isValidSpecStoryFile(filePath: string): boolean {
@@ -254,7 +255,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 <body>
 
 <div class="header-bar">
-	🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}
+	📊 Total: ${recentPrompts.length} prompts (max 20) | ⚙️ Change max count in settings
 </div>
 
 ${promptsHtml}
@@ -271,6 +272,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
 	outputChannel.show();
 	outputChannel.appendLine('🚀 PROMPTS: Extension spouštění...');
+	
+	// Create status bar item
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.show();
+	
+	// Update status bar with initial values
+	const updateStatusBar = () => {
+		const extensionVersion = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.73';
+		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}`;
+		statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
+	};
+	updateStatusBar();
 	
 	// NEJDŘÍVE načti prompty
 	await loadExistingPrompts();
@@ -307,6 +320,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (args.text.includes('\n') || args.text.includes('\r')) {
 				aiPromptCounter++;
 				outputChannel.appendLine(`🤖 AI Prompt detected! Counter: ${aiPromptCounter}`);
+				// Update status bar
+				updateStatusBar();
 				// Refresh webview to show new counter
 				promptsProvider.refresh();
 			}
@@ -315,7 +330,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 	
 	// Přidej do subscriptions pro cleanup
-	context.subscriptions.push(outputChannel, registration, watcher, disposable);
+	context.subscriptions.push(outputChannel, registration, watcher, disposable, statusBarItem);
 	
 	outputChannel.appendLine(`🚀 PROMPTS: Aktivace dokončena - celkem ${recentPrompts.length} promptů`);
 	outputChannel.appendLine('🚀 PROMPTS: Otevři Activity Bar panel SpecStory AI!');
