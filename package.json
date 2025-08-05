@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.72",
+  "version": "1.1.73",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -60,7 +60,7 @@
 			"specstory-activity": [
 				{
 					"id": "specstory-autosave-view",
-					"name": "AI Prompts",
+					"name": "",
 					"when": "true",
 					"type": "webview"
 				}
@@ -70,7 +70,7 @@
 			"activitybar": [
 				{
 					"id": "specstory-activity",
-					"title": "SpecStory AI",
+					"title": "SpecStory AutoSave + AI Copilot Prompt Detection",
 					"icon": "$(comment-discussion)"
 				}
 			]

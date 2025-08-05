@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 let outputChannel: vscode.OutputChannel;
-let recentPrompts: string[] = [];
+let recentPrompts: string[] = []; // SpecStory exported prompts from .md files
+let aiPromptCounter: number = 0; // Counter for AI prompts to GitHub Copilot
 
 // Funkce pro validaci SpecStory souborů
 function isValidSpecStoryFile(filePath: string): boolean {
@@ -191,8 +192,11 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 </div>`;
 		}
 
-		return `<!DOCTYPE html>
-<html lang="cs">
+	// Get extension version from package.json
+	const extensionVersion = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.72';
+
+	return `<!DOCTYPE html>
+<html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -236,7 +240,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 			padding: 20px;
 			color: #888;
 		}
-		.status {
+		.header-bar {
 			margin-bottom: 15px;
 			padding: 8px;
 			background-color: #0e639c;
@@ -249,8 +253,8 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
 
-<div class="status">
-	📊 Celkem: ${recentPrompts.length} promptů | 👁️ Zobrazeno: max 20 | ⚙️ Max počet změň v nastavení
+<div class="header-bar">
+	🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}
 </div>
 
 ${promptsHtml}
@@ -294,9 +298,24 @@ export async function activate(context: vscode.ExtensionContext) {
 			promptsProvider.refresh();
 		}
 	});
+
+	// Monitor AI prompt counter - detect Copilot activity
+	const disposable = vscode.commands.registerCommand('type', (args) => {
+		// Increment counter when user types in Copilot or sends prompts
+		if (args && typeof args.text === 'string') {
+			// Simple detection - increment on Enter key or specific patterns
+			if (args.text.includes('\n') || args.text.includes('\r')) {
+				aiPromptCounter++;
+				outputChannel.appendLine(`🤖 AI Prompt detected! Counter: ${aiPromptCounter}`);
+				// Refresh webview to show new counter
+				promptsProvider.refresh();
+			}
+		}
+		return vscode.commands.executeCommand('default:type', args);
+	});
 	
 	// Přidej do subscriptions pro cleanup
-	context.subscriptions.push(outputChannel, registration, watcher);
+	context.subscriptions.push(outputChannel, registration, watcher, disposable);
 	
 	outputChannel.appendLine(`🚀 PROMPTS: Aktivace dokončena - celkem ${recentPrompts.length} promptů`);
 	outputChannel.appendLine('🚀 PROMPTS: Otevři Activity Bar panel SpecStory AI!');
