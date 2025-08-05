@@ -2,7 +2,7 @@
   "name": "specstory-autosave",
   "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.59",
+  "version": "1.1.61",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -21,28 +21,6 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-		"commands": [
-			{
-				"command": "specstory-autosave.refresh",
-				"title": "Refresh AI Prompts",
-				"category": "SpecStory"
-			},
-			{
-				"command": "specstory-autosave.enable",
-				"title": "Enable AutoSave",
-				"category": "SpecStory"
-			},
-			{
-				"command": "specstory-autosave.disable",
-				"title": "Disable AutoSave",
-				"category": "SpecStory"
-			},
-			{
-				"command": "specstory-autosave.configure",
-				"title": "Configure AutoSave",
-				"category": "SpecStory"
-			}
-		],
 		"configuration": {
 			"title": "SpecStory AutoSave",
 			"properties": {
@@ -95,13 +73,7 @@
 					"icon": "$(comment-discussion)"
 				}
 			]
-		},
-		"viewsWelcome": [
-			{
-				"view": "specstory-autosave-view",
-				"contents": "No AI prompts detected yet.\n[Refresh](command:specstory-autosave.refresh)"
-			}
-		]
+		}
 	},
 	"scripts": {
 		"compile": "tsc -p ./",
