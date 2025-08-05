@@ -38,64 +38,47 @@ $bubblePath.AddArc($bubbleRect.Right - $bubbleCorner, $bubbleRect.Bottom - $bubb
 $bubblePath.AddArc($bubbleRect.X, $bubbleRect.Bottom - $bubbleCorner, $bubbleCorner, $bubbleCorner, 90, 90)
 $bubblePath.CloseFigure()
 
-# Draw chat bubble (without tail - just clean rounded rectangle)
+# Draw chat bubble (clean rounded rectangle)
 $graphics.FillPath($chatBrush, $bubblePath)
 $graphics.DrawPath($outlinePen, $bubblePath)
 
-# AI indicator - three dots perfectly centered in bubble
-$dotSize = 4
-$dotY = $bubbleY + ($bubbleHeight / 2) - ($dotSize / 2)  # Perfect vertical center
-$dotSpacing = 8
-$totalDotsWidth = ($dotSize * 3) + ($dotSpacing * 2)  # Total width of all 3 dots with spacing
-$dotStartX = $bubbleX + ($bubbleWidth - $totalDotsWidth) / 2  # Perfect horizontal center
-$graphics.FillEllipse($sparkleBrush, $dotStartX, $dotY, $dotSize, $dotSize)
-$graphics.FillEllipse($sparkleBrush, $dotStartX + $dotSize + $dotSpacing, $dotY, $dotSize, $dotSize) 
-$graphics.FillEllipse($sparkleBrush, $dotStartX + ($dotSize + $dotSpacing) * 2, $dotY, $dotSize, $dotSize)
+# AI indicator - classic 5-pointed star like Google Gemini
+$starCenterX = $bubbleX + ($bubbleWidth / 2)
+$starCenterY = $bubbleY + ($bubbleHeight / 2)
+$outerRadius = 15
+$innerRadius = 6
 
-# AI sparkle effects - 6 stars around the centered bubble
-$sparkleSize = 6
-$sparklePen = New-Object System.Drawing.Pen($aiSparkleColor, 2)
+# Create 5-pointed star manually with correct coordinates
+$starPoints = @(
+    # Point 1 (top)
+    [System.Drawing.Point]::new($starCenterX, $starCenterY - $outerRadius),
+    [System.Drawing.Point]::new($starCenterX + $innerRadius * 0.6, $starCenterY - $innerRadius * 0.6),
+    
+    # Point 2 (top right)  
+    [System.Drawing.Point]::new($starCenterX + $outerRadius * 0.95, $starCenterY - $outerRadius * 0.31),
+    [System.Drawing.Point]::new($starCenterX + $innerRadius * 0.95, $starCenterY + $innerRadius * 0.31),
+    
+    # Point 3 (bottom right)
+    [System.Drawing.Point]::new($starCenterX + $outerRadius * 0.59, $starCenterY + $outerRadius * 0.81),
+    [System.Drawing.Point]::new($starCenterX - $innerRadius * 0.0, $starCenterY + $innerRadius * 1.0),
+    
+    # Point 4 (bottom left)
+    [System.Drawing.Point]::new($starCenterX - $outerRadius * 0.59, $starCenterY + $outerRadius * 0.81),
+    [System.Drawing.Point]::new($starCenterX - $innerRadius * 0.95, $starCenterY + $innerRadius * 0.31),
+    
+    # Point 5 (top left)
+    [System.Drawing.Point]::new($starCenterX - $outerRadius * 0.95, $starCenterY - $outerRadius * 0.31),
+    [System.Drawing.Point]::new($starCenterX - $innerRadius * 0.6, $starCenterY - $innerRadius * 0.6)
+)
 
-# Top right sparkle
-$graphics.FillEllipse($sparkleBrush, 90, 25, $sparkleSize, $sparkleSize)
-$graphics.DrawLine($sparklePen, 93, 20, 93, 35)
-$graphics.DrawLine($sparklePen, 85, 28, 100, 28)
-
-# Bottom left sparkle  
-$graphics.FillEllipse($sparkleBrush, 20, 95, $sparkleSize, $sparkleSize)
-$graphics.DrawLine($sparklePen, 23, 90, 23, 105)
-$graphics.DrawLine($sparklePen, 15, 98, 30, 98)
-
-# Top center sparkle
-$graphics.FillEllipse($sparkleBrush, 60, 18, $sparkleSize, $sparkleSize)
-$graphics.DrawLine($sparklePen, 63, 13, 63, 28)
-$graphics.DrawLine($sparklePen, 55, 21, 70, 21)
-
-# Right center sparkle
-$graphics.FillEllipse($sparkleBrush, 100, 60, $sparkleSize, $sparkleSize)
-$graphics.DrawLine($sparklePen, 103, 55, 103, 70)
-$graphics.DrawLine($sparklePen, 95, 63, 110, 63)
-
-# Left center sparkle
-$graphics.FillEllipse($sparkleBrush, 15, 60, $sparkleSize, $sparkleSize)
-$graphics.DrawLine($sparklePen, 18, 55, 18, 70)
-$graphics.DrawLine($sparklePen, 10, 63, 25, 63)
-
-# Top left small sparkle
-$graphics.FillEllipse($sparkleBrush, 30, 20, 3, 3)
-
-# Bottom right small sparkle
-$graphics.FillEllipse($sparkleBrush, 95, 100, 3, 3)
-
-# Bottom center small sparkle
-$graphics.FillEllipse($sparkleBrush, 64, 105, 3, 3)
+# Draw filled star
+$graphics.FillPolygon($sparkleBrush, $starPoints)
 
 # Cleanup
 $graphics.Dispose()
 $chatBrush.Dispose()
 $sparkleBrush.Dispose()
 $outlinePen.Dispose()
-$sparklePen.Dispose()
 $borderPen.Dispose()
 
 # Save the icon
@@ -105,6 +88,6 @@ $icon.Dispose()
 Write-Host "✅ New AI chat icon created!" -ForegroundColor Green
 Write-Host "   • Blue circular border around entire icon" -ForegroundColor Cyan
 Write-Host "   • Chat bubble perfectly centered" -ForegroundColor Cyan
-Write-Host "   • AI typing dots inside bubble" -ForegroundColor Cyan  
-Write-Host "   • 8 gold sparkle effects for AI indication" -ForegroundColor Cyan
+Write-Host "   • Large gold star in center of bubble" -ForegroundColor Cyan  
+Write-Host "   • Clean minimalist design" -ForegroundColor Cyan
 Write-Host "   • Transparent background" -ForegroundColor Cyan
