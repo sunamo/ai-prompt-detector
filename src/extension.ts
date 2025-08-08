@@ -427,8 +427,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			const customMessage = config.get<string>('customMessage', '');
 			const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
 			setTimeout(() => {
+				// Refresh right when we show the notification so the prompt is #1 simultaneously
+				// @ts-ignore - promptsProvider defined above
+				(promptsProvider as any)?.refresh?.();
 				vscode.window.showInformationMessage(message);
-				writeLog('📤 NOTIFIED via Enter-forward command after forwarding to chat', false);
+				writeLog('📤 NOTIFIED and Activity Bar refreshed (prompt #1) after forwarding to chat', false);
 			}, 10);
 		} catch (err) {
 			writeLog(`❌ Error in forwardEnterToChat: ${err}`, false);
