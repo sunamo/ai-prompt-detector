@@ -340,6 +340,41 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
+
+	// ------------- NEW: notify immediately after Copilot Chat submit -------------
+	const COPILOT_SUBMIT_COMMANDS = [
+		'workbench.action.chat.acceptInput',
+		'github.copilot.chat.acceptInput',
+		'github.copilot.chat.submit',
+		'github.copilot.interactive.submit',
+		'chat.submit'
+	];
+	let lastSubmitAt = 0;
+	const commandsAny = (vscode.commands as any);
+	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
+		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
+			try {
+				if (!ev || !COPILOT_SUBMIT_COMMANDS.includes(ev.command)) return;
+				// Debounce multiple internal submits triggered by the same Enter
+				const now = Date.now();
+				if (now - lastSubmitAt < 800) return;
+				lastSubmitAt = now;
+				const config = vscode.workspace.getConfiguration('specstory-autosave');
+				const customMessage = config.get<string>('customMessage', '');
+				const message = customMessage
+					? `AI Prompt sent\n${customMessage}`
+					: 'AI Prompt sent\nWe will verify quality & accuracy.';
+				vscode.window.showInformationMessage(message);
+				writeLog(`📤 NOTIFIED on Copilot submit: ${ev.command}`, false);
+			} catch (err) {
+				writeLog(`❌ Error in Copilot submit listener: ${err}`, false);
+			}
+		});
+		context.subscriptions.push(cmdListener);
+	} else {
+		writeLog('⚠️ onDidExecuteCommand API not available; Copilot submit notifications disabled', true);
+	}
+	// ---------------------------------------------------------------------------
 	
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
@@ -486,8 +521,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		startAutoSave();
 	}
 	
-	context.subscriptions.push(outputChannel, registration, watcher, configWatcher, textDocumentWatcher, statusBarItem);
-	
+	context.subscriptions.push(outputChannel, registration, watcher, configWatcher, statusBarItem);
+
 	context.subscriptions.push({
 		dispose: () => {
 			if (autoSaveTimer) {
