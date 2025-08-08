@@ -381,7 +381,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				'chat.acceptInput'
 			];
 			const present = candidatesOrdered.filter(id => all.includes(id));
-			writeLog(`🔎 Chat submit candidates present: ${present.join(', ') || 'none'}`, false);
+			writeLog(`🔎 Chat submit candidates present: ${present.join(', ') || 'none'}`, true);
 			for (const id of present) {
 				try {
 					await vscode.commands.executeCommand(id);
@@ -407,15 +407,59 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
+	// Try to extract current chat input text using copy/select-all fallbacks
+	async function getChatInputText(): Promise<string> {
+		try {
+			await focusChatInput();
+			const prev = await vscode.env.clipboard.readText();
+			let captured = '';
+			const all = await vscode.commands.getCommands(true);
+			const copyCandidates = [
+				'workbench.action.chat.copyInput',
+				'chat.copyInput',
+				'github.copilot.chat.copyInput'
+			].filter(id => all.includes(id));
+			for (const id of copyCandidates) {
+				try {
+					await vscode.commands.executeCommand(id);
+					captured = await vscode.env.clipboard.readText();
+					if (captured && captured.trim().length > 0) break;
+				} catch { /* ignore and try next */ }
+			}
+			if (!captured || captured.trim().length === 0) {
+				const selectAllCandidates = ['workbench.action.chat.selectAll', 'chat.selectAll'].filter(id => all.includes(id));
+				for (const sid of selectAllCandidates) {
+					try {
+						await vscode.commands.executeCommand(sid);
+						await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+						captured = await vscode.env.clipboard.readText();
+						if (captured && captured.trim().length > 0) break;
+					} catch { /* ignore */ }
+				}
+			}
+			// Restore clipboard
+			try { await vscode.env.clipboard.writeText(prev); } catch { /* ignore */ }
+			return (captured || '').trim();
+		} catch (e) {
+			writeLog(`⚠️ getChatInputText failed: ${e}`, true);
+			return '';
+		}
+	}
+
 	// Enter-forward command: trigger on Enter in chat input, then forward to chat accept
 	const forwardEnterCmd = vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
-			const buffered = chatInputBuffer.trim();
-			if (buffered.length > 0) {
-				recentPrompts.unshift(buffered);
+			// Prefer actual chat input text; fallback to buffered
+			let toAdd = await getChatInputText();
+			if (!toAdd || toAdd.length === 0) {
+				const buffered = chatInputBuffer.trim();
+				toAdd = buffered;
+			}
+			if (toAdd && toAdd.length > 0) {
+				recentPrompts.unshift(toAdd);
 				if (recentPrompts.length > 1000) recentPrompts = recentPrompts.slice(0, 1000);
-				writeLog(`➕ PROMPT ADDED (Enter): "${buffered.substring(0, 50)}..."`, false);
-				// Refresh immediately so the prompt appears as #1 right away
+				writeLog(`➕ PROMPT ADDED (Enter): "${toAdd.substring(0, 50)}..."`, false);
+				// Show immediately as #1
 				// @ts-ignore - promptsProvider defined above
 				(promptsProvider as any)?.refresh?.();
 			}
