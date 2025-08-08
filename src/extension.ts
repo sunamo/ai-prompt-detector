@@ -342,19 +342,32 @@ export async function activate(context: vscode.ExtensionContext) {
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
 	// ------------- NEW: notify immediately after Copilot Chat submit -------------
-	const COPILOT_SUBMIT_COMMANDS = [
-		'workbench.action.chat.acceptInput',
-		'github.copilot.chat.acceptInput',
-		'github.copilot.chat.submit',
-		'github.copilot.interactive.submit',
-		'chat.submit'
+	// Broaden detection to cover variations across VS Code and Copilot Chat versions
+	const SUBMIT_MATCHERS: RegExp[] = [
+		/^workbench\.action\.chat\.acceptInput$/i,
+		/copilot.*chat.*acceptinput/i,
+		/copilot.*chat.*submit/i,
+		/copilot.*interactive.*submit/i,
+		/^chat\.submit$/i,
+		/inline.*chat.*accept/i
 	];
+	const isCopilotSubmit = (cmd: string | undefined): boolean => {
+		if (!cmd) return false;
+		return SUBMIT_MATCHERS.some(rx => rx.test(cmd));
+	};
 	let lastSubmitAt = 0;
 	const commandsAny = (vscode.commands as any);
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
-				if (!ev || !COPILOT_SUBMIT_COMMANDS.includes(ev.command)) return;
+				const cmd: string | undefined = ev?.command;
+				if (!isCopilotSubmit(cmd)) {
+					// Optional debug to help discover new command IDs in future
+					if (cmd && /copilot|chat/i.test(cmd)) {
+						writeLog(`Ignored command (not a submit): ${cmd}`, true);
+					}
+					return;
+				}
 				// Debounce multiple internal submits triggered by the same Enter
 				const now = Date.now();
 				if (now - lastSubmitAt < 800) return;
@@ -365,7 +378,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					? `AI Prompt sent\n${customMessage}`
 					: 'AI Prompt sent\nWe will verify quality & accuracy.';
 				vscode.window.showInformationMessage(message);
-				writeLog(`📤 NOTIFIED on Copilot submit: ${ev.command}`, false);
+				writeLog(`📤 NOTIFIED on Copilot submit: ${cmd}`, false);
 			} catch (err) {
 				writeLog(`❌ Error in Copilot submit listener: ${err}`, false);
 			}
