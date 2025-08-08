@@ -341,15 +341,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
-	// ------------- NEW: notify immediately on Enter key press (no other detection) -------------
+	// ------------- UPDATED: notify on Enter only (type + chat acceptInput treated as Enter) -------------
 	let lastEnterAt = 0;
 	const commandsAny = (vscode.commands as any);
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
-				if (ev?.command !== 'type') return;
-				const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
-				if (!textArg || textArg.indexOf('\n') === -1) return; // only Enter
+				const cmd: string | undefined = ev?.command;
+				let isEnter = false;
+				if (cmd === 'type') {
+					const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
+					isEnter = !!textArg && textArg.indexOf('\n') !== -1;
+				} else if (cmd === 'workbench.action.chat.acceptInput' || cmd === 'github.copilot.chat.acceptInput') {
+					// Treat chat acceptInput as Enter in chat
+					isEnter = true;
+				} else {
+					return; // ignore all others
+				}
+				if (!isEnter) return;
 				// Debounce multiple triggers from the same Enter
 				const now = Date.now();
 				if (now - lastEnterAt < 800) return;
@@ -360,7 +369,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					? `AI Prompt sent\n${customMessage}`
 					: 'AI Prompt sent\nWe will verify quality & accuracy.';
 				vscode.window.showInformationMessage(message);
-				writeLog('📤 NOTIFIED on Enter key', false);
+				writeLog(`📤 NOTIFIED on Enter (${cmd})`, false);
 			} catch (err) {
 				writeLog(`❌ Error in Enter listener: ${err}`, false);
 			}
@@ -369,7 +378,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	} else {
 		writeLog('⚠️ onDidExecuteCommand API not available; Enter listener disabled', true);
 	}
-	// --------------------------------------------------------------------------------------------
+	// -------------------------------------------------------------------------------------------------
 	
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
