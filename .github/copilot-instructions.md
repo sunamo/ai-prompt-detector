@@ -1,5 +1,7 @@
 # AI Assistant Instructions - SpecStory AutoSave Extension
 
+Write to me at the beginning of each prompt that you see the logs in the folder
+
 ## ⚠️ CRITICAL RULES - STRICTLY FOLLOW!
 
 As a copilot, you never change versions. The version changes fundamentally only install.ps1

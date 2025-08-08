@@ -341,37 +341,41 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
-	// ------------- UPDATED: notify on Enter only (type + chat acceptInput treated as Enter) -------------
+	// ------------- UPDATED: notify on Enter only (type + common chat acceptInput/accept) -------------
 	let lastEnterAt = 0;
+	const ACCEPT_ENTER_CMDS = new Set<string>([
+		'workbench.action.chat.acceptInput',
+		'github.copilot.chat.acceptInput',
+		'workbench.action.inlineChat.accept',
+		'inlineChat.accept',
+		'inlineChat.acceptInput',
+		'github.copilot.inlineChat.acceptInput',
+		'github.copilot.interactive.acceptInput'
+	]);
 	const commandsAny = (vscode.commands as any);
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
 				const cmd: string | undefined = ev?.command;
-				// Minimal debug to discover actual Copilot/Chat submit command
-				if (cmd && (/copilot|chat/i.test(cmd) || cmd === 'type')) {
+				if (cmd && (/copilot|chat|inline/i.test(cmd) || cmd === 'type')) {
 					writeLog(`CMD: ${cmd}`, true);
 				}
 				let isEnter = false;
 				if (cmd === 'type') {
 					const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
 					isEnter = !!textArg && textArg.indexOf('\n') !== -1;
-				} else if (cmd === 'workbench.action.chat.acceptInput' || cmd === 'github.copilot.chat.acceptInput') {
-					// Treat chat acceptInput as Enter in chat
+				} else if (cmd && ACCEPT_ENTER_CMDS.has(cmd)) {
 					isEnter = true;
 				} else {
-					return; // ignore all others
+					return;
 				}
 				if (!isEnter) return;
-				// Debounce multiple triggers from the same Enter
 				const now = Date.now();
 				if (now - lastEnterAt < 800) return;
 				lastEnterAt = now;
 				const config = vscode.workspace.getConfiguration('specstory-autosave');
 				const customMessage = config.get<string>('customMessage', '');
-				const message = customMessage
-					? `AI Prompt sent\n${customMessage}`
-					: 'AI Prompt sent\nWe will verify quality & accuracy.';
+				const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
 				vscode.window.showInformationMessage(message);
 				aiPromptCounter++;
 				updateStatusBar();
