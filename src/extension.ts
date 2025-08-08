@@ -42,6 +42,34 @@ function writeLog(message: string, isDebug: boolean = false): void {
 	}
 }
 
+// ---------- NEW: duplicate suppression and doc ignore helpers ----------
+const DUPLICATE_TTL_MS = 5000;
+let lastProcessedText = '';
+let lastProcessedAt = 0;
+const lastDuplicateLog = new Map<string, number>();
+
+function shouldIgnoreDocument(doc: vscode.TextDocument): boolean {
+	try {
+		const fp = (doc.uri.fsPath || '').toLowerCase();
+		if (!fp) return false;
+		// Ignore our own log files and any .log document
+		if (fp.includes('c:\\temp\\specstory-autosave-logs') || fp.endsWith('.log')) return true;
+		const name = path.basename(fp);
+		if (name.startsWith('extension-') && name.endsWith('.log')) return true;
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+function shouldSuppressDuplicateLog(text: string): boolean {
+	const now = Date.now();
+	const prev = lastDuplicateLog.get(text);
+	if (prev && now - prev < DUPLICATE_TTL_MS) return true;
+	lastDuplicateLog.set(text, now);
+	return false;
+}
+
 // Auto-save configuration
 const AUTO_SAVE_ENABLED = true;
 const AUTO_SAVE_INTERVAL = 5000;
@@ -335,10 +363,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Improved Copilot prompt detection via TextDocument changes
 	const textDocumentWatcher = vscode.workspace.onDidChangeTextDocument(e => {
 		try {
+			// Ignore our own log files or any .log buffers
+			if (shouldIgnoreDocument(e.document)) {
+				return;
+			}
 			const changes = e.contentChanges;
 			for (const change of changes) {
 				const text = change.text;
-				
+				// Skip our own log lines to avoid feedback loops
+				if (text.includes('🔍 POTENTIAL AI PROMPT') || text.includes('🔄 DUPLICATE PROMPT') || text.includes('📝 PROMPT:') || text.includes('🤖 NEW AI PROMPT')) {
+					continue;
+				}
 				// Better prompt detection patterns
 				if (text.length > 10 && (
 					text.toLowerCase().includes('explain') ||
@@ -353,17 +388,23 @@ export async function activate(context: vscode.ExtensionContext) {
 					(text.length > 30 && text.trim().split(' ').length > 5)
 				)) {
 					writeLog(`🔍 POTENTIAL AI PROMPT: "${text.substring(0, 50)}..."`, true);
-					
 					setTimeout(() => {
 						const editor = vscode.window.activeTextEditor;
 						if (editor && editor.document === e.document) {
+							if (shouldIgnoreDocument(editor.document)) return;
 							const currentLine = editor.document.lineAt(editor.selection.active.line);
 							const lineText = currentLine.text.trim();
 							if (lineText.length > 15) {
+								// Debounce identical line processed too recently
+								if (lineText === lastProcessedText && Date.now() - lastProcessedAt < 2000) {
+									return;
+								}
+								lastProcessedText = lineText;
+								lastProcessedAt = Date.now();
 								processPotentialPrompt(lineText);
 							}
 						}
-					}, 500); // Longer delay to capture complete input
+					}, 600);
 				}
 			}
 		} catch (error) {
@@ -377,38 +418,31 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (cleanPrompt.length < 15 || cleanPrompt.length > 1000) {
 				return;
 			}
-			
 			if (recentPrompts.includes(cleanPrompt)) {
-				writeLog(`🔄 DUPLICATE PROMPT: "${cleanPrompt.substring(0, 30)}..."`, true);
+				if (!shouldSuppressDuplicateLog(cleanPrompt)) {
+					writeLog(`🔄 DUPLICATE PROMPT: "${cleanPrompt.substring(0, 30)}..."`, true);
+				}
 				return;
 			}
-			
 			aiPromptCounter++;
 			writeLog(`🤖 NEW AI PROMPT DETECTED! Counter: ${aiPromptCounter}`, false);
 			writeLog(`📝 PROMPT: "${cleanPrompt}"`, false);
-			
 			const config = vscode.workspace.getConfiguration('specstory-autosave');
 			const customMessage = config.get<string>('customMessage', '');
-			
 			const notificationMessage = customMessage 
 				? `AI Prompt detected\n${customMessage}`
 				: 'AI Prompt detected\nCheck: Quality & accuracy of response';
-			
 			vscode.window.showInformationMessage(notificationMessage);
 			writeLog(`📢 NOTIFICATION SHOWN: ${notificationMessage.replace('\n', ' | ')}`, false);
-			
 			recentPrompts.unshift(cleanPrompt);
 			writeLog(`➕ PROMPT ADDED TO ACTIVITY BAR: "${cleanPrompt.substring(0, 50)}..."`, false);
-			
 			if (recentPrompts.length > 1000) {
 				recentPrompts = recentPrompts.slice(0, 1000);
 				writeLog(`🔄 TRIMMED PROMPTS ARRAY TO 1000 ITEMS`, true);
 			}
-			
 			updateStatusBar();
 			promptsProvider.refresh();
 			writeLog(`🔄 UI UPDATED`, true);
-			
 		} catch (error) {
 			writeLog(`❌ Error processing prompt: ${error}`, false);
 		}
