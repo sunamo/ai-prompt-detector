@@ -1,6 +1,8 @@
 # AI Assistant Instructions - SpecStory AutoSave Extension
 
-Write to me at the beginning of each prompt that you see the logs in the folder
+Write to me at the beginning of each prompt that you see the logs in the folder¨
+
+Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.
 
 ## ⚠️ CRITICAL RULES - STRICTLY FOLLOW!
 

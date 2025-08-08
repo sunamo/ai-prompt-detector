@@ -341,55 +341,26 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
-	// ------------- UPDATED: notify on Enter only (type + common chat acceptInput/accept) -------------
-	let lastEnterAt = 0;
-	const ACCEPT_ENTER_CMDS = new Set<string>([
-		'workbench.action.chat.acceptInput',
-		'github.copilot.chat.acceptInput',
-		'workbench.action.inlineChat.accept',
-		'inlineChat.accept',
-		'inlineChat.acceptInput',
-		'github.copilot.inlineChat.acceptInput',
-		'github.copilot.interactive.acceptInput'
-	]);
-	const commandsAny = (vscode.commands as any);
-	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
-		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
-			try {
-				const cmd: string | undefined = ev?.command;
-				if (cmd && (/copilot|chat|inline/i.test(cmd) || cmd === 'type')) {
-					writeLog(`CMD: ${cmd}`, true);
-				}
-				let isEnter = false;
-				if (cmd === 'type') {
-					const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
-					isEnter = !!textArg && textArg.indexOf('\n') !== -1;
-				} else if (cmd && ACCEPT_ENTER_CMDS.has(cmd)) {
-					isEnter = true;
-				} else {
-					return;
-				}
-				if (!isEnter) return;
-				const now = Date.now();
-				if (now - lastEnterAt < 800) return;
-				lastEnterAt = now;
-				const config = vscode.workspace.getConfiguration('specstory-autosave');
-				const customMessage = config.get<string>('customMessage', '');
-				const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
-				vscode.window.showInformationMessage(message);
-				aiPromptCounter++;
-				updateStatusBar();
-				writeLog(`📤 NOTIFIED on Enter (${cmd}); counter=${aiPromptCounter}`, false);
-			} catch (err) {
-				writeLog(`❌ Error in Enter listener: ${err}`, false);
-			}
-		});
-		context.subscriptions.push(cmdListener);
-	} else {
-		writeLog('⚠️ onDidExecuteCommand API not available; Enter listener disabled', true);
-	}
-	// -------------------------------------------------------------------------------------------------
-	
+	// Enter-forward command: trigger on Enter in chat input, then forward to chat accept
+	const forwardEnterCmd = vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
+		try {
+			const config = vscode.workspace.getConfiguration('specstory-autosave');
+			const customMessage = config.get<string>('customMessage', '');
+			const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
+			vscode.window.showInformationMessage(message);
+			aiPromptCounter++;
+			// updateStatusBar is defined above in activate
+			// @ts-ignore - using outer scoped function
+			(updateStatusBar as any)();
+			writeLog('📤 NOTIFIED via Enter-forward command; forwarding to chat.acceptInput', false);
+			// forward to the built-in chat submit
+			await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
+		} catch (err) {
+			writeLog(`❌ Error in forwardEnterToChat: ${err}`, false);
+		}
+	});
+	context.subscriptions.push(forwardEnterCmd);
+
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
 	watcher.onDidCreate(uri => {
