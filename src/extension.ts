@@ -345,7 +345,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Enter-forward command: trigger on Enter in chat input, then forward to chat accept
 	const forwardEnterCmd = vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
-			// Immediately take current buffered input as the prompt (best effort)
 			const buffered = chatInputBuffer.trim();
 			if (buffered.length > 0) {
 				recentPrompts.unshift(buffered);
@@ -353,24 +352,42 @@ export async function activate(context: vscode.ExtensionContext) {
 				writeLog(`➕ PROMPT ADDED (Enter): "${buffered.substring(0, 50)}..."`, false);
 			}
 
+			// Reset buffer before forwarding (chat UI will also clear its input after submit)
+			chatInputBuffer = '';
+
+			// Forward to Copilot Chat submit first; fallback to workbench chat submit
+			let forwarded = false;
+			try {
+				await vscode.commands.executeCommand('github.copilot.chat.acceptInput');
+				forwarded = true;
+				writeLog('📨 Forwarded Enter to github.copilot.chat.acceptInput', true);
+			} catch (e) {
+				writeLog(`ℹ️ github.copilot.chat.acceptInput not available: ${e}`, true);
+			}
+			if (!forwarded) {
+				try {
+					await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
+					forwarded = true;
+					writeLog('📨 Forwarded Enter to workbench.action.chat.acceptInput', true);
+				} catch (e2) {
+					writeLog(`⚠️ Failed forwarding to workbench.action.chat.acceptInput: ${e2}`, false);
+				}
+			}
+
+			// After forwarding, update counters/status, refresh UI and then show notification
+			aiPromptCounter++;
+			// @ts-ignore - using outer scoped function
+			(updateStatusBar as any)();
+			// @ts-ignore - promptsProvider defined above
+			(promptsProvider as any)?.refresh?.();
+
 			const config = vscode.workspace.getConfiguration('specstory-autosave');
 			const customMessage = config.get<string>('customMessage', '');
 			const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
-			vscode.window.showInformationMessage(message);
-			aiPromptCounter++;
-			// updateStatusBar is defined above in activate
-			// @ts-ignore - using outer scoped function
-			(updateStatusBar as any)();
-			// Refresh activity view to show the newly added prompt
-			// @ts-ignore - promptsProvider defined above
-			(promptsProvider as any)?.refresh?.();
-			writeLog('📤 NOTIFIED via Enter-forward command; forwarding to chat.acceptInput', false);
-
-			// Reset buffer (chat UI will also clear its input after submit)
-			chatInputBuffer = '';
-
-			// forward to the built-in chat submit
-			await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
+			setTimeout(() => {
+				vscode.window.showInformationMessage(message);
+				writeLog('📤 NOTIFIED via Enter-forward command after forwarding to chat', false);
+			}, 10);
 		} catch (err) {
 			writeLog(`❌ Error in forwardEnterToChat: ${err}`, false);
 		}
