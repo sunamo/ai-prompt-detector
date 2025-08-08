@@ -341,53 +341,35 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
-	// ------------- NEW: notify immediately after Copilot Chat submit -------------
-	// Broaden detection to cover variations across VS Code and Copilot Chat versions
-	const SUBMIT_MATCHERS: RegExp[] = [
-		/^workbench\.action\.chat\.acceptInput$/i,
-		/copilot.*chat.*acceptinput/i,
-		/copilot.*chat.*submit/i,
-		/copilot.*interactive.*submit/i,
-		/^chat\.submit$/i,
-		/inline.*chat.*accept/i
-	];
-	const isCopilotSubmit = (cmd: string | undefined): boolean => {
-		if (!cmd) return false;
-		return SUBMIT_MATCHERS.some(rx => rx.test(cmd));
-	};
-	let lastSubmitAt = 0;
+	// ------------- NEW: notify immediately on Enter key press (no other detection) -------------
+	let lastEnterAt = 0;
 	const commandsAny = (vscode.commands as any);
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
-				const cmd: string | undefined = ev?.command;
-				if (!isCopilotSubmit(cmd)) {
-					// Optional debug to help discover new command IDs in future
-					if (cmd && /copilot|chat/i.test(cmd)) {
-						writeLog(`Ignored command (not a submit): ${cmd}`, true);
-					}
-					return;
-				}
-				// Debounce multiple internal submits triggered by the same Enter
+				if (ev?.command !== 'type') return;
+				const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
+				if (!textArg || textArg.indexOf('\n') === -1) return; // only Enter
+				// Debounce multiple triggers from the same Enter
 				const now = Date.now();
-				if (now - lastSubmitAt < 800) return;
-				lastSubmitAt = now;
+				if (now - lastEnterAt < 800) return;
+				lastEnterAt = now;
 				const config = vscode.workspace.getConfiguration('specstory-autosave');
 				const customMessage = config.get<string>('customMessage', '');
 				const message = customMessage
 					? `AI Prompt sent\n${customMessage}`
 					: 'AI Prompt sent\nWe will verify quality & accuracy.';
 				vscode.window.showInformationMessage(message);
-				writeLog(`📤 NOTIFIED on Copilot submit: ${cmd}`, false);
+				writeLog('📤 NOTIFIED on Enter key', false);
 			} catch (err) {
-				writeLog(`❌ Error in Copilot submit listener: ${err}`, false);
+				writeLog(`❌ Error in Enter listener: ${err}`, false);
 			}
 		});
 		context.subscriptions.push(cmdListener);
 	} else {
-		writeLog('⚠️ onDidExecuteCommand API not available; Copilot submit notifications disabled', true);
+		writeLog('⚠️ onDidExecuteCommand API not available; Enter listener disabled', true);
 	}
-	// ---------------------------------------------------------------------------
+	// --------------------------------------------------------------------------------------------
 	
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
