@@ -342,6 +342,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
+	// Auto-open our Activity Bar view on startup
+	async function openActivityViewOnStartup() {
+		try {
+			await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
+			await vscode.commands.executeCommand('workbench.viewsService.openView', PromptsProvider.viewType, true);
+			writeLog('🎯 Activity Bar view opened on startup', false);
+		} catch (e) {
+			writeLog(`⚠️ Failed to open Activity Bar view on startup: ${e}`, false);
+		}
+	}
+	setTimeout(openActivityViewOnStartup, 400);
+
 	async function focusChatInput(): Promise<void> {
 		const focusCandidates = [
 			'github.copilot.chat.focusInput',
@@ -403,6 +415,9 @@ export async function activate(context: vscode.ExtensionContext) {
 				recentPrompts.unshift(buffered);
 				if (recentPrompts.length > 1000) recentPrompts = recentPrompts.slice(0, 1000);
 				writeLog(`➕ PROMPT ADDED (Enter): "${buffered.substring(0, 50)}..."`, false);
+				// Refresh immediately so the prompt appears as #1 right away
+				// @ts-ignore - promptsProvider defined above
+				(promptsProvider as any)?.refresh?.();
 			}
 
 			// Reset buffer before forwarding
