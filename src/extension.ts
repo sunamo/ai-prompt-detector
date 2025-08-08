@@ -348,6 +348,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		const cmdListener = commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
 				const cmd: string | undefined = ev?.command;
+				// Minimal debug to discover actual Copilot/Chat submit command
+				if (cmd && (/copilot|chat/i.test(cmd) || cmd === 'type')) {
+					writeLog(`CMD: ${cmd}`, true);
+				}
 				let isEnter = false;
 				if (cmd === 'type') {
 					const textArg = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
@@ -369,7 +373,9 @@ export async function activate(context: vscode.ExtensionContext) {
 					? `AI Prompt sent\n${customMessage}`
 					: 'AI Prompt sent\nWe will verify quality & accuracy.';
 				vscode.window.showInformationMessage(message);
-				writeLog(`📤 NOTIFIED on Enter (${cmd})`, false);
+				aiPromptCounter++;
+				updateStatusBar();
+				writeLog(`📤 NOTIFIED on Enter (${cmd}); counter=${aiPromptCounter}`, false);
 			} catch (err) {
 				writeLog(`❌ Error in Enter listener: ${err}`, false);
 			}
