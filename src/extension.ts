@@ -342,6 +342,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
+	async function focusChatInput(): Promise<void> {
+		const focusCandidates = [
+			'github.copilot.chat.focusInput',
+			'workbench.action.chat.focusInput',
+			'chat.focusInput'
+		];
+		for (const id of focusCandidates) {
+			try { await vscode.commands.executeCommand(id); writeLog(`🧭 Focused chat input using: ${id}`, true); break; } catch { /* ignore */ }
+		}
+	}
+
 	// Helper: robustly forward Enter to whichever chat-accept command is available
 	async function forwardToChatAccept(): Promise<boolean> {
 		try {
@@ -353,10 +364,12 @@ export async function activate(context: vscode.ExtensionContext) {
 				'workbench.action.chat.executeSubmit',
 				'workbench.action.chat.send',
 				'workbench.action.chat.sendMessage',
+				'inlineChat.accept',
+				'interactive.acceptInput',
 				'chat.acceptInput'
 			];
 			const present = candidatesOrdered.filter(id => all.includes(id));
-			writeLog(`🔎 Chat submit candidates present: ${present.join(', ') || 'none'}`, true);
+			writeLog(`🔎 Chat submit candidates present: ${present.join(', ') || 'none'}`, false);
 			for (const id of present) {
 				try {
 					await vscode.commands.executeCommand(id);
@@ -365,6 +378,14 @@ export async function activate(context: vscode.ExtensionContext) {
 				} catch (e) {
 					writeLog(`⚠️ Forward via ${id} failed: ${e}`, true);
 				}
+			}
+			// Final fallback: simulate Enter key
+			try {
+				await vscode.commands.executeCommand('type', { text: '\n' });
+				writeLog('↩️ Fallback: simulated Enter via type command', false);
+				return true;
+			} catch (e3) {
+				writeLog(`❌ Fallback type \\n failed: ${e3}`, false);
 			}
 			writeLog('❌ No chat accept/submit command could be executed', false);
 			return false;
@@ -387,7 +408,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			// Reset buffer before forwarding
 			chatInputBuffer = '';
 
-			// Forward to available chat accept
+			// Ensure focus and forward
+			await focusChatInput();
 			const ok = await forwardToChatAccept();
 
 			// After forwarding, update counters/status, refresh UI and then show notification
