@@ -6,6 +6,7 @@ let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = [];
 let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
+let chatInputBuffer: string = '';
 
 // Logging system
 const LOG_DIR = 'C:\\temp\\specstory-autosave-logs';
@@ -344,6 +345,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Enter-forward command: trigger on Enter in chat input, then forward to chat accept
 	const forwardEnterCmd = vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
+			// Immediately take current buffered input as the prompt (best effort)
+			const buffered = chatInputBuffer.trim();
+			if (buffered.length > 0) {
+				recentPrompts.unshift(buffered);
+				if (recentPrompts.length > 1000) recentPrompts = recentPrompts.slice(0, 1000);
+				writeLog(`➕ PROMPT ADDED (Enter): "${buffered.substring(0, 50)}..."`, false);
+			}
+
 			const config = vscode.workspace.getConfiguration('specstory-autosave');
 			const customMessage = config.get<string>('customMessage', '');
 			const message = customMessage ? `AI Prompt sent\n${customMessage}` : 'AI Prompt sent\nWe will verify quality & accuracy.';
@@ -352,7 +361,14 @@ export async function activate(context: vscode.ExtensionContext) {
 			// updateStatusBar is defined above in activate
 			// @ts-ignore - using outer scoped function
 			(updateStatusBar as any)();
+			// Refresh activity view to show the newly added prompt
+			// @ts-ignore - promptsProvider defined above
+			(promptsProvider as any)?.refresh?.();
 			writeLog('📤 NOTIFIED via Enter-forward command; forwarding to chat.acceptInput', false);
+
+			// Reset buffer (chat UI will also clear its input after submit)
+			chatInputBuffer = '';
+
 			// forward to the built-in chat submit
 			await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
 		} catch (err) {
@@ -360,6 +376,39 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 	context.subscriptions.push(forwardEnterCmd);
+
+	// Buffer chat input text as the user types/pastes (best effort). No notifications here.
+	const commandsAny = (vscode.commands as any);
+	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
+		const typeListener = commandsAny.onDidExecuteCommand((ev: any) => {
+			try {
+				const cmd: string | undefined = ev?.command;
+				if (cmd === 'type') {
+					const t = ev?.args && ev.args[0] && typeof ev.args[0].text === 'string' ? (ev.args[0].text as string) : undefined;
+					if (!t) return;
+					// Ignore Enter here; Enter is handled by our command
+					if (t.indexOf('\n') !== -1) return;
+					chatInputBuffer += t;
+					return;
+				}
+				if (cmd === 'editor.action.clipboardPasteAction') {
+					vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; });
+					return;
+				}
+				if (cmd === 'deleteLeft') {
+					if (chatInputBuffer.length > 0) chatInputBuffer = chatInputBuffer.slice(0, -1);
+					return;
+				}
+				// On operations we don't model, clear to avoid stale/wrong text
+				if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') {
+					chatInputBuffer = '';
+				}
+			} catch { /* ignore */ }
+		});
+		context.subscriptions.push(typeListener);
+	} else {
+		writeLog('⚠️ onDidExecuteCommand API not available; prompt buffer disabled', true);
+	}
 
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	
