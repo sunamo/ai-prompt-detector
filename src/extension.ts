@@ -342,6 +342,38 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog('🚀 PROMPTS: Provider registered successfully', false);
 
+	// Helper: robustly forward Enter to whichever chat-accept command is available
+	async function forwardToChatAccept(): Promise<boolean> {
+		try {
+			const all = await vscode.commands.getCommands(true);
+			const candidatesOrdered = [
+				'github.copilot.chat.acceptInput',
+				'workbench.action.chat.acceptInput',
+				'workbench.action.chat.submit',
+				'workbench.action.chat.executeSubmit',
+				'workbench.action.chat.send',
+				'workbench.action.chat.sendMessage',
+				'chat.acceptInput'
+			];
+			const present = candidatesOrdered.filter(id => all.includes(id));
+			writeLog(`🔎 Chat submit candidates present: ${present.join(', ') || 'none'}`, true);
+			for (const id of present) {
+				try {
+					await vscode.commands.executeCommand(id);
+					writeLog(`📨 Forwarded Enter using: ${id}`, false);
+					return true;
+				} catch (e) {
+					writeLog(`⚠️ Forward via ${id} failed: ${e}`, true);
+				}
+			}
+			writeLog('❌ No chat accept/submit command could be executed', false);
+			return false;
+		} catch (e) {
+			writeLog(`❌ forwardToChatAccept error: ${e}`, false);
+			return false;
+		}
+	}
+
 	// Enter-forward command: trigger on Enter in chat input, then forward to chat accept
 	const forwardEnterCmd = vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
@@ -352,34 +384,22 @@ export async function activate(context: vscode.ExtensionContext) {
 				writeLog(`➕ PROMPT ADDED (Enter): "${buffered.substring(0, 50)}..."`, false);
 			}
 
-			// Reset buffer before forwarding (chat UI will also clear its input after submit)
+			// Reset buffer before forwarding
 			chatInputBuffer = '';
 
-			// Forward to Copilot Chat submit first; fallback to workbench chat submit
-			let forwarded = false;
-			try {
-				await vscode.commands.executeCommand('github.copilot.chat.acceptInput');
-				forwarded = true;
-				writeLog('📨 Forwarded Enter to github.copilot.chat.acceptInput', true);
-			} catch (e) {
-				writeLog(`ℹ️ github.copilot.chat.acceptInput not available: ${e}`, true);
-			}
-			if (!forwarded) {
-				try {
-					await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
-					forwarded = true;
-					writeLog('📨 Forwarded Enter to workbench.action.chat.acceptInput', true);
-				} catch (e2) {
-					writeLog(`⚠️ Failed forwarding to workbench.action.chat.acceptInput: ${e2}`, false);
-				}
-			}
+			// Forward to available chat accept
+			const ok = await forwardToChatAccept();
 
 			// After forwarding, update counters/status, refresh UI and then show notification
-			aiPromptCounter++;
-			// @ts-ignore - using outer scoped function
-			(updateStatusBar as any)();
-			// @ts-ignore - promptsProvider defined above
-			(promptsProvider as any)?.refresh?.();
+			if (ok) {
+				aiPromptCounter++;
+				// @ts-ignore - using outer scoped function
+				(updateStatusBar as any)();
+				// @ts-ignore - promptsProvider defined above
+				(promptsProvider as any)?.refresh?.();
+			} else {
+				writeLog('⚠️ Enter forwarded but no chat accept command succeeded', false);
+			}
 
 			const config = vscode.workspace.getConfiguration('specstory-autosave');
 			const customMessage = config.get<string>('customMessage', '');
