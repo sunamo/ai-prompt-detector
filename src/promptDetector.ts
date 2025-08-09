@@ -1,5 +1,81 @@
 import * as vscode from 'vscode';
 import { writeLog } from './logger';
+import { state } from './state';
+import { PromptsProvider } from './activityBarProvider';
+
+async function focusChatInput(): Promise<boolean> {
+	const candidates = [
+		'workbench.action.chat.focus',
+		'workbench.action.chat.open',
+		'inlineChat.start',
+		'chat.start',
+		'workbench.panel.chat.view.focus',
+		'workbench.view.extension.chatExplorer',
+	];
+	for (const cmd of candidates) {
+		try { await vscode.commands.executeCommand(cmd); return true; } catch {}
+	}
+	return false;
+}
+
+async function getChatInputText(): Promise<string> {
+	try {
+		await focusChatInput();
+		const original = await vscode.env.clipboard.readText();
+		let captured = '';
+		try {
+			await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+			captured = await vscode.env.clipboard.readText();
+		} catch {}
+		if (!captured) {
+			try {
+				await vscode.commands.executeCommand('editor.action.selectAll');
+				await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+				captured = await vscode.env.clipboard.readText();
+			} catch {}
+		}
+		await vscode.env.clipboard.writeText(original);
+		return captured || '';
+	} catch (e) {
+		writeLog(`⚠️ getChatInputText failed: ${String(e)}`, true);
+		return '';
+	}
+}
+
+async function forwardToChatAccept(): Promise<boolean> {
+	const candidates = [
+		'workbench.action.chat.acceptInput',
+		'inlineChat.accept',
+		'chat.acceptInput',
+		'workbench.action.quickchat.accept',
+	];
+	for (const cmd of candidates) {
+		try { await vscode.commands.executeCommand(cmd); return true; } catch {}
+	}
+	try { await vscode.commands.executeCommand('type', { text: '\n' }); return true; } catch {}
+	return false;
+}
+
+export function registerEnterHandler(context: vscode.ExtensionContext, provider: PromptsProvider) {
+	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
+		try {
+			const text = (await getChatInputText())?.trim();
+			if (text) {
+				state.recentPrompts.unshift(text);
+				provider.refresh();
+			}
+
+			const accepted = await forwardToChatAccept();
+			writeLog(`➡️ Forwarded Enter to Copilot: ${accepted}`, true);
+
+			if (text) {
+				vscode.window.setStatusBarMessage('AI just received your prompt. Review results.', 1500);
+			}
+		} catch (e) {
+			writeLog(`❌ Enter handler failed: ${String(e)}`, true);
+		}
+	}));
+}
 
 export function detectCopilotEnter(args: any): boolean {
 	// Only detect Enter key press (newline)

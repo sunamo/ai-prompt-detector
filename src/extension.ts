@@ -1,18 +1,20 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
-import { initLogger, writeLog } from './logger';
+import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 
-let recentPrompts: string[] = [];
-let aiPromptCounter = 0;
+let outputChannel: vscode.OutputChannel;
+let recentPrompts: string[] = state.recentPrompts;
+let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
-let chatInputBuffer = '';
+let chatInputBuffer: string = '';
 
 export async function activate(context: vscode.ExtensionContext) {
-	initLogger(vscode.window.createOutputChannel('SpecStory Prompts'));
-	writeLog('🚀 ACTIVATION: Extension starting...', true);
+	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
+	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
 
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	statusBarItem.show();
@@ -24,18 +26,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	updateStatusBar();
 
 	await loadExistingPrompts();
-	const provider = new PromptsProvider(recentPrompts);
+	const provider = new PromptsProvider();
 	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, provider);
-	writeLog('🚀 PROMPTS: Provider registered successfully', false);
+	outputChannel.appendLine('🚀 PROMPTS: Provider registered successfully');
 
 	// Auto-open our Activity Bar view on startup
 	setTimeout(async () => {
 		try {
 			await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
 			await vscode.commands.executeCommand('workbench.viewsService.openView', PromptsProvider.viewType, true);
-			writeLog('🎯 Activity Bar view opened on startup', false);
+			outputChannel.appendLine('🎯 Activity Bar view opened on startup');
 		} catch (e) {
-			writeLog(`⚠️ Failed to open Activity Bar view on startup: ${e}`, false);
+			outputChannel.appendLine(`⚠️ Failed to open Activity Bar view on startup: ${e}`);
 		}
 	}, 400);
 
@@ -49,8 +51,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		try {
 			const all = await vscode.commands.getCommands(true);
 			const ids = ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage','inlineChat.accept','interactive.acceptInput','chat.acceptInput'].filter(i => all.includes(i));
-			for (const id of ids) { try { await vscode.commands.executeCommand(id); writeLog(`📨 Forwarded Enter using: ${id}`, false); return true; } catch { /* next */ } }
-			try { await vscode.commands.executeCommand('type', { text: '\n' }); writeLog('↩️ Fallback: simulated Enter via type command', false); return true; } catch {}
+			for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); return true; } catch { /* next */ } }
+			try { await vscode.commands.executeCommand('type', { text: '\n' }); outputChannel.appendLine('↩️ Fallback: simulated Enter via type command'); return true; } catch {}
 			return false;
 		} catch { return false; }
 	};
@@ -86,7 +88,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			const cfg = vscode.workspace.getConfiguration('specstory-autosave');
 			const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
 			setTimeout(() => { provider.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10);
-		} catch (e) { writeLog(`❌ Error in forwardEnterToChat: ${e}`, false); }
+		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
 
 	// Buffer typed/pasted text (best effort)
@@ -105,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Watch SpecStory exports
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { writeLog(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`, false); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
+	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
 
 	// React to settings changes
 	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) provider.refresh(); });
@@ -115,17 +117,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	const autoSaveDisposable = createAutoSaveDisposable();
 
 	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
-	writeLog(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`, false);
+	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
 }
 
 async function loadExistingPrompts(): Promise<void> {
-	writeLog('🔍 Searching for existing SpecStory files...', false);
+	outputChannel.appendLine('🔍 Searching for existing SpecStory files...');
 	const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
-	writeLog(`📊 Found ${files.length} SpecStory files`, false);
+	outputChannel.appendLine(`📊 Found ${files.length} SpecStory files`);
 	if (files.length === 0) { recentPrompts.push('Welcome to SpecStory AutoSave + AI Copilot Prompt Detection', 'TEST: Dummy prompt for demonstration'); return; }
 	const sorted = files.sort((a, b) => path.basename(b.fsPath).localeCompare(path.basename(a.fsPath)));
 	sorted.forEach(f => { if (isValidSpecStoryFile(f.fsPath)) loadPromptsFromFile(f.fsPath, recentPrompts); });
-	writeLog(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`, false);
+	outputChannel.appendLine(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`);
 }
 
-export function deactivate() { writeLog('🚀 DEACTIVATION: Extension shutting down', false); writeLog('🚀 Extension deactivated', false); }
+export function deactivate() { outputChannel.appendLine('🚀 DEACTIVATION: Extension shutting down'); outputChannel.appendLine('🚀 Extension deactivated'); }
