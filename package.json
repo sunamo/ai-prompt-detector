@@ -1,9 +1,9 @@
 {
-  "name": "specstory-autosave",
+  "name": "ai-prompt-detector",
   "displayName": "SpecStory AutoSave",
   "publisher": "sunamocz",
   "description": "Minimal VS Code extension scaffold (logging + prompt history datastore).",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -25,7 +25,7 @@
         "specstoryAutosave.debugLogging": {
           "type": "boolean",
             "default": true,
-            "description": "Enable verbose debug logging (written to C:/temp/specstory-autosave-logs/)."
+            "description": "Enable verbose debug logging (written to C:/temp/ai-prompt-detector-logs/)."
         }
       }
     },

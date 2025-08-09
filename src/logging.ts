@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-const LOG_DIR = 'C:/temp/specstory-autosave-logs';
+const LOG_DIR = 'C:/temp/ai-prompt-detector-logs';
 const MAX_LOG_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
 export type LogLevel = 'normal' | 'debug';

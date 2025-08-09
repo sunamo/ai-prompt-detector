@@ -2,7 +2,7 @@
 
 Minimal scaffold per instructions. Features:
 
-- Logging (normal + debug) to `C:/temp/specstory-autosave-logs/extension.log`
+- Logging (normal + debug) to `C:/temp/ai-prompt-detector-logs/extension.log`
 - Validates log freshness (<=5 minutes) on activation
 - Session datastore: prompt count + loaded markdown prompt history from `.specstory/history/*.md`
 - Command: `SpecStory: Show Status`
