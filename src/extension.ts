@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs'; // added for file logging
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
@@ -43,6 +44,17 @@ async function finalizePrompt(source: string, directText?: string) {
 
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
+	// Daily log file handling (clear on each activation)
+	try {
+		const logDir = 'C:/temp/specstory-autosave-logs';
+		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+		const today = new Date().toISOString().slice(0,10);
+		const dailyLogPath = path.join(logDir, `extension-${today}.log`);
+		fs.writeFileSync(dailyLogPath, ''); // clear file
+		const origAppend = outputChannel.appendLine.bind(outputChannel);
+		outputChannel.appendLine = (v: string) => { origAppend(v); try { fs.appendFileSync(dailyLogPath, `[${new Date().toISOString()}] ${v}\n`); } catch {} };
+		outputChannel.appendLine(`🧹 Cleared daily log file ${dailyLogPath}`);
+	} catch {}
 	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
 
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
