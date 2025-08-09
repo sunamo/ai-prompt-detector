@@ -24,7 +24,7 @@ export function isValidSpecStoryFile(filePath: string): boolean {
 export function extractPromptsFromContent(content: string): string[] {
 	const prompts: string[] = [];
 	try {
-		// Split by sections starting with _**User**_ or _**Assistant**_
+		// Rozdělit podle sekcí začínajících _**User**_ nebo _**Assistant**_
 		const sections = content.split(/(?=_\*\*User\*\*_|_\*\*Assistant\*\*_)/);
 		for (let i = 0; i < sections.length; i++) {
 			const section = sections[i];

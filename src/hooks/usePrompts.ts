@@ -15,20 +15,20 @@ export const usePrompts = () => {
 			const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
 			writeLog(`Found ${files.length} SpecStory files to analyze`, 'INFO');
 			
-			// Sort files by timestamp (newest first)
+			// Seřadit soubory podle časové značky (nejnovější první)
 			const sortedFiles = files.sort((a, b) => {
 				const nameA = path.basename(a.fsPath);
 				const nameB = path.basename(b.fsPath);
-				// Extract timestamp from filename for proper chronological sorting
+				// Extrahovat časovou značku z názvu souboru pro správné chronologické řazení
 				const timestampA = extractTimestampFromFileName(nameA);
 				const timestampB = extractTimestampFromFileName(nameB);
-				return timestampB.getTime() - timestampA.getTime(); // Newest first
+				return timestampB.getTime() - timestampA.getTime(); // Nejnovější první
 			});
 			
-			// Clear existing prompts
+			// Vymazat existující prompty
 			state.recentPrompts = [];
 			
-			// Process each file and extract user prompts
+			// Zpracovat každý soubor a extrahovat uživatelské prompty
 			sortedFiles.forEach(file => {
 				writeLog(`Checking file: ${file.fsPath}`, 'DEBUG');
 				if (isValidSpecStoryFile(file.fsPath)) {

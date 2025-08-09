@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs'; // added for file logging
+import * as fs from 'fs'; // přidáno pro logování do souborů
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
@@ -14,7 +14,7 @@ import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
 import { focusChatInput, forwardToChatAccept, getChatInputText, captureChatInputSilently } from './chatHelpers';
 import { startDetectionTimers } from './detectionTimers';
 
-let outputChannel: vscode.OutputChannel; // legacy local retained for minimal change
+let outputChannel: vscode.OutputChannel; // starší lokální proměnná zachována pro minimální změny
 let recentPrompts: string[] = state.recentPrompts;
 let aiPromptCounter = 0;
 let statusBarItem: vscode.StatusBarItem;
@@ -33,7 +33,7 @@ const chatDocState = new Map<string,string>();
 let lastEditorPollText = '';
 let lastBufferChangedAt = Date.now();
 
-// Lightweight finalize wrapper also used by heuristic watcher
+// Lehký obal pro finalize funkci používaný také heuristickým pozorovatelem
 function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
 
 async function finalizePrompt(source: string, directText?: string) {
@@ -60,19 +60,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
 	info('🚀 ACTIVATION: Extension starting...');
-	// Daily log file handling (clear on each activation)
+	// Zpracování denních log souborů (vymazat při každé aktivaci)
 	try {
-		const logDir = LOG_DIR; // reference constant so it is tracked
+		const logDir = LOG_DIR; // reference konstanty pro sledování
 		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 		const today = new Date().toISOString().slice(0,10);
 		const dailyLogPath = path.join(logDir, `extension-${today}.log`);
-		fs.writeFileSync(dailyLogPath, ''); // clear file
+		fs.writeFileSync(dailyLogPath, ''); // vymazat soubor
 		const origAppend = outputChannel.appendLine.bind(outputChannel);
 		outputChannel.appendLine = (v: string) => { origAppend(v); try { fs.appendFileSync(dailyLogPath, `[${new Date().toISOString()}] ${v}\n`); } catch {} };
 		outputChannel.appendLine(`🧹 Cleared daily log file ${dailyLogPath}`);
 	} catch {}
 	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
-	outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // activation reference line
+	outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // referenční řádek aktivace
 
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	statusBarItem.show();
@@ -92,13 +92,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
 	}, 400);
 
-	// Setup heuristic watcher (additive)
+	// Nastavení heuristického pozorovatele (aditivní)
 	setupChatResponseWatcher(context, doFinalize);
 	registerChatApiHook(context, doFinalize);
 	registerCommandListener(context);
 	startDetectionTimers(context);
 
-	// helpers imported now (previous local implementations removed)
+	// helpery jsou nyní importovány (předchozí lokální implementace odstraněny)
 
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try { let text = await getChatInputText(); if (!text) text = chatInputBuffer.trim(); if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); providerRef?.refresh(); lastSubmittedText = text; } chatInputBuffer = ''; await focusChatInput(); lastEnterSubmitAt = Date.now(); const ok = await forwardToChatAccept(); if (ok) { aiPromptCounter++; updateStatusBar(); providerRef?.refresh(); } const cfg = vscode.workspace.getConfiguration('specstory-autosave'); const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.'; setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10); } catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
@@ -112,13 +112,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 	}
 
-	// NEW: log any Copilot/Chat related document open (response appears) -> finalize if pending
+	// NOVÉ: loguj jakékoliv otevření Copilot/Chat dokumentu (objeví se odpověď) -> finalizuj pokud čeká
 	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
 		try {
 			const name = doc.fileName.toLowerCase();
 			if (/(copilot|chat)/.test(name)) {
 				outputChannel.appendLine(`📄 OPEN doc=${path.basename(doc.fileName)} len=${doc.getText().length} lang=${doc.languageId}`);
-				// If we have a buffered prompt not yet finalized, finalize now (button likely used)
+				// Pokud máme uložený prompt, který ještě nebyl finalizován, finalizuj nyní (pravděpodobně bylo použito tlačítko)
 				if ((chatInputBuffer.trim() || lastNonEmptySnapshot) && Date.now() - lastFinalizeAt > 120) {
 					finalizePrompt('open-doc');
 				}
@@ -126,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		} catch {}
 	}));
 
-	// Strengthen change listener: always log when chat doc transitions to empty
+	// Posílit listener změn: vždy loguj když chat dokument přejde na prázdný
 	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
 		try {
 			const doc = ev.document; const name = doc.fileName.toLowerCase(); if (!(name.includes('copilot') || name.includes('chat'))) return;
@@ -141,8 +141,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
-		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; lastEditorPollText = current; } else { if (lastEditorPollText && !current) { // transition non-empty -> empty in editor
-				// If internal buffer still holds text we likely had a button submission
+		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); 			if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; lastEditorPollText = current; } else { if (lastEditorPollText && !current) { // přechod neprázdný -> prázdný v editoru
+				// Pokud interní buffer stále obsahuje text, pravděpodobně došlo k odeslání tlačítkem
 				if (chatInputBuffer.trim() && Date.now() - lastFinalizeAt > 140) {
 					outputChannel.appendLine('🧲 Heuristic: editor cleared while buffer still has text (button send?)');
 					await finalizePrompt('editor-clear-buffer');

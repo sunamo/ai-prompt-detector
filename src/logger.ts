@@ -32,7 +32,7 @@ export function error(m: string) { append(m); }
 export function debug(m: string) { if (debugEnabled) append(m); }
 export function getDailyLogPath() { return dailyPath; }
 
-// Compatibility shim for older code still importing writeLog(message, isDebug)
+// Kompatibilní obal pro starší kód stále importující writeLog(message, isDebug)
 export function writeLog(message: string, isDebug: boolean) { if (isDebug) { debug(message); } else { info(message); } }
 
 function freshCheck() {

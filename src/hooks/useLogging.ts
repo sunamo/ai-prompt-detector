@@ -7,10 +7,10 @@ export const useLogging = () => {
 		const outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
 		state.outputChannel = outputChannel;
 		
-		// Write initial log entry
+		// Zapsat počáteční log záznam
 		writeLog('=== NEW SESSION STARTED ===', 'INFO');
 		
-		// Verify logging works after a short delay
+		// Ověřit, že logování funguje po krátkém zpoždění
 		setTimeout(() => {
 			verifyLogFile();
 		}, 1000);

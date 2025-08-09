@@ -5,7 +5,7 @@ import { state } from '../state';
 
 const LOG_FILE_PATH = 'C:\\temp\\specstory-autosave-logs\\extension.log';
 
-// Ensure log directory exists
+// Zajistit, že log adresář existuje
 function ensureLogDirectory(): void {
 	const logDir = path.dirname(LOG_FILE_PATH);
 	if (!fs.existsSync(logDir)) {
@@ -21,22 +21,22 @@ export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'I
 	const config = vscode.workspace.getConfiguration('specstory-autosave');
 	const debugEnabled = config.get<boolean>('enableDebugLogs', true);
 
-	// Skip debug messages if debugging is disabled
+	// Přeskočit debug zprávy, pokud je debugging vypnut
 	if (level === 'DEBUG' && !debugEnabled) {
 		return;
 	}
 
 	const now = new Date();
-	const czechTime = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // UTC+2 for Czech timezone
+	const czechTime = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // UTC+2 pro český časový pás
 	const timeString = czechTime.toISOString().replace('T', ' ').substring(0, 19);
 	const logMessage = `[${timeString}] [${level}] ${message}`;
 
-	// Always write to VS Code output channel
+	// Vždy zapisovat do VS Code output channel
 	if (state.outputChannel) {
 		state.outputChannel.appendLine(logMessage);
 	}
 
-	// Also write to file
+	// Také zapisovat do souboru
 	try {
 		ensureLogDirectory();
 		fs.appendFileSync(LOG_FILE_PATH, logMessage + '\n', 'utf8');
