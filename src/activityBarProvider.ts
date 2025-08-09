@@ -22,10 +22,17 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'ai-prompt-detector-view';
   private _view?: vscode.WebviewView;
 
-  /** Konstruktor – pouze trace log vytvoření provideru. */
+  /**
+   * Konstruktor – trace log vytvoření provideru.
+   * MUSÍ zůstat jednoduchý (žádná logika navíc).
+   */
   constructor() { debug('🎯 PROMPTS: Provider created'); }
 
-  /** Inicializace webview – nastaví možnosti a naplní HTML. */
+  /**
+   * Inicializace webview – nastaví možnosti a naplní HTML.
+   * @param webviewView Cílový webview container (poskytuje webview).
+   * NESMĚNÍ přidávat reorder logiku – pouze deleguje na update.
+   */
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this._view = webviewView;
     // SECURITY: Skripty zakázány – pouze statický HTML + CSS (policy requirement)
@@ -34,16 +41,23 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     info(`🎯 PROMPTS: Number of prompts to display: ${state.recentPrompts.length}`);
   }
 
-  /** Veřejný refresh – přegeneruje HTML pokud je webview k dispozici. */
+  /**
+   * Veřejný refresh – přegeneruje HTML pokud je webview k dispozici.
+   * Nesmí měnit pořadí dat – pouze re-render.
+   */
   public refresh(): void { if (this._view) this.updateWebview(); }
 
-  /** Interní aktualizace HTML obsahu webview. */
+  /**
+   * Interní aktualizace HTML obsahu webview.
+   * Nevkládat reverse/sort – striktně deleguje na createPromptsHtml.
+   */
   private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
   /**
    * Výpis promptů: pořadí vychází přímo z `state.recentPrompts`.
    * INVARIANT: Žádné reverse/sort/secondary slice od konce – pouze slice(0, maxPrompts).
    * ZMĚNA tohoto chování = REGRESE (viz Activity Bar Rendering Policy v instrukcích).
+   * @returns HTML string pro webview (statický, bez skriptů).
    */
   private createPromptsHtml(): string {
     let promptsHtml = '';

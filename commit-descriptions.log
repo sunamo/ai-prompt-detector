@@ -62,3 +62,4 @@ v1.1.246 | Fix prompt ordering: newest already index 0 (remove reverse) so numbe
 v1.1.247 | Adjust ordering so #1 is newest prompt in Activity Bar
 v1.1.248 | Adjust ordering: per-file reversed on load, removed reverse in view rendering
 v1.1.249 | Re-append missing duplicate suppression, activity bar, readability, header, ordering invariants sections
+v1.1.250 | Add Activity Bar rendering invariant comments
