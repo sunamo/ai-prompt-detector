@@ -1,3 +1,4 @@
+``````instructions
 `````instructions
 ````instructions
 # AI Assistant Instructions - AI Copilot Prompt Detector Extension
@@ -309,3 +310,12 @@ enter must work for both copilot and my extension without remapping. In another 
 - Only the explicitly allowed minimal set of source files may exist: extension.ts, activityBarProvider.ts, chatHelpers.ts, specstoryReader.ts, logger.ts, state.ts.
 - Rationale: Prevent accidental reintroduction via tooling / merges and ensure minimal footprint.
 - Any keybinding regressions (loss of Enter / Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+Alt+Enter detection) must be fixed BEFORE any other change.
+
+## 🚫 Prompt Duplicate Suppression (Appended)
+- Never reintroduce any logic that skips counting a prompt because it is identical to the previous one.
+- Specifically FORBIDDEN: conditions like `if (text === lastSubmittedText) return false;` or any hash/equality guard blocking consecutive identical prompts.
+- Reason: This suppression previously froze the status bar counter at 1 and falsely appeared as if Enter variants (Enter / Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+Alt+Enter) were not working after the first submission.
+- Allowing duplicates is REQUIRED to verify rapid iterative prompting scenarios and guarantees all four key variants increment the counter every time.
+- If optimization of storage is needed, only trim array length (e.g. keep max N prompts) but NEVER skip insertion due to equality with the immediately prior prompt.
+````instructions
+`````

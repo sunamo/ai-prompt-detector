@@ -81,12 +81,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	};
 
 	/** Uloží prompt do stavu, vždy započítá i opakovaný (již poslaný) text.
-	 * Původní kontrola na duplikát byla odstraněna, aby šel počet navyšovat i při identických vstupech.
+	 * DŮLEŽITÉ (TRVALÝ POŽADAVEK): NESMÍ SE ZNOVU ZAVÉST FILTRACE DUPLIKÁTŮ.
+	 * Dřívější kontrola `if (text === lastSubmittedText) return false;` způsobila:
+	 *  - Počítal se jen první odeslaný prompt (status bar ustrnul na hodnotě 1)
+	 *  - Další Enter / Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+Alt+Enter neinkrementovaly čítač
+	 *  - Působilo to jako nefunkčnost ostatních klávesových zkratek
+	 * Odstranění této podmínky obnovilo správné fungování všech 4 variant Enter a nekonečné navyšování čítače.
+	 * Tato poznámka je synchronizována s instrukcemi (sekce: No duplicate suppression for prompts).
 	 */
 	const recordPrompt = (raw: string, source: string): boolean => {
 		const text = (raw || '').trim();
 		if (!text) return false; // prázdné nic neukládáme
-		lastSubmittedText = text; // stále uchováme poslední (může se hodit pro další logiku)
+		lastSubmittedText = text; // uchováme poslední (může se hodit, ale NE k blokaci)
 		state.recentPrompts.unshift(text);
 		if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
 		aiPromptCounter++;
