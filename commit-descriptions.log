@@ -46,3 +46,4 @@ v1.1.231 | restore keybinding full unbind variants
 v1.1.232 | Allow duplicate prompts via Ctrl+Enter and add Czech JSDoc
 v1.1.233 | Document permanent removal of duplicate prompt suppression in code & instructions
 v1.1.233 | Restore Activity Bar container and webview contribution
+v1.1.234 | Restore missing duplicate suppression + activity bar preservation instructions

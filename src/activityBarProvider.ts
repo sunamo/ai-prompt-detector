@@ -19,12 +19,9 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 	 * @param webviewView Cílový webview container.
 	 */
 	public resolveWebviewView(webviewView: vscode.WebviewView): void {
-		debug('🎯 PROMPTS: resolveWebviewView called');
 		this._view = webviewView;
 		webviewView.webview.options = { enableScripts: false, localResourceRoots: [] };
 		this.updateWebview();
-		debug('🎯 PROMPTS: Real prompts set');
-		info('🎯 PROMPTS: Showing real prompts from SpecStory files');
 		info(`🎯 PROMPTS: Number of prompts to display: ${state.recentPrompts.length}`);
 	}
 
@@ -36,11 +33,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Interní aktualizace HTML obsahu webview.
 	 */
-	private updateWebview(): void {
-		if (!this._view) { debug('🎯 PROMPTS: Webview not ready yet'); return; }
-		this._view.webview.html = this.createPromptsHtml();
-		debug(`🎯 PROMPTS: HTML set, displaying ${state.recentPrompts.length} prompts`);
-	}
+	private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
 	/**
 	 * Vytvoří HTML pro výpis promptů – bezpečně escapuje a limituje počet.
