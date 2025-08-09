@@ -53,3 +53,4 @@ v1.1.237 | Remove unused lastTypingChangeAt variable and assignments
 v1.1.238 | Readable formatting applied to all TS sources
 v1.1.239 | Restore duplicate suppression + activity bar preservation sections and add readability heuristic addendum
 v1.1.240 | Add mandatory readability header to all TS files and update instructions
+v1.1.241 | Baseline commit: all functionality works except mouse-based Copilot send capture; added readability headers to all TS files

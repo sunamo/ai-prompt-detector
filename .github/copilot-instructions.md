@@ -1,3 +1,4 @@
+````````````instructions
 ```````````instructions
 ``````````instructions
 `````````instructions
@@ -337,9 +338,8 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - If a reviewer (or automated check) detects line count shrink without clearer naming / extra comments, treat it as regression and reformat immediately.
 - This addendum must NOT be removed; append further clarifications with dated notes only.
 
-## 📌 File Header Readability Comment Requirement (Appended Aug 10 2025)
-- Every TypeScript source file MUST begin with a standardized Czech comment block declaring permanent readability requirements.
-- Required header (exact text, may extend with dated addenda but not shrink):
+### 📘 Mandatory File Readability Header (Aug 10 2025 Reinforced)
+- Every TypeScript source file MUST begin with the exact Czech block:
 ```
 /**
  * ČITELNOST: Soubor musí zůstat vždy plně čitelný pro programátora.
@@ -348,9 +348,7 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
  * čitelnosti je REGRESE a musí být vráceno. Zachovávej logické bloky a vertikální strukturu.
  */
 ```
-- This header is mandatory for: extension.ts, activityBarProvider.ts, chatHelpers.ts, specstoryReader.ts, logger.ts, state.ts (and any future .ts files).
-- If a file is created without the header, the next edit MUST add it before any imports.
-- Never remove or shrink the header; only append clarifying lines with a date tag.
-- Commits adding the header should NOT be treated as noise; they enforce policy.
-- Automated scripts may re‑insert the header if missing; do not block them.
-```````
+- If a file is created or found without this header, the next commit MUST add it at the very top (before imports).
+- Header may only gain additional lines with dated clarifications; never shrink or translate it.
+- A helper script may re‑insert this header automatically; such commits are valid and must not be rejected as noise.
+- Treat absence, alteration, or truncation of this header as a readability regression equal in severity to keybinding failure.
