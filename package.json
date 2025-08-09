@@ -9,86 +9,27 @@
     "url": "https://github.com/sunamo/specstory-autosave2.git"
   },
   "icon": "icon.png",
-	"engines": {
-		"vscode": "^1.74.0"
-	},
-	"categories": [
-		"Other"
-	],
-	"activationEvents": [
-		"onStartupFinished",
-		"*"
-	],
+	"engines": { "vscode": "^1.74.0" },
+	"categories": [ "Other" ],
+	"activationEvents": [ "onStartupFinished", "*" ],
 	"main": "./out/extension.js",
 	"contributes": {
 		"configuration": {
 			"title": "SpecStory AutoSave",
 			"properties": {
-				"specstory-autosave.maxPrompts": {
-					"type": "number",
-					"default": 50,
-					"description": "Maximum number of prompts to display"
-				},
-				"specstory-autosave.enableDebugLogs": {
-					"type": "boolean",
-					"default": false,
-					"description": "Enable debug logging"
-				},
-				"specstory-autosave.customMessage": {
-					"type": "string",
-					"default": "",
-					"description": "Custom notification message"
-				}
+				"specstory-autosave.maxPrompts": { "type": "number", "default": 50, "description": "Maximum number of prompts to display" },
+				"specstory-autosave.enableDebugLogs": { "type": "boolean", "default": false, "description": "Enable debug logging" },
+				"specstory-autosave.customMessage": { "type": "string", "default": "", "description": "Custom notification message" }
 			}
 		},
-		"views": {
-			"specstory-activity": [
-				{
-					"id": "specstory-autosave-view",
-					"name": "",
-					"when": "true",
-					"type": "webview",
-					"icon": "icon.png"
-				}
-			]
-		},
-		"viewsContainers": {
-			"activitybar": [
-				{
-					"id": "specstory-activity",
-					"title": "SpecStory AutoSave + AI Copilot Prompt Detection",
-					"icon": "icon.png"
-				}
-			]
-		},
+		"views": { "specstory-activity": [ { "id": "specstory-autosave-view", "name": "", "when": "true", "type": "webview", "icon": "icon.png" } ] },
+		"viewsContainers": { "activitybar": [ { "id": "specstory-activity", "title": "SpecStory AutoSave + AI Copilot Prompt Detection", "icon": "icon.png" } ] },
 		"keybindings": [
-			{
-				"command": "-workbench.action.chat.acceptInput",
-				"key": "enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "-github.copilot.chat.acceptInput",
-				"key": "enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "specstory-autosave.forwardEnterToChat",
-				"key": "enter",
-				"mac": "enter",
-				"when": "inChatInput"
-			}
+			{ "command": "-workbench.action.chat.acceptInput", "key": "enter", "when": "inChatInput" },
+			{ "command": "-github.copilot.chat.acceptInput", "key": "enter", "when": "inChatInput" },
+			{ "command": "specstory-autosave.forwardEnterToChat", "key": "enter", "mac": "enter", "when": "inChatInput" }
 		]
 	},
-	"scripts": {
-		"compile": "tsc -p ./",
-		"build": "tsc -p ./",
-		"watch": "tsc -watch -p ./"
-	},
-	"devDependencies": {
-		"@types/vscode": "^1.74.0",
-		"@types/node": "20.x",
-		"typescript": "^5.4.5"
-	},
-	"packageManager": "pnpm@9.0.0"
-}
+	"scripts": { "compile": "tsc -p ./", "build": "tsc -p ./", "watch": "tsc -watch -p ./" },
+	"devDependencies": { "@types/vscode": "^1.74.0", "@types/node": "20.x", "typescript": "^5.4.5" },
+	"packageManager": "pnpm@9.0.0" }

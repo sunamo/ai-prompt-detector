@@ -38,25 +38,8 @@ const finalize = externalFinalizePrompt;
 // Lightweight finalize wrapper also used by heuristic watcher
 function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
 
-async function finalizePrompt(source: string, directText?: string) {
-	try {
-		let txt = (directText || chatInputBuffer || lastNonEmptySnapshot).trim();
-		if (!txt) return;
-		if (txt === lastSubmittedText) { outputChannel.appendLine(`ℹ️ Skipped duplicate finalize (${source})`); return; }
-		lastSubmittedText = txt;
-		recentPrompts.unshift(txt);
-		if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-		chatInputBuffer = '';
-		aiPromptCounter++;
-		lastFinalizeAt = Date.now();
-		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-		const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-		vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-		providerRef?.refresh();
-		outputChannel.appendLine(`🛎️ Detected submit via ${source} | chars=${txt.length}`);
-		outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // visible reference line
-	} catch (e) { outputChannel.appendLine(`❌ finalizePrompt error: ${e}`); }
-}
+// Use external finalize directly
+const finalizePrompt = externalFinalizePrompt;
 
 export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
