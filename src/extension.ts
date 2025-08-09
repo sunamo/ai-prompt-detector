@@ -5,6 +5,7 @@ import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
+import { initLogger, info, debug, error } from './logger';
 
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = state.recentPrompts;
@@ -43,7 +44,9 @@ async function finalizePrompt(source: string, directText?: string) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+	initLogger();
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
+	info('🚀 ACTIVATION: Extension starting...');
 	// Daily log file handling (clear on each activation)
 	try {
 		const logDir = 'C:/temp/specstory-autosave-logs';
