@@ -52,3 +52,4 @@ v1.1.236 | Add missing keybindings for ctrl+shift+enter and ctrl+alt+enter
 v1.1.237 | Remove unused lastTypingChangeAt variable and assignments
 v1.1.238 | Readable formatting applied to all TS sources
 v1.1.239 | Restore duplicate suppression + activity bar preservation sections and add readability heuristic addendum
+v1.1.240 | Add mandatory readability header to all TS files and update instructions

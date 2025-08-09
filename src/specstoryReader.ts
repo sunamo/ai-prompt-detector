@@ -1,7 +1,8 @@
 /**
  * ČITELNOST: Soubor musí zůstat vždy plně čitelný pro programátora.
  * Žádné umělé zkracování řádků, slučování nesouvisejících příkazů na jeden řádek
- * ani minifikace. Snížení počtu řádků bez jasného zlepšení čitelnosti je regrese.
+ * ani minifikace. Snížení počtu řádků bez jasného, zdokumentovaného zlepšení
+ * čitelnosti je REGRESE a musí být vráceno. Zachovávej logické bloky a vertikální strukturu.
  */
 
 import * as fs from 'fs';
