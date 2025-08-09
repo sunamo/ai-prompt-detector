@@ -1,0 +1,46 @@
+{
+  "name": "specstory-autosave",
+  "displayName": "SpecStory AutoSave",
+  "publisher": "sunamocz",
+  "description": "Minimal VS Code extension scaffold (logging + prompt history datastore).",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -p . -w"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^18.19.0",
+    "typescript": "^5.4.0",
+    "vsce": "^2.15.0"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "SpecStory AutoSave",
+      "properties": {
+        "specstoryAutosave.debugLogging": {
+          "type": "boolean",
+            "default": true,
+            "description": "Enable verbose debug logging (written to C:/temp/specstory-autosave-logs/)."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "specstoryAutosave.showStatus",
+        "title": "SpecStory: Show Status"
+      }
+    ]
+  },
+  "activationEvents": ["*"],
+  "categories": ["Other"],
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sunamo/ai-prompt-detector"
+  }
+}
