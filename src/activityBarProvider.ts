@@ -54,8 +54,8 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      // Kopie omezeného seznamu + obrácení pořadí pro zobrazení (nejnovější první)
-      const renderList = recentPrompts.slice(0, maxPrompts).reverse();
+      // Nově: nepřevracet. Pole recentPrompts má nejnovější položku na indexu 0 (unshift), takže zobrazíme přímo pořadí.
+      const renderList = recentPrompts.slice(0, maxPrompts);
       promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
