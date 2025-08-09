@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { LOG_DIR } from './constants';
 
 let channel: vscode.OutputChannel;
 let dailyPath = '';
@@ -11,7 +12,7 @@ function refreshDebug() { debugEnabled = vscode.workspace.getConfiguration('spec
 export function initLogger(): void {
 	channel = vscode.window.createOutputChannel('SpecStory Prompts');
 	refreshDebug();
-	const dir = 'C:/temp/specstory-autosave-logs';
+	const dir = LOG_DIR;
 	try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch {}
 	const today = new Date().toISOString().slice(0,10);
 	dailyPath = path.join(dir, `extension-${today}.log`);

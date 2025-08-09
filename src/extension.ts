@@ -8,6 +8,7 @@ import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 import { initLogger, info, debug, error, writeLog } from './logger';
 import { setupChatResponseWatcher } from './chatResponseWatcher';
 import { registerChatApiHook } from './chatApiHook';
+import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
 
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = state.recentPrompts;
@@ -54,7 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	info('🚀 ACTIVATION: Extension starting...');
 	// Daily log file handling (clear on each activation)
 	try {
-		const logDir = 'C:/temp/specstory-autosave-logs';
+		const logDir = LOG_DIR; // reference constant so it is tracked
 		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 		const today = new Date().toISOString().slice(0,10);
 		const dailyLogPath = path.join(logDir, `extension-${today}.log`);
