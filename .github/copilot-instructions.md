@@ -1,4 +1,5 @@
 ````````````````instructions
+````````````````instructions
 ```````````````instructions
 ``````````````instructions
 `````````````instructions
@@ -379,4 +380,37 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - Removing `collected.reverse()` in `specstoryReader` and compensating with UI reversal.
 
 Persist forever. Append refinements only; never delete this section.
+
+## 📊 Activity Bar Rendering Policy (Aug 10 2025 Addendum)
+- Purpose: Ensure SpecStory-derived prompts render in a stable, predictable order and structure.
+- Ordering Source of Truth:
+  1. File discovery sorts filenames descending (newest timestamp/name first).
+  2. Per file, raw user prompt segments are collected in encounter order then reversed BEFORE insertion (newest in file first).
+  3. Runtime submissions use unshift() placing newest overall prompt at index 0.
+  4. UI strictly consumes state.recentPrompts WITHOUT reversing or re-sorting.
+- Therefore: Index #1 (displayed) is ALWAYS the newest overall prompt across all sources.
+- UI MUST NOT:
+  - Call reverse() or sort() on the prompt list.
+  - Filter, group, paginate, or re-chunk prompts implicitly.
+  - Inject artificial headers that break sequential numbering.
+- Numbering: Displayed #n corresponds to (array index + 1) of the already correctly ordered slice.
+- Truncation: Only apply slice(0, maxPrompts) – never slice from the end.
+- Escaping: HTML entities (& < > ") MUST be escaped for safety; no additional sanitization is required for plain text prompts.
+- Styling: header-bar, list, prompt-item, ln, txt, empty, footer class names are STABLE – do not rename without explicit instruction (automation or user CSS dependents may rely on them).
+- Accessibility: Keep text content selectable; avoid focus stealing (snapshot retrieval uses getChatInputText(false) for passive polling).
+- Script Policy: enableScripts remains false to reduce attack surface; do not enable unless a future feature explicitly requires it.
+- Regression Definition: Any deviation causing newest prompt not to appear at #1, or insertion of an extra reverse/sort, or loss of selectable text, is a REGRESSION equal to a keybinding failure.
+- Preservation: Treat this section plus existing Prompt Ordering Invariants as a unified contract. Append refinements only.
+
+### ✅ Enforcement Checklist (Activity Bar)
+1. createPromptsHtml: NO reverse/sort on render list? (Yes)
+2. loadPromptsFromFile: includes collected.reverse()? (Yes)
+3. recordPrompt: uses unshift()? (Yes)
+4. Max prompts applied only via slice(0, maxPrompts)? (Yes)
+5. HTML escaping intact (& < > ")? (Yes)
+6. Scripts disabled? (Yes)
+7. Copy/select inside webview not interrupted by focus side-effects? (Yes – passive snapshots avoid forcing focus)
+
+### 🔒 Marker
+- Presence of this section forbids silent reordering changes. Commits altering ordering logic MUST reference this policy.
 ````````````````

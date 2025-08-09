@@ -11,51 +11,48 @@ import { state } from './state';
 
 /**
  * Poskytuje webview s výpisem zachycených promptů ve vlastním panelu Activity Bar.
+ * INVARIANTS (Activity Bar Rendering Policy):
+ *  - Pořadí dat je již připraveno v `state.recentPrompts` (nejnovější = index 0)
+ *  - ZDE NESMÍ být volán reverse() ani sort()
+ *  - Zobrazuje se pouze slice(0, maxPrompts)
+ *  - Číslování #index+1 reflektuje původní pořadí
+ *  - Přidání jakéhokoli přetřídění = REGRESE (porušení Activity Bar Rendering Policy)
  */
 export class PromptsProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'ai-prompt-detector-view';
   private _view?: vscode.WebviewView;
 
-  /**
-   * Konstruktor – pouze trace log vytvoření provideru.
-   */
+  /** Konstruktor – pouze trace log vytvoření provideru. */
   constructor() { debug('🎯 PROMPTS: Provider created'); }
 
-  /**
-   * Inicializace webview – nastaví možnosti a naplní HTML.
-   * @param webviewView Cílový webview container.
-   */
+  /** Inicializace webview – nastaví možnosti a naplní HTML. */
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this._view = webviewView;
+    // SECURITY: Skripty zakázány – pouze statický HTML + CSS (policy requirement)
     webviewView.webview.options = { enableScripts: false, localResourceRoots: [] };
     this.updateWebview();
     info(`🎯 PROMPTS: Number of prompts to display: ${state.recentPrompts.length}`);
   }
 
-  /**
-   * Veřejný refresh – přegeneruje HTML pokud je webview k dispozici.
-   */
+  /** Veřejný refresh – přegeneruje HTML pokud je webview k dispozici. */
   public refresh(): void { if (this._view) this.updateWebview(); }
 
-  /**
-   * Interní aktualizace HTML obsahu webview.
-   */
+  /** Interní aktualizace HTML obsahu webview. */
   private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
   /**
    * Výpis promptů: pořadí vychází přímo z `state.recentPrompts`.
-   * INVARIANT: Žádné další reverse zde – už je aplikováno v `specstoryReader` při načítání souborů
-   * a `recordPrompt` vkládá nové prompty pomocí `unshift` na začátek.
-   * ZMĚNA tohoto chování (přidání reverse / přetřiďování) = REGRESE.
+   * INVARIANT: Žádné reverse/sort/secondary slice od konce – pouze slice(0, maxPrompts).
+   * ZMĚNA tohoto chování = REGRESE (viz Activity Bar Rendering Policy v instrukcích).
    */
   private createPromptsHtml(): string {
     let promptsHtml = '';
-    const recentPrompts = state.recentPrompts; // pořadí: newest file first + newest prompt first
+    const recentPrompts = state.recentPrompts; // pořadí: newest file first + newest prompt first (index 0 = nejnovější)
     const config = vscode.workspace.getConfiguration('ai-prompt-detector');
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse!
+      const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse / NE sort
       promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
