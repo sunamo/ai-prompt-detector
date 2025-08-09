@@ -12,6 +12,7 @@ let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
 let chatInputBuffer: string = '';
 let lastEnterSubmitAt = 0; // timestamp of last submission to avoid duplicate notifications
+const chatDocState = new Map<string, { last: string; typed: boolean }>();
 const explicitSubmitCommands = new Set([
 	'github.copilot.chat.acceptInput',
 	'github.copilot.chat.submit',
