@@ -1,5 +1,15 @@
 # AI Assistant Instructions - AI Copilot Prompt Detector Extension
 
+## ✅ Formatting Policy (Human Readable Output)
+- ALL code and text the AI produces must already be cleanly formatted and human readable when shown (never rely on later formatting steps).
+- Follow a Prettier‑like style (consistent indentation, spacing, trailing commas where typical, wrapped long lines sensibly).
+- No minified or compressed one‑line blocks unless it is a deliberate tiny snippet example.
+- When editing existing files, preserve surrounding style and improve readability if previous formatting was degraded.
+- Large inline arrays or objects must be split across multiple lines.
+- Avoid excessively long lines (>140 chars) where reasonable.
+- Always keep the final code below per‑file length limits already defined in these instructions.
+- This policy is mandatory for every response containing code or documentation.
+
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
 Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.
@@ -38,7 +48,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - Always check that you have correct ending `.instructions.md`
 
 ### 🚀 RELEASE at the end of every prompt
-- **At the end of EVERY prompt run `.\install.ps1`**
+- **At the end of EVERY prompt run `\.\install.ps1`**
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
@@ -102,7 +112,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **API**: "AI created API! Check: • Error handling • Security • API documentation"
 
 ### 📝 Git commit workflow
-- Order: 1) Code change → 2) Increment PATCH → 3) `.\install.ps1` (automatically: commit → push → package)
+- Order: 1) Code change → 2) Increment PATCH → 3) `\.\install.ps1` (automatically: commit → push → package)
 - Format: `git commit -m "v1.1.3"` (always just patch++)
 - Everything is done automatically through install.ps1
 
@@ -116,23 +126,23 @@ As a copilot, you never change versions. The version changes fundamentally only 
 
 ### 🔨 BUILD at the end of every prompt
 - **NEVER run `pnpm run compile` separately!**
-- **WORKFLOW**: Increment version → run `.\install.ps1`
+- **WORKFLOW**: Increment version → run `\.\install.ps1`
 - If build fails in install.ps1:
   1. Decrease version back
   2. Fix errors
   3. Increment version again
-  4. Run `.\install.ps1` again
+  4. Run `\.\install.ps1` again
 - install.ps1 contains build, so separate compilation is unnecessary
 - **COMMIT ONLY AFTER SUCCESSFUL BUILD** - so all versions are buildable
 
 ### 🚀 RELEASE at the end of every prompt
-- **At the end of EVERY prompt run `.\install.ps1`**
+- **At the end of EVERY prompt run `\.\install.ps1`**
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
 
 ### 📝 Git commit workflow
-- Order: 1) Code change → 2) Build test → 3) `.\install.ps1` (automatically: commit → push → package)
+- Order: 1) Code change → 2) Build test → 3) `\.\install.ps1` (automatically: commit → push → package)
 - Format: `git commit -m "v1.1.1"`
 - Everything is done automatically through install.ps1
 
@@ -208,10 +218,10 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 
 ## Version Release Process
 
-**Automated process through `.\install.ps1`:**
+**Automated process through `\.\install.ps1`:**
 1. Update version in `package.json`
 2. Update `CHANGELOG.md`
-3. Run `.\install.ps1` - does everything automatically:
+3. Run `\.\install.ps1` - does everything automatically:
    - Git commit with version
    - Git push
    - pnpm run compile
@@ -230,7 +240,7 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 **AUTOMATICALLY run these commands:**
 - `pnpm install`
 - `pnpm run compile`
-- `.\install.ps1`
+- `\.\install.ps1`
 - `git add .`
 - `git commit -m "..."`
 - `git push`
