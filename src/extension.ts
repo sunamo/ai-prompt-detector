@@ -11,6 +11,7 @@ let recentPrompts: string[] = state.recentPrompts;
 let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
 let chatInputBuffer: string = '';
+let lastEnterSubmitAt = 0; // timestamp of last Enter-based submission to avoid duplicate notifications
 
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
@@ -83,6 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); provider.refresh(); }
 			chatInputBuffer = '';
 			await focusChatInput();
+			lastEnterSubmitAt = Date.now();
 			const ok = await forwardToChatAccept();
 			if (ok) { aiPromptCounter++; updateStatusBar(); provider.refresh(); }
 			const cfg = vscode.workspace.getConfiguration('specstory-autosave');
@@ -101,6 +103,24 @@ export async function activate(context: vscode.ExtensionContext) {
 				else if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => chatInputBuffer += txt); }
 				else if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); }
 				else if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; }
+
+				// Detect button-based submit (accept commands) and show notification if not already handled by Enter
+				const acceptCommands = new Set([
+					'github.copilot.chat.acceptInput',
+					'workbench.action.chat.acceptInput',
+					'chat.acceptInput',
+					'inlineChat.accept',
+					'workbench.action.chat.submit',
+					'workbench.action.chat.executeSubmit'
+				]);
+				if (cmd && acceptCommands.has(cmd)) {
+					const now = Date.now();
+					if (now - lastEnterSubmitAt > 150) { // not just handled by our Enter override
+						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+					}
+				}
 			} catch {}
 		}));
 	}
