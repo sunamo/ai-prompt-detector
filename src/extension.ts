@@ -106,6 +106,9 @@ function out(msg: string, data?: any) { if (!outputChannel) return; const line =
  */
 function safeJson(o: any) { try { return JSON.stringify(o); } catch { return String(o); } }
 
+let chatDocState = new Map<string, { lastText: string; lastPromptTime: number }>();
+const CHAT_DOC_DEDUPE_MS = 150; // reduced for faster successive detection
+
 /**
  * CZ: Aktivace rozšíření – připraví výstup, status bar, načte historii a nasadí hooky.
  */
@@ -120,7 +123,41 @@ export async function activate(context: vscode.ExtensionContext) {
     if (root) { workspaceRoot = root; loadHistory(root); updateStatusBar(); }
     installCommandListener(context);
     context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => { try { const s = getSession(); vscode.window.showInformationMessage(`Copilot prompts this session: ${s.promptCount}. History loaded: ${s.prompts.length}`); out('showStatus', s); } catch (e) { logError('showStatus failed', e); out('showStatus failed'); } }));
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => { try { const doc = ev.document; const scheme = doc.uri.scheme; if (scheme.includes('chat') || doc.fileName.includes('copilot') || doc.languageId.includes('chat')) { if (ev.contentChanges.some(c => c.text.includes('\n'))) { recordPrompt('chat-doc', { doc: doc.uri.toString() }); } } } catch (e) { logError('chat doc heuristic failed', e); out('chat heuristic failed'); } }));
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
+        try {
+            const doc = ev.document;
+            const id = doc.uri.toString();
+            const scheme = doc.uri.scheme;
+            const lang = doc.languageId || '';
+            const file = doc.fileName || '';
+            const qualifies = scheme.includes('chat') || file.toLowerCase().includes('copilot') || lang.includes('chat') || lang.includes('copilot');
+            if (!qualifies) return;
+            let state = chatDocState.get(id);
+            if (!state) { state = { lastText: doc.getText(), lastPromptTime: 0 }; chatDocState.set(id, state); }
+            const oldText = state.lastText;
+            const newText = doc.getText();
+            const now = Date.now();
+            const rec = (reason: string, extra?: any) => {
+                if (now - state!.lastPromptTime < CHAT_DOC_DEDUPE_MS) return; // tighter per-doc dedupe window
+                recordPrompt(reason, { doc: id, ...extra });
+                state!.lastPromptTime = now;
+            };
+            // Heuristic 1: explicit newline typed (often submission by Enter key)
+            if (ev.contentChanges.some(c => c.text.includes('\n'))) {
+                rec('chat-doc-newline', { oldLen: oldText.length, newLen: newText.length });
+            } else {
+                // Heuristic 2: content cleared after being non-empty (covers button send even for short prompts)
+                if (oldText.length > 0 && newText.length === 0) {
+                    rec(oldText.length <= 5 ? 'chat-doc-clear-small' : 'chat-doc-clear', { oldLen: oldText.length });
+                }
+                // Heuristic 3: large truncation (e.g., Copilot cleared input but not fully)
+                else if (oldText.length > 20 && newText.length < oldText.length / 4) { // lowered threshold from 40 to 20 for sensitivity
+                    rec('chat-doc-truncate', { oldLen: oldText.length, newLen: newText.length });
+                }
+            }
+            state.lastText = newText;
+        } catch (e) { logError('enhanced chat heuristic failed', e); out('enhanced chat heuristic failed'); }
+    }));
     out('activate complete');
     log('debug', 'activate complete');
 }
