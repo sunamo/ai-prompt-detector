@@ -28,9 +28,12 @@ export function setupChatResponseWatcher(
 				if (!t) continue;
 				if (t.startsWith('#')) continue; // skip headings
 				if (/assistant|copilot/i.test(t)) continue; // skip meta lines
-				if (t.length < 5) continue;
+				if (t.length < 3) continue;
 				candidate = t;
 				break;
+			}
+			if (!candidate && full.toLowerCase().includes('dispatch')) {
+				candidate = full.split(/\r?\n/).find(l=>l.toLowerCase().includes('dispatch'))?.trim() || '';
 			}
 			if (!candidate) return;
 			// Avoid noise or duplicates

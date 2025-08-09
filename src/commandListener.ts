@@ -21,10 +21,15 @@ export function registerCommandListener(context: vscode.ExtensionContext) {
 			if (cmd === 'deleteLeft') { if (runtime.chatInputBuffer) { runtime.chatInputBuffer = runtime.chatInputBuffer.slice(0,-1); runtime.lastBufferChangedAt = Date.now(); runtime.lastNonEmptySnapshot = runtime.chatInputBuffer; } return; }
 			if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { runtime.chatInputBuffer=''; runtime.lastBufferChangedAt=Date.now(); return; }
 			const lower = cmd.toLowerCase();
-			const heuristicSubmit = lower.includes('chat') && (lower.includes('accept')||lower.includes('submit')||lower.includes('send')||lower.includes('execute')||lower.includes('dispatch'));
+			const isDispatch = lower.includes('dispatch');
+			const isCopilot = lower.includes('copilot');
+			const heuristicSubmit = (lower.includes('chat') || isCopilot) && (lower.includes('accept')||lower.includes('submit')||lower.includes('send')||lower.includes('execute')||lower.includes('dispatch'));
 			const now = Date.now();
-			if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - runtime.lastEnterSubmitAt > 100 && now - runtime.lastFinalizeAt > 100) setTimeout(()=>finalizePrompt(`command:${cmd}`),30); return; }
-			if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - runtime.lastEnterSubmitAt > 120) {
+			if (explicitSubmitCommands.has(cmd) || heuristicSubmit || isDispatch) {
+				if (now - runtime.lastEnterSubmitAt > 100 && now - runtime.lastFinalizeAt > 100) setTimeout(()=>finalizePrompt(`command:${cmd}`),30);
+				return;
+			}
+			if ((lower.includes('github.copilot') || lower.includes('chat') || isDispatch) && now - runtime.lastEnterSubmitAt > 120) {
 				if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (runtime.chatInputBuffer.trim() || runtime.lastNonEmptySnapshot)) setTimeout(()=>finalizePrompt(`fallback:${cmd}`),50);
 			}
 		} catch (e) { runtime.outputChannel?.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }

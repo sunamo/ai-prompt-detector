@@ -11,9 +11,14 @@ export function registerChatApiHook(context: vscode.ExtensionContext, finalize: 
 			context.subscriptions.push(chatNs.onDidSubmitRequest((e: any) => {
 				try {
 					const prompt = e?.request?.message || e?.request?.prompt || e?.prompt || '';
-					if (prompt && prompt.trim().length > 2) {
+					const text = String(prompt).trim();
+					if (text && text.length > 2) {
 						writeLog('🧩 Chat API onDidSubmitRequest captured prompt', true);
-						finalize('chatApi', String(prompt).trim());
+						finalize('chatApi', text);
+						if (/save and dispatch/i.test(text)) {
+							writeLog('🧩 Explicit Save and Dispatch detected', true);
+							finalize('dispatchButton', text);
+						}
 					}
 				} catch (err) { writeLog('❌ Chat API event error: '+err, true); }
 			}));
