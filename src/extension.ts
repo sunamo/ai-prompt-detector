@@ -8,9 +8,13 @@ import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 import { initLogger, info, debug, error, writeLog } from './logger';
 import { setupChatResponseWatcher } from './chatResponseWatcher';
 import { registerChatApiHook } from './chatApiHook';
+import { runtime } from './runtime';
+import { finalizePrompt as externalFinalizePrompt } from './finalize';
+import { registerCommandListener } from './commandListener';
 import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
+import { focusChatInput, forwardToChatAccept, getChatInputText, captureChatInputSilently } from './chatHelpers';
 
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.OutputChannel; // legacy local retained for minimal change
 let recentPrompts: string[] = state.recentPrompts;
 let aiPromptCounter = 0;
 let statusBarItem: vscode.StatusBarItem;
@@ -26,9 +30,11 @@ let lastNonEmptySnapshot = '';
 let lastSubmittedText = '';
 let lastFinalizeAt = 0;
 const chatDocState = new Map<string,string>();
+let lastEditorPollText = '';
+let lastBufferChangedAt = Date.now();
 
 // Lightweight finalize wrapper also used by heuristic watcher
-function doFinalize(source: string, directText?: string) { finalizePrompt(source, directText); }
+function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
 
 async function finalizePrompt(source: string, directText?: string) {
 	try {
@@ -80,7 +86,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	await loadExistingPrompts();
 	providerRef = new PromptsProvider();
 	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
-	outputChannel.appendLine('🚀 PROMPTS: Provider registered successfully');
+	runtime.providerRef = providerRef; runtime.outputChannel = outputChannel;
 
 	setTimeout(async () => {
 		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
@@ -89,32 +95,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Setup heuristic watcher (additive)
 	setupChatResponseWatcher(context, doFinalize);
 	registerChatApiHook(context, doFinalize);
+	registerCommandListener(context);
 
-	const focusChatInput = async () => { for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} } };
-	const forwardToChatAccept = async (): Promise<boolean> => {
-		try { const all = await vscode.commands.getCommands(true); const ids = ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage','inlineChat.accept','interactive.acceptInput','chat.acceptInput'].filter(i => all.includes(i)); for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); return true; } catch {} } try { await vscode.commands.executeCommand('type', { text: '\n' }); outputChannel.appendLine('↩️ Fallback: simulated Enter via type command'); return true; } catch {} return false; } catch { return false; }
-	};
-	const getChatInputText = async (): Promise<string> => {
-		try { await focusChatInput(); const prev = await vscode.env.clipboard.readText(); let captured = ''; const all = await vscode.commands.getCommands(true); for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } if (!captured.trim()) { for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } } try { await vscode.env.clipboard.writeText(prev); } catch {} return captured.trim(); } catch { return ''; }
-	};
-	const captureChatInputSilently = async (): Promise<string> => {
-		try {
-			for (const id of ['workbench.action.chat.focusInput','github.copilot.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} }
-		} catch {}
-		const prev = await vscode.env.clipboard.readText();
-		let captured = '';
-		try {
-			const all = await vscode.commands.getCommands(true);
-			for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
-			if (!captured.trim()) {
-				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
-			}
-		} finally { try { await vscode.env.clipboard.writeText(prev); } catch {} }
-		return captured.trim();
-	};
-
-	// List available chat/copilot commands once for diagnostics
-	try { const all = await vscode.commands.getCommands(true); const subset = all.filter(c => /copilot|chat/i.test(c)); outputChannel.appendLine(`📋 CHAT COMMANDS LIST (${subset.length})`); subset.slice(0,120).forEach(c => outputChannel.appendLine(' • '+c)); } catch {}
+	// helpers imported now (previous local implementations removed)
 
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try { let text = await getChatInputText(); if (!text) text = chatInputBuffer.trim(); if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); providerRef?.refresh(); lastSubmittedText = text; } chatInputBuffer = ''; await focusChatInput(); lastEnterSubmitAt = Date.now(); const ok = await forwardToChatAccept(); if (ok) { aiPromptCounter++; updateStatusBar(); providerRef?.refresh(); } const cfg = vscode.workspace.getConfiguration('specstory-autosave'); const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.'; setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10); } catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
@@ -124,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		outputChannel.appendLine('🛰️ Command listener active');
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
-			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalizePrompt(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalizePrompt(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
+			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) { chatInputBuffer = chatInputBuffer.slice(0, -1); lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; } return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; lastBufferChangedAt = Date.now(); return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalizePrompt(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalizePrompt(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
 	}
 
@@ -157,7 +140,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
-		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; } else { if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); } lastPollHadText = false; } } catch {} }, 150);
+		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; lastEditorPollText = current; } else { if (lastEditorPollText && !current) { // transition non-empty -> empty in editor
+				// If internal buffer still holds text we likely had a button submission
+				if (chatInputBuffer.trim() && Date.now() - lastFinalizeAt > 140) {
+					outputChannel.appendLine('🧲 Heuristic: editor cleared while buffer still has text (button send?)');
+					await finalizePrompt('editor-clear-buffer');
+				}
+			}
+			if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); }
+			lastPollHadText = false; lastEditorPollText = current; } } catch {} }, 150);
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); if (forceSnapshotTimer) clearInterval(forceSnapshotTimer); } });
 		forceSnapshotTimer = setInterval(async () => { try { if (!lastNonEmptySnapshot && chatInputBuffer.trim().length > 2) { const txt = await getChatInputText(); if (txt) { lastNonEmptySnapshot = txt; outputChannel.appendLine('🧪 Forced snapshot captured'); } } } catch {} }, 800);
 	}
