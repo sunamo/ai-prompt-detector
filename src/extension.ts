@@ -50,6 +50,43 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	} catch (e) { debug('chat api init err ' + e); }
 
+	// Minimalni listener pro zachyceni kliknuti na GUI tlacitko (Send / Dispatch / New Chat / With Codebase)
+	try {
+		const commandsAny = vscode.commands as any;
+		if (commandsAny?.onDidExecuteCommand) {
+			const sendCommands = new Set([
+				'github.copilot.chat.acceptInput',
+				'github.copilot.chat.send',
+				'github.copilot.chat.submit',
+				'workbench.action.chat.acceptInput',
+				'workbench.action.chat.submit',
+				'workbench.action.chat.submitWithCodebase',
+				'workbench.action.chat.sendToNewChat',
+				'workbench.action.chat.submitWithoutDispatching'
+			]);
+			context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
+				try {
+					const cmd = ev?.command as string; if (!sendCommands.has(cmd)) return;
+					// Zpozdeni aby Chat API melo prednost (zabrani dvojitemu zapoctu)
+					setTimeout(async () => {
+						try {
+							const text = await getChatInputText();
+							if (!text || text === lastSubmittedText) return;
+							lastSubmittedText = text;
+							state.recentPrompts.unshift(text);
+							if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
+							aiPromptCounter++;
+							providerRef?.refresh();
+							updateStatusBar();
+							const msg = vscode.workspace.getConfiguration('ai-prompt-detector').get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+							vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+						} catch(e2){ debug('cmd capture err '+e2); }
+					}, 25);
+				} catch(err){ debug('cmd hook err '+err); }
+			}));
+		}
+	} catch(e){ debug('cmd hook init err '+e); }
+
 	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 		try {
 			const text = await getChatInputText();
