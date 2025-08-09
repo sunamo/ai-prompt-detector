@@ -49,3 +49,4 @@ v1.1.233 | Restore Activity Bar container and webview contribution
 v1.1.234 | Restore missing duplicate suppression + activity bar preservation instructions
 v1.1.235 | Remove unused silent capture + lastSubmittedText and extra logs (minimal line cleanup)
 v1.1.236 | Add missing keybindings for ctrl+shift+enter and ctrl+alt+enter
+v1.1.237 | Remove unused lastTypingChangeAt variable and assignments
