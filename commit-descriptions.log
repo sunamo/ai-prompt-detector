@@ -25,3 +25,4 @@ v1.1.196 | Docs: add formatting policy requiring Prettier-style human readable o
 v1.1.197 | Docs: clarify correct usage .\install.ps1 path and previously added keybinding requirement
 v1.1.198 | Docs: add content preservation policy forbidding deletions in copilot-instructions.md without explicit verbatim order
 v1.1.199 | Fix: ensure all Enter variants unbound + added ctrl+alt+enter unbinding; docs: add preservation policy reiteration
+v1.1.200 | Fix: prevent Send dropdown auto-close (remove exec monkey patch, delayed notification) and add dropdown stability rules

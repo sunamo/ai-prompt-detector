@@ -16,7 +16,6 @@ let lastSnapshot = '';
 let lastTypingChangeAt = Date.now();
 let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
-let pollTimer: ReturnType<typeof setInterval> | undefined;
 
 function refreshDebugFlag() {
 	debugEnabled = vscode.workspace.getConfiguration('ai-prompt-detector').get<boolean>('enableDebugLogs', false) ?? false;
@@ -254,29 +253,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		debug('cmd hook init err ' + e);
 	}
 
-	// 3) Fallback polling: detekce vymazání vstupu (myší SEND mimo příkazy)
-	try {
-		let lastContent = '';
-		pollTimer = setInterval(async () => {
-			try {
-				const text = await getChatInputText();
-				if (text.trim()) {
-					lastContent = text.trim();
-					lastSnapshot = lastContent;
-				} else if (
-					lastContent &&
-					Date.now() - lastTypingChangeAt < 1600 &&
-					lastSubmittedText !== lastContent
-				) {
-					// vstup se vymazal -> pravděpodobně odeslání myší
-					recordPrompt(lastContent, 'poll-clear');
-					lastContent = '';
-				}
-			} catch {}
-		}, 300);
-	} catch {}
-
-	// 4) Enter / klávesové zkratky
+	// 3) Enter / klávesové zkratky
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			'ai-prompt-detector.forwardEnterToChat',
@@ -362,6 +339,5 @@ async function loadExistingPrompts() {
 }
 
 export function deactivate() {
-	if (pollTimer) clearInterval(pollTimer as any);
 	info('Deactivation');
 }
