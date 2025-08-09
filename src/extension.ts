@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
-import { isValidSpecStoryFile, loadPromptsFromFile, extractPromptsFromContent } from './specstoryReader';
+import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 
 let outputChannel: vscode.OutputChannel;
@@ -135,114 +135,73 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Buffer typed/pasted text (best effort)
 	const commandsAny = vscode.commands as any;
+	// Track last non-empty snapshot for button detection
+	let lastNonEmptySnapshot = '';
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
 				const cmd = ev?.command as string | undefined;
 				if (!cmd) return;
 				if (cmd.includes('copilot') || cmd.includes('chat')) { outputChannel.appendLine(`🔎 CMD: ${cmd}`); }
+				// Maintain snapshot before mutations via existing poller fallback
 				if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; return; }
-				if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => chatInputBuffer += txt); return; }
+				if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; }); return; }
 				if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); return; }
 				if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; return; }
 
 				const lower = cmd.toLowerCase();
 				const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
 				const now = Date.now();
-				const handleSubmit = () => {
-					lastEnterSubmitAt = now;
-					(async () => {
-						let txt = chatInputBuffer.trim();
-						if (!txt) txt = await getChatInputText();
-						if (txt) {
-							recentPrompts.unshift(txt);
-							if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-							chatInputBuffer = '';
-							provider.refresh();
-						} else {
-							outputChannel.appendLine('⚠️ Fallback submit detected but no prompt text');
-						}
-						aiPromptCounter++;
-						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-						provider.refresh();
-					})();
+
+				const finalizePrompt = async (source: string) => {
+					let txt = chatInputBuffer.trim();
+					if (!txt) txt = lastNonEmptySnapshot || await getChatInputText();
+					if (!txt) return;
+					if (recentPrompts[0] === txt) return; // already added
+					recentPrompts.unshift(txt);
+					if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+					chatInputBuffer = '';
+					aiPromptCounter++;
+					const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+					const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+					vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+					provider.refresh();
+					outputChannel.appendLine(`🛎️ Detected submit via ${source}`);
 				};
 
 				if (explicitSubmitCommands.has(cmd) || heuristicSubmit) {
-					if (now - lastEnterSubmitAt > 120) handleSubmit();
+					if (now - lastEnterSubmitAt > 120) {
+						// Defer slightly to let input clear first
+						setTimeout(() => finalizePrompt(`command:${cmd}`), 40);
+					}
 					return;
 				}
 
-				// Broad Copilot fallback: any other github.copilot.* command (excluding focus/copy/select) when buffer has content and no recent submit
-				if (cmd.startsWith('github.copilot.') && chatInputBuffer.trim() && now - lastEnterSubmitAt > 150) {
-					if (!/focus|copy|select|type|acceptinput|help|status/i.test(cmd)) {
-						outputChannel.appendLine(`⚡ Fallback Copilot submit via command: ${cmd}`);
-						handleSubmit();
+				// Generic Copilot button fallback: if a copilot/chat command (not typing helpers) fires and buffer had content recently
+				if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 150) {
+					if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) {
+						setTimeout(() => finalizePrompt(`fallback:${cmd}`), 60);
 					}
 				}
 			} catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
 	}
 
-	// Start improved poller using actual chat input snapshot (not our buffer) to detect button submits
-	let lastSnapshot = '';
-	let lastHandledPrompt = '';
+	// Faster snapshot poller (direct detection)
 	let pollTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
 		pollTimer = setInterval(async () => {
 			try {
 				const current = await captureChatInputSilently();
-				// Detect transition from non-empty -> empty without Enter handler (button click)
-				if (!current && lastSnapshot && lastSnapshot !== lastHandledPrompt) {
-					// Ensure we did not just handle Enter
-					if (Date.now() - lastEnterSubmitAt > 140) {
-						if (recentPrompts[0] !== lastSnapshot) {
-							recentPrompts.unshift(lastSnapshot);
-							if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-							aiPromptCounter++;
-							const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-							const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-							vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-							provider.refresh();
-							lastHandledPrompt = lastSnapshot;
-						}
-					}
-				}
-				if (current) lastSnapshot = current; // update snapshot only when there's content
+				if (current) lastNonEmptySnapshot = current; // remember last non-empty
 			} catch {}
-		}, 500);
+		}, 180); // faster interval for responsiveness
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); } });
 	}
 
-	// Track prompts we have already seen to avoid duplicate notifications (for file-based detection)
-	const seenPrompts = new Set<string>(recentPrompts);
-	function handleSpecStoryFileUpdate(fp: string) {
-		try {
-			const content = fs.readFileSync(fp, 'utf8');
-			const extracted = extractPromptsFromContent(content); // newest first per reader implementation
-			for (const p of extracted) {
-				if (!seenPrompts.has(p)) {
-					seenPrompts.add(p);
-					recentPrompts.unshift(p);
-					if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-					aiPromptCounter++;
-					const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-					const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-					vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-					provider.refresh();
-					outputChannel.appendLine('🧾 File-based detection added prompt (button fallback)');
-					break; // only act on first new prompt
-				}
-			}
-		} catch {}
-	}
-
-	// Watch SpecStory exports
+	// Watch SpecStory exports (only initial load on create)
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); recentPrompts.forEach(p=>seenPrompts.add(p)); provider.refresh(); } });
-	watcher.onDidChange(uri => { if (isValidSpecStoryFile(uri.fsPath)) handleSpecStoryFileUpdate(uri.fsPath); });
+	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
 
 	// React to settings changes
 	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) provider.refresh(); });
