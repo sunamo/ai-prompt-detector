@@ -34,7 +34,8 @@ function appendPrompt(file: string) {
 // Added: run install.ps1 after each prompt (guard + debounce)
 let installing = false;
 let lastInstall = 0;
-const INSTALL_DEBOUNCE_MS = 2000; // prevent storms if multiple events fire rapidly
+let pendingInstall = false; // added queue flag
+const INSTALL_DEBOUNCE_MS = 0; // no debounce (always run)
 function runInstall(root: string) {
     try {
         const script = path.join(root, 'install.ps1');
@@ -42,18 +43,15 @@ function runInstall(root: string) {
             log('debug', 'install.ps1 not found, skipping');
             return;
         }
-        const now = Date.now();
         if (installing) {
-            log('debug', 'install already running, skip');
-            return;
-        }
-        if (now - lastInstall < INSTALL_DEBOUNCE_MS) {
-            log('debug', 'install debounce skip');
+            pendingInstall = true; // queue another run
+            log('debug', 'install already running, queued');
             return;
         }
         installing = true;
-        lastInstall = now;
-        log('normal', 'running install.ps1 after prompt');
+        pendingInstall = false;
+        lastInstall = Date.now();
+        log('normal', 'running install.ps1 (auto)');
         const ps = spawn('powershell', ['-ExecutionPolicy','Bypass','-File', script], { cwd: root, stdio: 'inherit' });
         ps.on('exit', code => {
             installing = false;
@@ -63,10 +61,15 @@ function runInstall(root: string) {
                 logError('install.ps1 failed', { code });
                 vscode.window.showWarningMessage(`install.ps1 failed (code ${code})`);
             }
+            if (pendingInstall) {
+                log('debug', 'running queued install');
+                runInstall(root);
+            }
         });
         ps.on('error', err => {
             installing = false;
             logError('install.ps1 spawn failed', err);
+            if (pendingInstall) runInstall(root);
         });
     } catch (e) {
         installing = false;
@@ -74,25 +77,16 @@ function runInstall(root: string) {
     }
 }
 
-// Central prompt handling with dedup
-const PROMPT_DEDUP_MS = 600;
-let lastPromptToken: string | undefined;
+// Central prompt handling WITHOUT dedup (every event counts)
 function handlePrompt(file: string, source: string) {
     try {
-        const bucket = Math.floor(Date.now() / PROMPT_DEDUP_MS);
-        const token = file + ':' + bucket;
-        if (lastPromptToken === token) {
-            log('debug', 'prompt dedup', { file, source });
-            return;
-        }
-        lastPromptToken = token;
         incPrompt();
         appendPrompt(file);
         const s = getSession();
         updateStatusBar();
         vscode.window.showInformationMessage(`Prompt odeslán (#${s.promptCount})`);
         if (workspaceRoot) runInstall(workspaceRoot);
-        log('debug', 'prompt handled', { file, source, count: s.promptCount });
+        log('debug', 'prompt handled (no dedup)', { file, source, count: s.promptCount });
     } catch (e) {
         logError('handlePrompt failed', e);
     }
@@ -142,14 +136,9 @@ function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
 
 export async function activate(context: vscode.ExtensionContext) {
     log('debug', 'activate start');
-
-    // Show status bar immediately
     initStatusBar(context);
-    // Fallback: re-show shortly after startup in case VS Code layout hides it initially
     setTimeout(() => { try { updateStatusBar(); } catch {/* ignore */} }, 1200);
-
     try { validateRecentLogs(); } catch (e) { logError('log validation failed', e); }
-
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (root) {
         workspaceRoot = root;
@@ -157,6 +146,7 @@ export async function activate(context: vscode.ExtensionContext) {
         loadHistory(root);
         registerPromptWatcher(context, root);
         updateStatusBar();
+        runInstall(root); // auto run at startup
     } else {
         updateStatusBar();
     }
