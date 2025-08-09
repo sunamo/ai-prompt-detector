@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { log, logError, validateRecentLogs } from './logging';
+import { log, logError, validateRecentLogs, clearLogFile } from './logging';
 import { loadHistory, incPrompt, getSession } from './datastore';
 
 let workspaceRoot: string | undefined;
@@ -10,27 +10,36 @@ let lastPromptSig: string | undefined; let lastPromptTime = 0; const PROMPT_DEDU
 /**
  * CZ: Rozhodne, zda je příkaz považován za Copilot prompt (podle prefixu nebo přesného názvu).
  */
-function isPromptCommand(command: string): boolean { if (PROMPT_COMMAND_EXACT.includes(command)) return true; return PROMPT_COMMAND_PREFIXES.some(p => command.startsWith(p)); }
+function isPromptCommand(command: string): boolean {
+    if (PROMPT_COMMAND_EXACT.includes(command)) return true;
+    if (command.startsWith('workbench.action.chat.')) return true; // širší chat akce
+    return PROMPT_COMMAND_PREFIXES.some(p => command.startsWith(p));
+}
 
 /**
  * CZ: Zaznamená detekovaný prompt (inkrementuje čítač, aktualizuje status bar, zobrazí notifikaci).
  */
 function recordPrompt(source: string, meta?: any) {
+    const t0 = Date.now();
     incPrompt();
     const s = getSession();
-    statusBar?.show();
-    if (statusBar) statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
-    queueMicrotask(() => updateStatusBar());
+    if (statusBar) {
+        statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
+        statusBar.show();
+    }
+    updateStatusBar(); // okamžitě, bez queueMicrotask
     vscode.window.showInformationMessage(`Prompt #${s.promptCount}`);
-    out('Prompt detected', { source, count: s.promptCount, meta });
+    const dt = Date.now() - t0;
+    out('Prompt detected', { source, count: s.promptCount, meta, dtMs: dt });
+    log('debug', 'prompt recorded immediate', { source, count: s.promptCount, dtMs: dt });
 }
 
 /**
  * CZ: Obsluha Copilot příkazu (jen zaznamená prompt).
  */
-function handleCopilotCommand(command: string) { try { recordPrompt('command', { command }); } catch (e) { logError('handleCopilotCommand failed', e); out('handleCopilotCommand failed'); } }
+function handleCopilotCommand(command: string) { try { recordPrompt('executeCommandPatch', { command }); } catch (e) { logError('handleCopilotCommand failed', e); out('handleCopilotCommand failed'); } }
 
-// Removed: handlePrompt, registerPromptWatcher, pollPromptFiles
+// Removed legacy file-based functions
 
 let statusBar: vscode.StatusBarItem | undefined;
 let extensionVersion = '0.0.0';
@@ -57,17 +66,30 @@ function initStatusBar(context: vscode.ExtensionContext) {
  */
 function updateStatusBar() { if (!statusBar) return; const s = getSession(); statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`; statusBar.show(); out('status bar update', { count: s.promptCount }); }
 
-/**
- * CZ: Hook (patch) na executeCommand pro zachycení Copilot příkazů ještě před jejich vykonáním.
- */
-function hookCopilotCommands(context: vscode.ExtensionContext) {
-    const orig = vscode.commands.executeCommand;
-    (vscode.commands as any).executeCommand = async function(command: string, ...rest: any[]) {
-        try { if (isPromptCommand(command)) { handleCopilotCommand(command); } } catch (e) { logError('executeCommand hook error', e); }
-        return orig.apply(this, [command, ...rest]);
-    };
-    context.subscriptions.push({ dispose: () => { (vscode.commands as any).executeCommand = orig; } });
-    log('debug', 'copilot command hook installed (executeCommand patch)');
+// New: onDidExecuteCommand listener (primary detection) – fallback to patch if not available
+function installCommandListener(context: vscode.ExtensionContext) {
+    const anyCommands: any = vscode.commands as any;
+    if (typeof anyCommands.onDidExecuteCommand === 'function') {
+        const disp = anyCommands.onDidExecuteCommand((ev: { command: string }) => {
+            try {
+                if (isPromptCommand(ev.command)) {
+                    log('debug', 'onDidExecuteCommand match', { cmd: ev.command });
+                    recordPrompt('onDidExecuteCommand', { command: ev.command });
+                }
+            } catch (e) { logError('onDidExecuteCommand handler failed', e); out('onDidExecuteCommand handler failed'); }
+        });
+        context.subscriptions.push(disp);
+        log('debug', 'onDidExecuteCommand listener installed');
+    } else {
+        // Fallback patch
+        const orig = vscode.commands.executeCommand;
+        (vscode.commands as any).executeCommand = async function(command: string, ...rest: any[]) {
+            try { if (isPromptCommand(command)) { log('debug', 'executeCommand patch match', { cmd: command }); recordPrompt('executeCommandPatch', { command }); } } catch (e) { logError('executeCommand hook error', e); }
+            return orig.apply(this, [command, ...rest]);
+        };
+        context.subscriptions.push({ dispose: () => { (vscode.commands as any).executeCommand = orig; } });
+        log('debug', 'executeCommand patch installed (fallback)');
+    }
 }
 
 let outputChannel: vscode.OutputChannel | undefined;
@@ -88,6 +110,7 @@ function safeJson(o: any) { try { return JSON.stringify(o); } catch { return Str
  * CZ: Aktivace rozšíření – připraví výstup, status bar, načte historii a nasadí hooky.
  */
 export async function activate(context: vscode.ExtensionContext) {
+    clearLogFile();
     ensureOutputChannel();
     out('activate start');
     log('debug', 'activate start');
@@ -95,9 +118,8 @@ export async function activate(context: vscode.ExtensionContext) {
     try { validateRecentLogs(); } catch (e) { logError('log validation failed', e); out('log validation failed'); }
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (root) { workspaceRoot = root; loadHistory(root); updateStatusBar(); }
-    hookCopilotCommands(context);
+    installCommandListener(context);
     context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => { try { const s = getSession(); vscode.window.showInformationMessage(`Copilot prompts this session: ${s.promptCount}. History loaded: ${s.prompts.length}`); out('showStatus', s); } catch (e) { logError('showStatus failed', e); out('showStatus failed'); } }));
-    // Chat heuristic remains (still Copilot-related)
     context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => { try { const doc = ev.document; const scheme = doc.uri.scheme; if (scheme.includes('chat') || doc.fileName.includes('copilot') || doc.languageId.includes('chat')) { if (ev.contentChanges.some(c => c.text.includes('\n'))) { recordPrompt('chat-doc', { doc: doc.uri.toString() }); } } } catch (e) { logError('chat doc heuristic failed', e); out('chat heuristic failed'); } }));
     out('activate complete');
     log('debug', 'activate complete');

@@ -17,6 +17,17 @@ function ensureDir() {
 }
 
 /**
+ * CZ: Vyprázdní (truncuje) soubor extension.log při startu rozšíření.
+ */
+export function clearLogFile(): void {
+    try {
+        ensureDir();
+        const file = path.join(LOG_DIR, 'extension.log');
+        fs.writeFileSync(file, '');
+    } catch { /* ignore */ }
+}
+
+/**
  * CZ: Vrací aktuální čas ve formátu ISO.
  */
 function ts() {
