@@ -1,0 +1,22 @@
+# Node dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+
+# VS Code extension packages
+*.vsix
+
+# Logs
+*.log
+logs/
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
