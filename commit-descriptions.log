@@ -16,3 +16,4 @@ v1.1.186 | UI layout: place number and prompt text on separate lines in list ite
 v1.1.187 | Add command execution listener to show notification for mouse button Send variants
 v1.1.188 | Refactor: unify prompt recording + notify also on mouse Send and command variants
 v1.1.189 | Fix: add pre-send capture (onWillExecuteCommand) for mouse SEND to show notification
+v1.1.190 | ...
