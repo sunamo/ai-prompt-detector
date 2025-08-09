@@ -2,7 +2,7 @@
   "name": "ai-prompt-detector",
   "displayName": "AI Prompt Detector + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.163",
+  "version": "1.1.164",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",

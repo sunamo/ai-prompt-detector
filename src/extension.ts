@@ -500,6 +500,28 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	writeLog(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`, false);
 	writeLog('🚀 PROMPTS: Open Activity Bar panel SpecStory AI!', false);
+	
+	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
+		try {
+			// Získá aktivní editor
+			const ed = vscode.window.activeTextEditor;
+			if (!ed) { vscode.window.showInformationMessage('AI Prompt detected'); return; }
+			// Vezme označený text nebo aktuální řádek
+			let text = ed.selection && !ed.selection.isEmpty ? ed.document.getText(ed.selection) : ed.document.lineAt(ed.selection.active.line).text;
+			text = text.trim();
+			if (!text) { vscode.window.showInformationMessage('AI Prompt detected'); return; }
+			// Re‑použije existující logiku zpracování (pokud podmínky splní) – napodobíme volání
+			if (text.length >= 5) {
+				aiPromptCounter++;
+				vscode.window.showInformationMessage('AI Prompt detected');
+				statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79'}`;
+			}
+		} catch (e) {
+			outputChannel.appendLine(`❌ forwardHandler error: ${e}`);
+		}
+	}));
+	// Alias command id pro nové jméno rozšíření (řeší warning not found)
+	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', () => vscode.commands.executeCommand('ai-prompt-detector.forwardEnterToChat')));
 }
 
 async function loadExistingPrompts(): Promise<void> {

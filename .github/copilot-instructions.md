@@ -1,5 +1,8 @@
 # AI Assistant Instructions - AI Prompt Detector Extension
 
+### ✅ CODE COMMENT ENFORCEMENT (CZECH ONLY)
+All inline code comments in source files MUST be written in Czech (e.g. // Načte aktuální vstup). Do NOT use English in code comments. Documentation, logs, messages, commit texts remain English per Language Policy below.
+
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
 Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.ssssssssssssssssss
@@ -17,7 +20,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
 - **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
 - **ONLY cs.json localization file** is allowed to contain non-English text
-- **ALL code comments in English**
+- **ALL code comments in Czech**
 - **ALL commit messages in English**
 - **ALL documentation in English**
 - **ALL debug logs in English**
@@ -57,7 +60,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **NEVER write texts directly in code** - always through i18n system
 - **CHANGELOG.md, README.md and all documents only in English**
 - **Commit messages in English**
-- **Code comments in English**
+- **Code comments in Czech**
 - **Debug logs in English**
 - Use: `i18n.t('key')` instead of hardcoded texts
 
