@@ -4,7 +4,6 @@ import * as fs from 'fs'; // added for file logging
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
-import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 import { initLogger, info, debug, error, writeLog } from './logger';
 import { setupChatResponseWatcher } from './chatResponseWatcher';
 import { registerChatApiHook } from './chatApiHook';
@@ -158,9 +157,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); providerRef?.refresh(); } });
 	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) providerRef?.refresh(); });
-	startAutoSave();
-	const autoSaveDisposable = createAutoSaveDisposable();
-	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
+	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem);
 	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
 
 	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => { try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {} }));
