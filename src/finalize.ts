@@ -14,8 +14,9 @@ export async function finalizePrompt(source: string, directText?: string) {
 		runtime.aiPromptCounter++;
 		runtime.lastFinalizeAt = Date.now();
 		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-		const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-		vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+		const custom = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+		const short = txt.length > 180 ? txt.slice(0,180)+'…' : txt;
+		vscode.window.showInformationMessage(`AI Prompt sent (via ${source})\n${short}\n${custom}`);
 		runtime.providerRef?.refresh();
 		runtime.outputChannel?.appendLine(`🛎️ Detected submit via ${source} | chars=${txt.length}`);
 		runtime.outputChannel?.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`);
