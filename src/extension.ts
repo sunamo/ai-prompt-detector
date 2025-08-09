@@ -315,13 +315,32 @@ export async function activate(context: vscode.ExtensionContext) {
   const handleForwardEnter = async (variant: string) => {
     try {
       debug('Enter variant invoked: ' + variant);
-      let text = await getChatInputText();
-      if (text) recordPrompt(text, 'enter-' + variant);
-      else if (typingBuffer.trim())
-        recordPrompt(typingBuffer, 'enter-buffer-' + variant);
-      else if (lastSnapshot)
-        recordPrompt(lastSnapshot, 'enter-snapshot-' + variant);
+
+      // 1) Always focus first for reliable capture
       await focusChatInput();
+
+      // 2) Primary capture attempt
+      let text = await getChatInputText();
+
+      // 3) Fallback to typing buffer / snapshot (buffer preferred – freshest)
+      if (!text && typingBuffer.trim()) text = typingBuffer.trim();
+      else if (!text && lastSnapshot) text = lastSnapshot;
+
+      // 4) If still nothing, short retry after a tiny delay (focus just applied)
+      if (!text) {
+        await new Promise((r) => setTimeout(r, 35));
+        const retry = await getChatInputText();
+        if (retry) text = retry;
+        else if (typingBuffer.trim()) text = typingBuffer.trim();
+        else if (lastSnapshot) text = lastSnapshot;
+      }
+
+      // 5) Record only if we have actual non‑empty text (avoid fake '(empty prompt)')
+      if (text && text.trim()) {
+        recordPrompt(text, 'enter-' + variant);
+      }
+
+      // 6) Forward the Enter action to Copilot/Chat
       let ok = await forwardToChatAccept();
       if (!ok) {
         for (const id of [
@@ -340,8 +359,11 @@ export async function activate(context: vscode.ExtensionContext) {
           } catch {}
         }
       }
-      if (ok && !text && !typingBuffer.trim() && !lastSnapshot)
+
+      // 7) If user truly sent an empty prompt (nothing captured anywhere) we still log it explicitly
+      if (ok && !text) {
         recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+      }
     } catch (e) {
       debug('forward err ' + e);
     }
