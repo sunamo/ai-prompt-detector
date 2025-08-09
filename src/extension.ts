@@ -116,6 +116,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     if (!text) return false;
+    // INVARIANT: Používáme unshift – nejnovější prompt musí být ALWAYS index 0.
+    // ZMĚNA na push() nebo přetřídění pole = REGRESE (poruší ordering policy).
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;

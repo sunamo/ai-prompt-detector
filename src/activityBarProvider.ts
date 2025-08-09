@@ -43,18 +43,19 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
   private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
   /**
-   * Výpis promptů: pořadí nyní vychází přímo z naplnění state.recentPrompts.
-   * Per‑soubor jsou prompty při načtení otočeny (viz specstoryReader), takže
-   * zde již NESMÍME provádět reverse – jinak by se pořadí znovu převrátilo.
+   * Výpis promptů: pořadí vychází přímo z `state.recentPrompts`.
+   * INVARIANT: Žádné další reverse zde – už je aplikováno v `specstoryReader` při načítání souborů
+   * a `recordPrompt` vkládá nové prompty pomocí `unshift` na začátek.
+   * ZMĚNA tohoto chování (přidání reverse / přetřiďování) = REGRESE.
    */
   private createPromptsHtml(): string {
     let promptsHtml = '';
-    const recentPrompts = state.recentPrompts; // již v pořadí: nejnovější soubor + jeho poslední zpráva první
+    const recentPrompts = state.recentPrompts; // pořadí: newest file first + newest prompt first
     const config = vscode.workspace.getConfiguration('ai-prompt-detector');
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      const renderList = recentPrompts.slice(0, maxPrompts); // žádné reverse!
+      const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse!
       promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;

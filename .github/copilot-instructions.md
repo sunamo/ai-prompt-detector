@@ -1,3 +1,7 @@
+````````````````instructions
+```````````````instructions
+``````````````instructions
+`````````````instructions
 ````````````instructions
 ```````````instructions
 ``````````instructions
@@ -352,3 +356,27 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - Header may only gain additional lines with dated clarifications; never shrink or translate it.
 - A helper script may re‑insert this header automatically; such commits are valid and must not be rejected as noise.
 - Treat absence, alteration, or truncation of this header as a readability regression equal in severity to keybinding failure.
+
+## 🔒 Prompt Ordering Invariants (Aug 10 2025)
+- Global ordering requirement is NOW STABLE and MUST NOT change without explicit instruction.
+- Per-file load: `specstoryReader.loadPromptsFromFile` collects user prompt segments in encounter order, then applies `collected.reverse()` BEFORE pushing into global state. This makes the newest (last in file) prompt from that markdown appear FIRST among that file's contributions.
+- Global aggregation: Files are processed in descending filename order (newest date/time first) – DO NOT alter this sorting logic. Combined with per-file reverse this yields final ordering: newest file first, within it newest prompt first.
+- Activity Bar rendering (`PromptsProvider.createPromptsHtml`) MUST NOT perform any `reverse()` on the slice of `state.recentPrompts`; it trusts upstream ordering. Adding a reverse here would flip ordering incorrectly (regression).
+- Manual runtime prompt capture (`recordPrompt` in `extension.ts`) uses `unshift()` to put freshly submitted prompts at the very top. DO NOT change to `push()` or re-sorting – would break the invariant that index #1 is always the latest overall prompt.
+- Changing ANY of: (1) per-file reverse, (2) file sorting, (3) activity bar omission of reverse, (4) use of `unshift` for new prompts – without explicit request is a regression.
+- Tests are intentionally absent; enforcement relies on code review + this documented invariant. Treat accidental removal as critical like keybinding failure.
+
+### ✅ Ordering Enforcement Quick Checklist
+1. specstoryReader: contains `collected.reverse()` BEFORE pushing – present? If missing → restore.
+2. extension recordPrompt: uses `state.recentPrompts.unshift(text)` – present? If changed → revert.
+3. activityBarProvider: NO `reverse()` on `recentPrompts` / `renderList` – ensure absent.
+4. File sorting (newest filename first) still applied before file loop – verify comparator unchanged.
+5. After edits, newest prompt (manual or from newest file) appears at #1 in Activity Bar.
+
+### 🚫 Forbidden Anti-Patterns
+- Adding secondary sorting of `state.recentPrompts` in any render code.
+- Replacing `unshift` with `push` or batch reassigning `state.recentPrompts = state.recentPrompts.reverse()`.
+- Removing `collected.reverse()` in `specstoryReader` and compensating with UI reversal.
+
+Persist forever. Append refinements only; never delete this section.
+````````````````

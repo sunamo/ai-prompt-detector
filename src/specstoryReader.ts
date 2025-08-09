@@ -23,9 +23,12 @@ export function isValidSpecStoryFile(filePath: string): boolean {
 
 /**
  * Načte prompt(y) ze souboru SpecStory a přidá je do pole recent.
- * Nově: prompty jednoho souboru se nejprve nasbírají do dočasného pole a poté
- * OBRÁTÍ (reverse), aby poslední uživatelský vstup z daného souboru byl
- * zobrazen jako první (#1) – uživatel požadoval nejnovější zprávy nahoře.
+ * Invariant (NEPORUŠIT): Pořadí se připravuje takto:
+ * 1. Nasbíráme prompty v pořadí výskytu v souboru (nejstarší -> nejnovější)
+ * 2. Poté provedeme collected.reverse() aby nejNOVĚJŠÍ (poslední) byl jako první
+ * 3. Výsledek pushujeme do global recent pole v tomto již otočeném pořadí
+ * UI (activityBarProvider) NESMÍ přidávat reverse – spoleh na zdejší úpravu.
+ * Jakákoliv změna (např. zrušení reverse a náhrada obracením v UI) je REGRESE.
  * @param filePath Cesta k markdown souboru.
  * @param recent Pole do něhož se přidávají nalezené prompty.
  */
@@ -45,7 +48,7 @@ export function loadPromptsFromFile(filePath: string, recent: string[]): void {
         if (body && body.length > 0) collected.push(body);
       }
     }
-    // Obrácený pořadí v rámci souboru – nejnovější (poslední v souboru) jde první.
+    // NEODSTRAŇOVAT: Obrácené pořadí v rámci souboru – nejnovější (poslední v souboru) jde první.
     for (const p of collected.reverse()) recent.push(p);
   } catch {}
 }
