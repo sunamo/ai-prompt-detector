@@ -36,3 +36,4 @@ v1.1.217 | Ensure full Enter variants unbinding across all chat focus contexts; 
 v1.1.218 | Unify unbinding for all Enter variants across chat focus contexts to restore detection
 v1.1.219 | Extend unbinding to all default chat submit/send commands for each Enter variant
 v1.1.220 | ...
+v1.1.222 | add Czech JSDoc comments, remove forbidden legacy files promptDetector.ts runtime.ts
