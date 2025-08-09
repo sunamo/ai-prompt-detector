@@ -138,6 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Track last non-empty snapshot for button detection
 	let lastNonEmptySnapshot = '';
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
+		outputChannel.appendLine('🛰️ Command listener active');
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
 				const cmd = ev?.command as string | undefined;
@@ -212,6 +213,29 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
 	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
+
+	// Focus change listener placed here to access provider & context
+	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => {
+		try {
+			if (!ed) return;
+			if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) {
+				if (chatInputBuffer.trim()) {
+					const candidate = chatInputBuffer.trim();
+					if (recentPrompts[0] !== candidate) {
+						recentPrompts.unshift(candidate);
+						if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+						aiPromptCounter++;
+						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+						provider.refresh();
+						outputChannel.appendLine('👀 Detected submit via focus change');
+					}
+					chatInputBuffer = '';
+				}
+			}
+		} catch {}
+	}));
 }
 
 async function loadExistingPrompts(): Promise<void> {
