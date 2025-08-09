@@ -44,3 +44,4 @@ v1.1.229 | Keybinding variant alignment and non-empty commit description enforce
 v1.1.230 | Revert to minimal keybinding set (historic working pattern) for Enter variants
 v1.1.231 | restore keybinding full unbind variants
 v1.1.232 | Allow duplicate prompts via Ctrl+Enter and add Czech JSDoc
+v1.1.233 | Document permanent removal of duplicate prompt suppression in code & instructions

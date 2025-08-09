@@ -19,8 +19,25 @@
         "ai-prompt-detector.customMessage": { "type": "string", "default": "", "description": "Custom notification message" }
       }
     },
-    "views": { "specstory-activity": [] },
-    "viewsContainers": { "activitybar": [] },
+    "views": {
+      "specstory-activity": [
+        {
+          "id": "ai-prompt-detector-view",
+          "name": "AI Copilot Prompt Detector",
+          "when": "true",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "specstory-activity",
+          "title": "AI Copilot Prompt Detector",
+          "icon": "icon.png"
+        }
+      ]
+    },
     "keybindings": [
       { "command": "-workbench.action.chat.acceptInput", "key": "enter", "when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus || chatViewFocus || github.copilot.chat.inputFocus || inlineChatFocused || inlineChatVisible" },
       { "command": "-workbench.action.chat.submit", "key": "enter", "when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus || chatViewFocus || github.copilot.chat.inputFocus || inlineChatFocused || inlineChatVisible" },
