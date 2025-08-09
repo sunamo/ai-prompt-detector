@@ -1,1 +1,2 @@
 v1.1.170 | Add commit description support
+v1.1.171 | remove heuristic detection and rely on chat API only
