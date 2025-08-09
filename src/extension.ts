@@ -39,7 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 		try {
 			let text = await getChatInputText();
-			// NEVRACEJ se pri prazdnem textu - Enter musí projít dál
+			// Nevracej se pri prazdnem textu - Enter musi projit dal
 			if (text) {
 				recentPrompts.unshift(text);
 				if (recentPrompts.length > 1000) recentPrompts.splice(1000);
@@ -60,15 +60,14 @@ export async function activate(context: vscode.ExtensionContext) {
 				]) { try { await vscode.commands.executeCommand(id); ok = true; break; } catch {} }
 			}
 			if (ok) {
-				// Inkrement jen pokud jsme skutečně odeslali a máme nějaký obsah
-				if (text) { aiPromptCounter++; }
+				// Inkrement vzdy kdyz jsme odeslali (i kdyz se nepodarilo ziskat text)
+				aiPromptCounter++;
 				providerRef?.refresh();
 				const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
 				const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-				// Notifikace vždy po úspěšném odeslání
+				// Notifikace vzdy po uspesnem odeslani
 				setTimeout(() => { vscode.window.showInformationMessage(`AI Prompt sent${text ? '\n'+msg : ''}`); }, 10);
-				const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '';
-				statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
+				updateStatusBar();
 			}
 		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));

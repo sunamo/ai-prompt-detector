@@ -6,3 +6,4 @@ v1.1.175 | restore enter forwarding fallback variants
 v1.1.176 | restore prompt sent notification always after forward
 v1.1.177 | Add extra send command IDs for Ctrl+Alt+Enter path
 v1.1.178 | add ctrl+alt+enter keybinding
+v1.1.179 | add ctrl+shift+enter keybinding with notification forwarding
