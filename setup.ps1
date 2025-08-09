@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 
-Write-Host "Installing dependencies for SpecStory AutoSave VS Code Extension..." -ForegroundColor Green
+Write-Host "Installing dependencies for AI Prompt Detector VS Code Extension..." -ForegroundColor Green
 
 # Check if pnpm is installed
 if (!(Get-Command pnpm -ErrorAction SilentlyContinue)) {

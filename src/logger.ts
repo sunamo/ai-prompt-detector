@@ -7,7 +7,7 @@ let channel: vscode.OutputChannel;
 let dailyPath = '';
 let debugEnabled = false;
 
-function refreshDebug() { debugEnabled = vscode.workspace.getConfiguration('specstory-autosave').get<boolean>('enableDebugLogs', false) || false; }
+function refreshDebug() { debugEnabled = vscode.workspace.getConfiguration('ai-prompt-detector').get<boolean>('enableDebugLogs', false) || false; }
 
 export function initLogger(): void {
 	channel = vscode.window.createOutputChannel('SpecStory Prompts');
@@ -19,7 +19,7 @@ export function initLogger(): void {
 	try { fs.writeFileSync(dailyPath, ''); } catch {}
 	info(`🧹 Cleared daily log file ${dailyPath}`);
 	freshCheck();
-	vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.enableDebugLogs')) refreshDebug(); });
+	vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('ai-prompt-detector.enableDebugLogs')) refreshDebug(); });
 }
 
 function append(msg: string) {

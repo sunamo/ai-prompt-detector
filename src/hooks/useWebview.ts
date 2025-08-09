@@ -83,7 +83,7 @@ export const useWebview = () => {
 		writeLog(`webviewView exists: ${!!state.webviewView}`, 'INFO');
 		
 		// Apply maxPrompts limit and convert to display format
-		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 		
 		writeLog(`refreshFromPrompts called with ${state.recentPrompts.length} total prompts`, 'DEBUG');

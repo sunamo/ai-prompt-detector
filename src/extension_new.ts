@@ -8,7 +8,7 @@ let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
 
 // Logging system
-const LOG_DIR = 'C:\\temp\\specstory-autosave-logs';
+const LOG_DIR = 'C:\\temp\\ai-prompt-detector-logs';
 
 function ensureLogDir(): void {
 	try {
@@ -28,7 +28,7 @@ function writeLog(message: string, isDebug: boolean = false): void {
 		outputChannel.appendLine(logMessage);
 	}
 	
-	const config = vscode.workspace.getConfiguration('specstory-autosave');
+	const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 	const debugEnabled = config.get<boolean>('enableDebugLogs', false);
 	
 	if (!isDebug || debugEnabled) {
@@ -134,7 +134,7 @@ function loadPromptsFromFile(filePath: string): void {
 }
 
 class PromptsProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = 'specstory-autosave-view';
+	public static readonly viewType = 'ai-prompt-detector-view';
 	private _view?: vscode.WebviewView;
 
 	constructor() {
@@ -183,7 +183,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 	private createPromptsHtml(): string {
 		let promptsHtml = '';
 		
-		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 		
 		if (recentPrompts.length > 0) {
@@ -212,7 +212,7 @@ class PromptsProvider implements vscode.WebviewViewProvider {
 </div>`;
 		}
 
-	const extensionVersion = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
+	const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -294,9 +294,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	statusBarItem.show();
 	
 	const updateStatusBar = () => {
-		const extensionVersion = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
+		const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}`;
-		statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
+		statusBarItem.tooltip = 'AI Prompt Detector + AI Copilot Prompt Detection';
 	};
 	updateStatusBar();
 	
@@ -324,8 +324,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-		if (e.affectsConfiguration('specstory-autosave.maxPrompts')) {
-			const config = vscode.workspace.getConfiguration('specstory-autosave');
+		if (e.affectsConfiguration('ai-prompt-detector.maxPrompts')) {
+			const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 			const maxPrompts = config.get<number>('maxPrompts', 50);
 			writeLog(`⚙️ Settings changed: maxPrompts = ${maxPrompts}`, false);
 			promptsProvider.refresh();
@@ -387,7 +387,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			writeLog(`🤖 NEW AI PROMPT DETECTED! Counter: ${aiPromptCounter}`, false);
 			writeLog(`📝 PROMPT: "${cleanPrompt}"`, false);
 			
-			const config = vscode.workspace.getConfiguration('specstory-autosave');
+			const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 			const customMessage = config.get<string>('customMessage', '');
 			
 			const notificationMessage = customMessage 
@@ -491,7 +491,7 @@ async function loadExistingPrompts(): Promise<void> {
 			writeLog(`✅ Total loaded ${recentPrompts.length} prompts from ${sortedFiles.length} files`, false);
 		} else {
 			writeLog('ℹ️ No SpecStory files found', false);
-			recentPrompts.push('Welcome to SpecStory AutoSave + AI Copilot Prompt Detection');
+			recentPrompts.push('Welcome to AI Prompt Detector + AI Copilot Prompt Detection');
 			recentPrompts.push('TEST: Dummy prompt for demonstration');
 			writeLog('🎯 Added test prompts for demonstration', false);
 		}
