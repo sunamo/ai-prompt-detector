@@ -293,3 +293,9 @@ enter must work for both copilot and my extension without remapping. In another 
 - ABSOLUTE DELETION is permitted ONLY when the user gives a direct, verbatim order AND supplies the exact text block to remove.
 - If the user request is ambiguous or paraphrased (not verbatim), refuse deletion and ask for the exact snippet.
 - Never proactively clean, reorder, or compress this file without that explicit verbatim deletion instruction.
+
+## 🔒 Send Button Dropdown Stability
+- The dropdown next to the Copilot / Chat Send button MUST NOT auto-close because of our extension logic.
+- Extension MUST NOT steal focus or execute commands that collapse the dropdown before user acts.
+- Avoid invasive monkey patching of Copilot internal submit/send functions if it risks dropdown stability.
+- Any regression causing premature dropdown closing has to be fixed before adding new features.

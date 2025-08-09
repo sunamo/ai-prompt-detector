@@ -19,95 +19,37 @@ let debugEnabled = false;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 
 function refreshDebugFlag() {
-	debugEnabled =
-		vscode.workspace
-			.getConfiguration('ai-prompt-detector')
-			.get<boolean>('enableDebugLogs', false) ?? false;
+	debugEnabled = vscode.workspace.getConfiguration('ai-prompt-detector').get<boolean>('enableDebugLogs', false) ?? false;
 }
 
 // Rekurzivní sken exportů Copilot Chat pro eventy submit (prohloubena heuristika)
-async function hookCopilotExports(
-	recordPrompt: (raw: string, src: string) => boolean
-) {
+async function hookCopilotExports(recordPrompt: (raw: string, src: string) => boolean) {
 	try {
-		const ext =
-			vscode.extensions.getExtension('GitHub.copilot-chat') ||
-			vscode.extensions.getExtension('github.copilot-chat');
-		if (!ext) {
-			debug('Copilot Chat extension not found');
-			return;
-		}
-		if (!ext.isActive) {
-			await ext.activate();
-		}
+		const ext = vscode.extensions.getExtension('GitHub.copilot-chat') || vscode.extensions.getExtension('github.copilot-chat');
+		if (!ext) { debug('Copilot Chat extension not found'); return; }
+		if (!ext.isActive) { await ext.activate(); }
 		const visited = new Set<any>();
 		const scan = (obj: any, depth = 0) => {
-			if (!obj || typeof obj !== 'object' || visited.has(obj) || depth > 8) return; // prohloubeno
+			if (!obj || typeof obj !== 'object' || visited.has(obj) || depth > 6) return;
 			visited.add(obj);
 			for (const k of Object.keys(obj)) {
 				const v = (obj as any)[k];
 				try {
-					if (
-						/submit|send|accept/i.test(k) &&
-						v &&
-						typeof v === 'object' &&
-						typeof (v as any).event === 'function'
-					) {
-						try {
-							(v as any).event((e: any) => {
-								try {
-									const txt = String(
-										e?.message ||
-										e?.prompt ||
-										e?.request?.message ||
-										e?.request?.prompt ||
-										''
-									).trim();
-									if (txt) {
-										if (recordPrompt(txt, 'copilot-exports'))
-											debug('Captured via Copilot exports: ' + k);
-									}
-								} catch (err) {
-									debug('exports event err ' + err);
-								}
-							});
-							debug('Hooked export event: ' + k);
-						} catch {}
-					}
-					// Monkey patch funkce submit() / send()
-					if (
-						typeof v === 'function' &&
-						/submit|send|accept/i.test(k) &&
-						!(v as any).__aiPatched
-					) {
-						(v as any).__aiPatched = true;
-						(obj as any)[k] = async function (...a: any[]) {
+					if (/submit|send|accept/i.test(k) && v && typeof v === 'object' && typeof (v as any).event === 'function') {
+						(v as any).event((e: any) => {
 							try {
-								const before = typingBuffer.trim() || lastSnapshot;
-								const r = await (v as any).apply(this, a);
-								setTimeout(() => {
-									getChatInputText()
-										.then((after) => {
-											if (before && after.trim() === '') {
-												recordPrompt(before, 'exports-patch');
-											}
-										})
-										.catch(() => {});
-								}, 20);
-								return r;
-							} catch (e) {
-								return (v as any).apply(this, a);
-							}
-						};
+								const txt = String(e?.message || e?.prompt || e?.request?.message || e?.request?.prompt || '').trim();
+								if (txt) { if (recordPrompt(txt, 'copilot-exports')) debug('Captured via Copilot exports: ' + k); }
+							} catch (err) { debug('exports event err ' + err); }
+						});
+						debug('Hooked export event: ' + k);
 					}
 				} catch {}
 				if (typeof v === 'object') scan(v, depth + 1);
 			}
 		};
 		scan(ext.exports);
-	} catch (e) {
-		debug('hookCopilotExports err ' + e);
-	}
+	} catch (e) { debug('hookCopilotExports err ' + e); }
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -139,14 +81,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		updateStatusBar();
 		typingBuffer = '';
 		lastSnapshot = '';
-		const msg =
-			vscode.workspace
-				.getConfiguration('ai-prompt-detector')
-				.get<string>('customMessage', '') ||
-			'We will verify quality & accuracy.';
-		vscode.window.showInformationMessage(
-			`AI Prompt sent (${source})\n${msg}`
-		);
+		const msg = vscode.workspace.getConfiguration('ai-prompt-detector').get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+		const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${msg}`);
+		// Delay notification for non-enter sources to avoid Send dropdown auto-close side effect
+		if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
 		debug(`recordPrompt ok src=${source} len=${text.length}`);
 		return true;
 	};
@@ -311,19 +249,6 @@ export async function activate(context: vscode.ExtensionContext) {
 					}
 				})
 			);
-			try {
-				const originalExec = vscode.commands.executeCommand;
-				(vscode.commands as any).executeCommand = function (
-					id: string,
-					...args: any[]
-				) {
-					if (debugEnabled) debug('EXEC ' + id);
-					return (originalExec as any).apply(this, [id, ...args]);
-				};
-				debug('executeCommand patched');
-			} catch (ePatch) {
-				debug('patch fail ' + ePatch);
-			}
 		}
 	} catch (e) {
 		debug('cmd hook init err ' + e);
