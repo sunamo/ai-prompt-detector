@@ -294,8 +294,14 @@ enter must work for both copilot and my extension without remapping. In another 
 - If the user request is ambiguous or paraphrased (not verbatim), refuse deletion and ask for the exact snippet.
 - Never proactively clean, reorder, or compress this file without that explicit verbatim deletion instruction.
 
-## 🔒 Send Button Dropdown Stability
-- The dropdown next to the Copilot / Chat Send button MUST NOT auto-close because of our extension logic.
-- Extension MUST NOT steal focus or execute commands that collapse the dropdown before user acts.
-- Avoid invasive monkey patching of Copilot internal submit/send functions if it risks dropdown stability.
-- Any regression causing premature dropdown closing has to be fixed before adding new features.
+## ✅ Core Functional Requirements (Must Remain Working)
+1. Immediate detection of prompt submission via ALL key variants: Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter (increment counter, log, notify, list update).
+2. Immediate detection of prompt submission via mouse (Send button) in GitHub Copilot Chat (same effects as keyboard; no dropdown auto-close side effects).
+3. Activity Bar view lists prompts loaded from SpecStory exports (`.specstory/history/*.md`). No generation or modification of those files.
+4. Status Bar shows: total detected GitHub Copilot prompts in current VS Code session + current extension version.
+
+## 🚫 Disallowed / Previously Failed Approaches (Do NOT Reintroduce)
+- Monkey patching `vscode.commands.executeCommand` (caused Send dropdown auto-close regressions).
+- Deep invasive export scanning beyond what is strictly necessary for detection (kept minimal; only expand on explicit request).
+- Duplicate heuristic command listeners when Chat API event already provides mouse + keyboard detection (keep minimal set to avoid dropdown instability).
+- Any change that removes or overrides keybindings for Enter variants without re-providing our unified forwarding command.
