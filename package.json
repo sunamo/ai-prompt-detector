@@ -2,7 +2,7 @@
   "name": "ai-prompt-detector",
   "displayName": "AI Copilot Prompt Detector",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.198",
+  "version": "1.1.199",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -75,6 +75,16 @@
 				"command": "ai-prompt-detector.forwardEnterToChat",
 				"key": "enter",
 				"mac": "enter",
+				"when": "inChatInput"
+			},
+			{
+				"command": "-workbench.action.chat.acceptInput",
+				"key": "ctrl+alt+enter",
+				"when": "inChatInput"
+			},
+			{
+				"command": "-github.copilot.chat.acceptInput",
+				"key": "ctrl+alt+enter",
 				"when": "inChatInput"
 			},
 			{
