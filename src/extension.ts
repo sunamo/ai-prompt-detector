@@ -12,7 +12,6 @@ let providerRef: PromptsProvider | undefined;
 let aiPromptCounter = 0;
 let typingBuffer = '';
 let lastSnapshot = '';
-let lastTypingChangeAt = Date.now();
 let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
 let snapshotTimer: NodeJS.Timeout | undefined;
@@ -126,9 +125,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			context.subscriptions.push(cmdsAny.onDidExecuteCommand(async (ev: any) => {
 				try {
 					const cmd = ev?.command as string; if (!cmd) return; if (debugEnabled) debug('CMD ' + cmd);
-					if (cmd === 'type') { const t = ev?.args?.[0]?.text; if (t && !String(t).includes('\n')) { typingBuffer += t; lastTypingChangeAt = Date.now(); if (typingBuffer.length > 8000) typingBuffer = typingBuffer.slice(-8000); } return; }
-					if (cmd === 'deleteLeft') { typingBuffer = typingBuffer.slice(0, -1); lastTypingChangeAt = Date.now(); return; }
-					if (cmd === 'editor.action.clipboardPasteAction') { try { const clip = await vscode.env.clipboard.readText(); if (clip) { typingBuffer += clip; lastTypingChangeAt = Date.now(); } } catch {} return; }
+					if (cmd === 'type') { const t = ev?.args?.[0]?.text; if (t && !String(t).includes('\n')) { typingBuffer += t; if (typingBuffer.length > 8000) typingBuffer = typingBuffer.slice(-8000); } return; }
+					if (cmd === 'deleteLeft') { typingBuffer = typingBuffer.slice(0, -1); return; }
+					if (cmd === 'editor.action.clipboardPasteAction') { try { const clip = await vscode.env.clipboard.readText(); if (clip) { typingBuffer += clip; } } catch {} return; }
 					const lower = cmd.toLowerCase();
 					const heuristicMatch = !sendCommands.has(cmd) && (lower.includes('copilot') || lower.includes('chat')) && (lower.includes('submit') || lower.includes('send') || lower.includes('accept'));
 					if (heuristicMatch) { debug('Heuristic SEND command detected: ' + cmd); sendCommands.add(cmd); }
