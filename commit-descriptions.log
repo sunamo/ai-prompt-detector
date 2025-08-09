@@ -5,3 +5,4 @@ v1.1.174 | further minimize extension.ts remove fs logging wrappers and auto-ope
 v1.1.175 | restore enter forwarding fallback variants
 v1.1.176 | restore prompt sent notification always after forward
 v1.1.177 | Add extra send command IDs for Ctrl+Alt+Enter path
+v1.1.178 | add ctrl+alt+enter keybinding
