@@ -12,6 +12,20 @@ let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
 let chatInputBuffer: string = '';
 let lastEnterSubmitAt = 0; // timestamp of last submission to avoid duplicate notifications
+const explicitSubmitCommands = new Set([
+	'github.copilot.chat.acceptInput',
+	'github.copilot.chat.submit',
+	'github.copilot.chat.send',
+	'github.copilot.chat.sendMessage',
+	'workbench.action.chat.acceptInput',
+	'workbench.action.chat.submit',
+	'workbench.action.chat.executeSubmit',
+	'workbench.action.chat.send',
+	'workbench.action.chat.sendMessage',
+	'chat.acceptInput',
+	'inlineChat.accept',
+	'interactive.acceptInput'
+]);
 
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
@@ -99,38 +113,42 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
 				const cmd = ev?.command as string | undefined;
-				if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; }
-				else if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => chatInputBuffer += txt); }
-				else if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); }
-				else if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; }
-
-				// Generic detection for button-based submit (send/dispatch/accept) not handled by our Enter override
-				if (cmd) {
-					const lower = cmd.toLowerCase();
-					const isSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
-					if (isSubmit) {
-						const now = Date.now();
-						if (now - lastEnterSubmitAt > 250) { // avoid duplicates when multiple internal commands fire
-							lastEnterSubmitAt = now;
-							(async () => {
-								let txt = await getChatInputText();
-								if (!txt) txt = chatInputBuffer.trim();
-								if (txt) {
-									recentPrompts.unshift(txt);
-									if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-									provider.refresh();
-									chatInputBuffer = '';
-								}
-								aiPromptCounter++;
-								updateStatusBar();
-								const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-								const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-								vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-							})();
-						}
-					}
+				if (!cmd) return;
+				// Debug log for chat/copilot related commands
+				if (cmd.includes('copilot') || cmd.includes('chat')) {
+					outputChannel.appendLine(`🔎 CMD: ${cmd}`);
 				}
-			} catch {}
+				if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; return; }
+				if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => chatInputBuffer += txt); return; }
+				if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); return; }
+				if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; return; }
+
+				// Explicit + heuristic detection for button-based submits
+				const lower = cmd.toLowerCase();
+				const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
+				if (explicitSubmitCommands.has(cmd) || heuristicSubmit) {
+					const now = Date.now();
+					if (now - lastEnterSubmitAt <= 120) { return; } // Enter already handled very recently
+					lastEnterSubmitAt = now;
+					(async () => {
+						let txt = chatInputBuffer.trim();
+						if (!txt) { txt = await getChatInputText(); }
+						if (txt) {
+							recentPrompts.unshift(txt);
+							if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+							provider.refresh();
+							chatInputBuffer = '';
+						} else {
+							outputChannel.appendLine('⚠️ Button submit detected but no prompt text captured');
+						}
+						aiPromptCounter++;
+						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+						provider.refresh();
+					})();
+				}
+			} catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
 	}
 
