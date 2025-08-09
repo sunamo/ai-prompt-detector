@@ -44,6 +44,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 
   /**
    * Vytvoří HTML pro výpis promptů – bezpečně escapuje a limituje počet.
+   * Nově: obrací pořadí tak, aby NEJNOVĚJŠÍ byl úplně nahoře (uživatel požadoval).
    * @returns Sestavený HTML řetězec.
    */
   private createPromptsHtml(): string {
@@ -53,8 +54,9 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      promptsHtml = recentPrompts
-        .slice(0, maxPrompts)
+      // Kopie omezeného seznamu + obrácení pořadí pro zobrazení (nejnovější první)
+      const renderList = recentPrompts.slice(0, maxPrompts).reverse();
+      promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
           const safePrompt = shortPrompt
