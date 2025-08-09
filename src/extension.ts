@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	outputChannel.appendLine('🚀 PROMPTS: Provider registered successfully');
 
 	setTimeout(async () => {
-		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); await vscode.commands.executeCommand('workbench.viewsService.openView', PromptsProvider.viewType, true); outputChannel.appendLine('🎯 Activity Bar view opened on startup'); } catch (e) { outputChannel.appendLine(`⚠️ Failed to open Activity Bar view on startup: ${e}`); }
+		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
 	}, 400);
 
 	const focusChatInput = async () => { for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} } };
@@ -89,7 +89,32 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 	}
 
-	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => { try { const doc = ev.document; const name = doc.fileName.toLowerCase(); if (!(name.includes('copilot') || name.includes('chat'))) return; const id = doc.uri.toString(); const prev = chatDocState.get(id) || ''; const curr = doc.getText(); if (prev && !curr.trim() && Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalizePrompt('doc-clear', prev); } if (curr.trim()) chatDocState.set(id, curr); } catch {} }));
+	// NEW: log any Copilot/Chat related document open (response appears) -> finalize if pending
+	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
+		try {
+			const name = doc.fileName.toLowerCase();
+			if (/(copilot|chat)/.test(name)) {
+				outputChannel.appendLine(`📄 OPEN doc=${path.basename(doc.fileName)} len=${doc.getText().length} lang=${doc.languageId}`);
+				// If we have a buffered prompt not yet finalized, finalize now (button likely used)
+				if ((chatInputBuffer.trim() || lastNonEmptySnapshot) && Date.now() - lastFinalizeAt > 120) {
+					finalizePrompt('open-doc');
+				}
+			}
+		} catch {}
+	}));
+
+	// Strengthen change listener: always log when chat doc transitions to empty
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
+		try {
+			const doc = ev.document; const name = doc.fileName.toLowerCase(); if (!(name.includes('copilot') || name.includes('chat'))) return;
+			const id = doc.uri.toString(); const prev = chatDocState.get(id) || ''; const curr = doc.getText();
+			if (curr.trim()) { chatDocState.set(id, curr); }
+			if (prev && !curr.trim()) {
+				outputChannel.appendLine(`🧹 CLEAR doc=${path.basename(doc.fileName)} prevLen=${prev.length}`);
+				if (Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalizePrompt('doc-clear2', prev); }
+			}
+		} catch {}
+	}));
 
 	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
