@@ -80,12 +80,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
 	};
 
-	/** Uloží prompt do stavu, provede notifikaci a resetuje buffery. */
+	/** Uloží prompt do stavu, vždy započítá i opakovaný (již poslaný) text.
+	 * Původní kontrola na duplikát byla odstraněna, aby šel počet navyšovat i při identických vstupech.
+	 */
 	const recordPrompt = (raw: string, source: string): boolean => {
 		const text = (raw || '').trim();
-		if (!text) return false; // empty
-		if (text === lastSubmittedText) return false; // duplicate
-		lastSubmittedText = text;
+		if (!text) return false; // prázdné nic neukládáme
+		lastSubmittedText = text; // stále uchováme poslední (může se hodit pro další logiku)
 		state.recentPrompts.unshift(text);
 		if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
 		aiPromptCounter++;
@@ -97,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${msg}`);
 		// Enter varianta bez zpoždění, ostatní se zpožděním
 		if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
-		debug(`recordPrompt ok src=${source} len=${text.length}`);
+		debug(`recordPrompt ok src=${source} len=${text.length} (duplicates allowed)`);
 		return true;
 	};
 
