@@ -286,3 +286,10 @@ enter must work for both copilot and my extension without remapping. In another 
   - Ctrl+Alt+Enter
 - Loss of functionality for ANY of these is considered a regression and must be fixed immediately before any other changes.
 - Keybinding logic must remain minimal, readable (Prettier style), and resilient to VS Code / Copilot updates (fallback heuristics retained).
+
+## 🛡 Content Preservation Policy (copilot-instructions.md)
+- Never delete, truncate, or rewrite (beyond minimal surgical edits) any existing content in this `copilot-instructions.md` file.
+- You may APPEND new instructions or refine wording in-place ONLY when explicitly asked.
+- ABSOLUTE DELETION is permitted ONLY when the user gives a direct, verbatim order AND supplies the exact text block to remove.
+- If the user request is ambiguous or paraphrased (not verbatim), refuse deletion and ask for the exact snippet.
+- Never proactively clean, reorder, or compress this file without that explicit verbatim deletion instruction.
