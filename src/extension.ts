@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
@@ -8,25 +7,38 @@ import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = state.recentPrompts;
-let aiPromptCounter: number = 0;
+let aiPromptCounter = 0;
 let statusBarItem: vscode.StatusBarItem;
-let chatInputBuffer: string = '';
-let lastEnterSubmitAt = 0; // timestamp of last submission to avoid duplicate notifications
-const chatDocState = new Map<string, { last: string; typed: boolean }>();
+let chatInputBuffer = '';
+let lastEnterSubmitAt = 0;
 const explicitSubmitCommands = new Set([
-	'github.copilot.chat.acceptInput',
-	'github.copilot.chat.submit',
-	'github.copilot.chat.send',
-	'github.copilot.chat.sendMessage',
-	'workbench.action.chat.acceptInput',
-	'workbench.action.chat.submit',
-	'workbench.action.chat.executeSubmit',
-	'workbench.action.chat.send',
-	'workbench.action.chat.sendMessage',
-	'chat.acceptInput',
-	'inlineChat.accept',
-	'interactive.acceptInput'
+	'github.copilot.chat.acceptInput','github.copilot.chat.submit','github.copilot.chat.send','github.copilot.chat.sendMessage',
+	'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage',
+	'chat.acceptInput','inlineChat.accept','interactive.acceptInput'
 ]);
+let providerRef: PromptsProvider | undefined;
+let lastNonEmptySnapshot = '';
+let lastSubmittedText = '';
+let lastFinalizeAt = 0;
+
+async function finalizePrompt(source: string, directText?: string) {
+	try {
+		let txt = (directText || chatInputBuffer || lastNonEmptySnapshot).trim();
+		if (!txt) return;
+		if (txt === lastSubmittedText) return;
+		lastSubmittedText = txt;
+		recentPrompts.unshift(txt);
+		if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+		chatInputBuffer = '';
+		aiPromptCounter++;
+		lastFinalizeAt = Date.now();
+		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+		const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+		vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+		providerRef?.refresh();
+		outputChannel.appendLine(`🛎️ Detected submit via ${source}`);
+	} catch (e) { outputChannel.appendLine(`❌ finalizePrompt error: ${e}`); }
+}
 
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
@@ -42,38 +54,29 @@ export async function activate(context: vscode.ExtensionContext) {
 	updateStatusBar();
 
 	await loadExistingPrompts();
-	const provider = new PromptsProvider();
-	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, provider);
+	providerRef = new PromptsProvider();
+	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
 	outputChannel.appendLine('🚀 PROMPTS: Provider registered successfully');
 
-	// Auto-open our Activity Bar view on startup
 	setTimeout(async () => {
 		try {
 			await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
 			await vscode.commands.executeCommand('workbench.viewsService.openView', PromptsProvider.viewType, true);
 			outputChannel.appendLine('🎯 Activity Bar view opened on startup');
-		} catch (e) {
-			outputChannel.appendLine(`⚠️ Failed to open Activity Bar view on startup: ${e}`);
-		}
+		} catch (e) { outputChannel.appendLine(`⚠️ Failed to open Activity Bar view on startup: ${e}`); }
 	}, 400);
 
-	// Helpers
 	const focusChatInput = async () => {
-		for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) {
-			try { await vscode.commands.executeCommand(id); break; } catch { /* next */ }
-		}
+		for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} }
 	};
-	let isInternalForward = false; // guard to prevent recursion when we internally invoke submit commands
 	const forwardToChatAccept = async (): Promise<boolean> => {
 		try {
-			isInternalForward = true;
 			const all = await vscode.commands.getCommands(true);
 			const ids = ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage','inlineChat.accept','interactive.acceptInput','chat.acceptInput'].filter(i => all.includes(i));
-			for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); isInternalForward = false; return true; } catch { /* next */ } }
+			for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); return true; } catch {} }
 			try { await vscode.commands.executeCommand('type', { text: '\n' }); outputChannel.appendLine('↩️ Fallback: simulated Enter via type command'); return true; } catch {}
 			return false;
 		} catch { return false; }
-		finally { isInternalForward = false; }
 	};
 	const getChatInputText = async (): Promise<string> => {
 		try {
@@ -81,158 +84,101 @@ export async function activate(context: vscode.ExtensionContext) {
 			const prev = await vscode.env.clipboard.readText();
 			let captured = '';
 			const all = await vscode.commands.getCommands(true);
-			for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) {
-				try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured?.trim()) break; } catch {}
-			}
-			if (!captured?.trim()) {
-				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) {
-					try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured?.trim()) break; } catch {}
-				}
+			for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
+			if (!captured.trim()) {
+				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
 			}
 			try { await vscode.env.clipboard.writeText(prev); } catch {}
-			return (captured || '').trim();
+			return captured.trim();
 		} catch { return ''; }
 	};
 	const captureChatInputSilently = async (): Promise<string> => {
-		try {
-			await vscode.commands.executeCommand('github.copilot.chat.focusInput');
-		} catch {}
+		try { await vscode.commands.executeCommand('github.copilot.chat.focusInput'); } catch {}
 		const prev = await vscode.env.clipboard.readText();
 		let captured = '';
 		try {
 			const all = await vscode.commands.getCommands(true);
-			const copyIds = ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'];
-			for (const id of copyIds.filter(i => all.includes(i))) {
-				try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {}
-			}
+			for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
 			if (!captured.trim()) {
-				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) {
-					try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {}
-				}
+				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
 			}
-		} finally {
-			try { await vscode.env.clipboard.writeText(prev); } catch {}
-		}
+		} finally { try { await vscode.env.clipboard.writeText(prev); } catch {} }
 		return captured.trim();
 	};
 
-	// Enter → add prompt immediately (#1), then forward to Copilot, then notify
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
 			let text = await getChatInputText();
 			if (!text) text = chatInputBuffer.trim();
-			if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); provider.refresh(); }
+			if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); providerRef?.refresh(); lastSubmittedText = text; }
 			chatInputBuffer = '';
 			await focusChatInput();
 			lastEnterSubmitAt = Date.now();
 			const ok = await forwardToChatAccept();
-			if (ok) { aiPromptCounter++; updateStatusBar(); provider.refresh(); }
+			if (ok) { aiPromptCounter++; updateStatusBar(); providerRef?.refresh(); }
 			const cfg = vscode.workspace.getConfiguration('specstory-autosave');
 			const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-			setTimeout(() => { provider.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10);
+			setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10);
 		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
 
-	// Buffer typed/pasted text (best effort)
 	const commandsAny = vscode.commands as any;
-	// Track last non-empty snapshot for button detection
-	let lastNonEmptySnapshot = '';
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		outputChannel.appendLine('🛰️ Command listener active');
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
 			try {
-				const cmd = ev?.command as string | undefined;
-				if (!cmd) return;
-				if (cmd.includes('copilot') || cmd.includes('chat')) { outputChannel.appendLine(`🔎 CMD: ${cmd}`); }
-				// Maintain snapshot before mutations via existing poller fallback
+				const cmd = ev?.command as string | undefined; if (!cmd) return;
+				if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`);
 				if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; return; }
 				if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; }); return; }
 				if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); return; }
 				if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; return; }
-
 				const lower = cmd.toLowerCase();
 				const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
 				const now = Date.now();
-
-				const finalizePrompt = async (source: string) => {
-					let txt = chatInputBuffer.trim();
-					if (!txt) txt = lastNonEmptySnapshot || await getChatInputText();
-					if (!txt) return;
-					if (recentPrompts[0] === txt) return; // already added
-					recentPrompts.unshift(txt);
-					if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-					chatInputBuffer = '';
-					aiPromptCounter++;
-					const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-					const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-					vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-					provider.refresh();
-					outputChannel.appendLine(`🛎️ Detected submit via ${source}`);
-				};
-
 				if (explicitSubmitCommands.has(cmd) || heuristicSubmit) {
-					if (now - lastEnterSubmitAt > 120) {
-						// Defer slightly to let input clear first
-						setTimeout(() => finalizePrompt(`command:${cmd}`), 40);
-					}
+					if (now - lastEnterSubmitAt > 120 && now - lastFinalizeAt > 120) setTimeout(() => finalizePrompt(`command:${cmd}`), 40);
 					return;
 				}
-
-				// Generic Copilot button fallback: if a copilot/chat command (not typing helpers) fires and buffer had content recently
 				if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 150) {
-					if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) {
-						setTimeout(() => finalizePrompt(`fallback:${cmd}`), 60);
-					}
+					if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalizePrompt(`fallback:${cmd}`), 60);
 				}
 			} catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
 	}
 
-	// Faster snapshot poller (direct detection)
 	let pollTimer: NodeJS.Timeout | undefined;
+	let lastPollHadText = false;
 	if (!pollTimer) {
 		pollTimer = setInterval(async () => {
 			try {
 				const current = await captureChatInputSilently();
-				if (current) lastNonEmptySnapshot = current; // remember last non-empty
+				if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; }
+				else {
+					if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastEnterSubmitAt > 150 && Date.now() - lastFinalizeAt > 180) {
+						await finalizePrompt('poll-clear');
+					}
+					lastPollHadText = false;
+				}
 			} catch {}
-		}, 180); // faster interval for responsiveness
+		}, 180);
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); } });
 	}
 
-	// Watch SpecStory exports (only initial load on create)
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
-
-	// React to settings changes
-	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) provider.refresh(); });
-
-	// Auto-save
+	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); providerRef?.refresh(); } });
+	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) providerRef?.refresh(); });
 	startAutoSave();
 	const autoSaveDisposable = createAutoSaveDisposable();
-
 	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
 	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
 
-	// Focus change listener placed here to access provider & context
 	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => {
 		try {
 			if (!ed) return;
 			if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) {
-				if (chatInputBuffer.trim()) {
-					const candidate = chatInputBuffer.trim();
-					if (recentPrompts[0] !== candidate) {
-						recentPrompts.unshift(candidate);
-						if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-						aiPromptCounter++;
-						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-						provider.refresh();
-						outputChannel.appendLine('👀 Detected submit via focus change');
-					}
-					chatInputBuffer = '';
-				}
+				if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim());
+				chatInputBuffer = '';
 			}
 		} catch {}
 	}));
