@@ -26,11 +26,17 @@ export function registerCommandListener(context: vscode.ExtensionContext) {
 			const heuristicSubmit = (lower.includes('chat') || isCopilot) && (lower.includes('accept')||lower.includes('submit')||lower.includes('send')||lower.includes('execute')||lower.includes('dispatch'));
 			const now = Date.now();
 			if (explicitSubmitCommands.has(cmd) || heuristicSubmit || isDispatch) {
-				if (now - runtime.lastEnterSubmitAt > 100 && now - runtime.lastFinalizeAt > 100) setTimeout(()=>finalizePrompt(`command:${cmd}`),30);
+				// Capture prompt snapshot immediately before UI clears
+				const snap = (runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || '').trim();
+				if (snap) runtime.outputChannel?.appendLine(`🧲 Snapshot capture for ${cmd} chars=${snap.length}`);
+				if (now - runtime.lastEnterSubmitAt > 100 && now - runtime.lastFinalizeAt > 100) {
+					setTimeout(()=>finalizePrompt(`command:${cmd}`, snap),10); // short delay to let buffer finish updating
+				}
 				return;
 			}
 			if ((lower.includes('github.copilot') || lower.includes('chat') || isDispatch) && now - runtime.lastEnterSubmitAt > 120) {
-				if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (runtime.chatInputBuffer.trim() || runtime.lastNonEmptySnapshot)) setTimeout(()=>finalizePrompt(`fallback:${cmd}`),50);
+				const snap = (runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || '').trim();
+				if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && snap) setTimeout(()=>finalizePrompt(`fallback:${cmd}`, snap),50);
 			}
 		} catch (e) { runtime.outputChannel?.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 	}));
