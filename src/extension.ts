@@ -46,6 +46,7 @@ async function finalizePrompt(source: string, directText?: string) {
 		vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
 		providerRef?.refresh();
 		outputChannel.appendLine(`🛎️ Detected submit via ${source} | chars=${txt.length}`);
+		outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // visible reference line
 	} catch (e) { outputChannel.appendLine(`❌ finalizePrompt error: ${e}`); }
 }
 
@@ -65,6 +66,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		outputChannel.appendLine(`🧹 Cleared daily log file ${dailyLogPath}`);
 	} catch {}
 	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
+	outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // activation reference line
 
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	statusBarItem.show();
