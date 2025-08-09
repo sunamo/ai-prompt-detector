@@ -77,19 +77,44 @@ function runInstall(root: string) {
     }
 }
 
-// Central prompt handling WITHOUT dedup (every event counts)
+// Feature flag: disable legacy .md file detection per new requirement
+const USE_FILE_WATCHERS = false;
+
+// Copilot command event logging
+function appendCopilotEvent(command: string) {
+    try {
+        if (!instructionsPath) return;
+        const entry = `\n---\n[${new Date().toISOString()}] Copilot Event: ${command}\n`;
+        fs.appendFileSync(instructionsPath, entry);
+        log('debug', 'copilot event logged', { command });
+    } catch (e) { logError('appendCopilotEvent failed', e); }
+}
+
+function handleCopilotCommand(command: string) {
+    try {
+        incPrompt();
+        appendCopilotEvent(command);
+        const s = getSession();
+        updateStatusBar();
+        // Single lightweight notification (can be toggled later)
+        vscode.window.setStatusBarMessage(`Copilot prompt #${s.promptCount}`, 1500);
+        if (workspaceRoot) runInstall(workspaceRoot);
+        log('debug', 'copilot command handled', { command, count: s.promptCount });
+    } catch (e) { logError('handleCopilotCommand failed', e); }
+}
+
+// Central prompt handling WITHOUT dedup (kept for potential fallback)
 function handlePrompt(file: string, source: string) {
+    if (!USE_FILE_WATCHERS) return; // disabled mode
     try {
         incPrompt();
         appendPrompt(file);
         const s = getSession();
         updateStatusBar();
-        vscode.window.showInformationMessage(`Prompt odeslán (#${s.promptCount})`);
+        vscode.window.setStatusBarMessage(`File prompt #${s.promptCount}`, 1500);
         if (workspaceRoot) runInstall(workspaceRoot);
-        log('debug', 'prompt handled (no dedup)', { file, source, count: s.promptCount });
-    } catch (e) {
-        logError('handlePrompt failed', e);
-    }
+        log('debug', 'file prompt handled', { file, source, count: s.promptCount });
+    } catch (e) { logError('handlePrompt failed', e); }
 }
 
 // Status bar handling
@@ -98,19 +123,16 @@ let extensionVersion = '0.0.0';
 function initStatusBar(context: vscode.ExtensionContext) {
     try {
         if (!statusBar) {
-            // Put LEFT with very high priority so it appears first and immediately
             statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10000);
             statusBar.command = 'specstoryAutosave.showStatus';
-            statusBar.tooltip = 'AI Prompt Detector – click for session stats';
+            statusBar.tooltip = 'AI Prompt Detector – Copilot events';
             context.subscriptions.push(statusBar);
             log('debug', 'status bar item created (left)');
         }
-        // Resolve version
         try {
             const pkgVersion = context.extension.packageJSON?.version;
             if (typeof pkgVersion === 'string') extensionVersion = pkgVersion;
         } catch (e) { logError('version resolve failed', e); }
-        // Initial text instantly (even before any prompts)
         const s = getSession();
         statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
         statusBar.show();
@@ -124,14 +146,34 @@ function updateStatusBar() {
 }
 
 function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
+    if (!USE_FILE_WATCHERS) return; // disabled
     try {
-        const pattern = new vscode.RelativePattern(root, '.specstory/history/*.md');
+        const pattern = new vscode.RelativePattern(root, '**/.specstory/history/*.md');
         const watcher = vscode.workspace.createFileSystemWatcher(pattern);
         watcher.onDidCreate(uri => handlePrompt(uri.fsPath, 'fs-create'), null, context.subscriptions);
         watcher.onDidChange(uri => handlePrompt(uri.fsPath, 'fs-change'), null, context.subscriptions);
         context.subscriptions.push(watcher);
-        log('debug', 'prompt watcher registered');
+        log('debug', 'prompt watcher registered', { root });
     } catch (e) { logError('registerPromptWatcher failed', e); }
+}
+
+// Polling disabled when file watchers off
+function pollPromptFiles() { /* noop in command mode */ }
+
+// Copilot command hook (fallback shim if onDidExecuteCommand not available)
+function hookCopilotCommands(context: vscode.ExtensionContext) {
+    // VS Code stable does not expose onDidExecuteCommand; we monkey-patch executeCommand
+    const orig = vscode.commands.executeCommand;
+    (vscode.commands as any).executeCommand = async function(command: string, ...rest: any[]) {
+        try {
+            if (command.startsWith('github.copilot') || command.startsWith('copilot.')) {
+                handleCopilotCommand(command);
+            }
+        } catch (e) { logError('executeCommand hook error', e); }
+        return orig.apply(this, [command, ...rest]);
+    };
+    context.subscriptions.push({ dispose: () => { (vscode.commands as any).executeCommand = orig; } });
+    log('debug', 'copilot command hook installed (executeCommand patch)');
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -143,34 +185,44 @@ export async function activate(context: vscode.ExtensionContext) {
     if (root) {
         workspaceRoot = root;
         ensureInstructions(root);
-        loadHistory(root);
-        registerPromptWatcher(context, root);
+        loadHistory(root); // historical md (optional)
+        if (USE_FILE_WATCHERS) {
+            for (const f of vscode.workspace.workspaceFolders || []) registerPromptWatcher(context, f.uri.fsPath);
+            // start polling only if enabled
+            const pollInterval = setInterval(pollPromptFiles, 1500);
+            context.subscriptions.push({ dispose: () => clearInterval(pollInterval) });
+        } else {
+            log('debug', 'file-based detection disabled (Copilot command mode active)');
+        }
         updateStatusBar();
-        runInstall(root); // auto run at startup
+        runInstall(root); // startup install
     } else {
         updateStatusBar();
     }
 
+    // Copilot command hook
+    hookCopilotCommands(context);
+
     context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => {
         try {
             const s = getSession();
-            vscode.window.showInformationMessage(`Prompts this session: ${s.promptCount}. Loaded history: ${s.prompts.length}`);
+            vscode.window.showInformationMessage(`Copilot prompts this session: ${s.promptCount}. History loaded: ${s.prompts.length}`);
             log('normal', 'status requested', s);
         } catch (e) { logError('showStatus failed', e); }
     }));
 
-    // Text change inside .specstory
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-        try { if (ev.document.fileName.includes('.specstory')) handlePrompt(ev.document.fileName, 'text-change'); } catch (e) { logError('prompt tracking failed', e); }
-    }));
-    // Open document
-    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
-        try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'open'); } catch (e) { logError('open doc prompt tracking failed', e); }
-    }));
-    // Save document
-    context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc => {
-        try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'save'); } catch (e) { logError('save doc prompt tracking failed', e); }
-    }));
+    // Remove noisy listeners when not using file watchers
+    if (USE_FILE_WATCHERS) {
+        context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
+            try { if (ev.document.fileName.includes('.specstory')) handlePrompt(ev.document.fileName, 'text-change'); } catch (e) { logError('prompt tracking failed', e); }
+        }));
+        context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
+            try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'open'); } catch (e) { logError('open doc prompt tracking failed', e); }
+        }));
+        context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc => {
+            try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'save'); } catch (e) { logError('save doc prompt tracking failed', e); }
+        }));
+    }
 
     log('debug', 'activate complete');
 }
