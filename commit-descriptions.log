@@ -47,3 +47,4 @@ v1.1.232 | Allow duplicate prompts via Ctrl+Enter and add Czech JSDoc
 v1.1.233 | Document permanent removal of duplicate prompt suppression in code & instructions
 v1.1.233 | Restore Activity Bar container and webview contribution
 v1.1.234 | Restore missing duplicate suppression + activity bar preservation instructions
+v1.1.235 | Remove unused silent capture + lastSubmittedText and extra logs (minimal line cleanup)
