@@ -5,7 +5,8 @@ import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
-import { initLogger, info, debug, error } from './logger';
+import { initLogger, info, debug, error, writeLog } from './logger';
+import { setupChatResponseWatcher } from './chatResponseWatcher';
 
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = state.recentPrompts;
@@ -23,6 +24,9 @@ let lastNonEmptySnapshot = '';
 let lastSubmittedText = '';
 let lastFinalizeAt = 0;
 const chatDocState = new Map<string,string>();
+
+// Lightweight finalize wrapper also used by heuristic watcher
+function doFinalize(source: string, directText?: string) { finalizePrompt(source, directText); }
 
 async function finalizePrompt(source: string, directText?: string) {
 	try {
@@ -77,6 +81,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	setTimeout(async () => {
 		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
 	}, 400);
+
+	// Setup heuristic watcher (additive)
+	setupChatResponseWatcher(context, doFinalize);
 
 	const focusChatInput = async () => { for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} } };
 	const forwardToChatAccept = async (): Promise<boolean> => {
