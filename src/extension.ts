@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
-import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
+import { isValidSpecStoryFile, loadPromptsFromFile, extractPromptsFromContent } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 
 let outputChannel: vscode.OutputChannel;
@@ -216,9 +216,33 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); } });
 	}
 
+	// Track prompts we have already seen to avoid duplicate notifications (for file-based detection)
+	const seenPrompts = new Set<string>(recentPrompts);
+	function handleSpecStoryFileUpdate(fp: string) {
+		try {
+			const content = fs.readFileSync(fp, 'utf8');
+			const extracted = extractPromptsFromContent(content); // newest first per reader implementation
+			for (const p of extracted) {
+				if (!seenPrompts.has(p)) {
+					seenPrompts.add(p);
+					recentPrompts.unshift(p);
+					if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+					aiPromptCounter++;
+					const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+					const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+					vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+					provider.refresh();
+					outputChannel.appendLine('🧾 File-based detection added prompt (button fallback)');
+					break; // only act on first new prompt
+				}
+			}
+		} catch {}
+	}
+
 	// Watch SpecStory exports
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
+	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); recentPrompts.forEach(p=>seenPrompts.add(p)); provider.refresh(); } });
+	watcher.onDidChange(uri => { if (isValidSpecStoryFile(uri.fsPath)) handleSpecStoryFileUpdate(uri.fsPath); });
 
 	// React to settings changes
 	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) provider.refresh(); });
