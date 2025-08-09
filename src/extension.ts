@@ -90,16 +90,45 @@ function appendCopilotEvent(command: string) {
     } catch (e) { logError('appendCopilotEvent failed', e); }
 }
 
+// Prompt detection configuration
+const PROMPT_COMMAND_PREFIXES = ['github.copilot', 'copilot.'];
+const PROMPT_COMMAND_EXACT = [
+    'workbench.action.chat.submit',
+    'workbench.action.chat.acceptChanges',
+    'workbench.action.chat.send',
+    'chat.submit',
+    'chat.send'
+];
+let lastPromptSig: string | undefined;
+let lastPromptTime = 0;
+const PROMPT_DEDUPE_WINDOW_MS = 150; // avoid ultra-fast duplicates from multiple hooks
+
+function isPromptCommand(command: string): boolean {
+    if (PROMPT_COMMAND_EXACT.includes(command)) return true;
+    return PROMPT_COMMAND_PREFIXES.some(p => command.startsWith(p));
+}
+
+function recordPrompt(source: string, meta?: any) {
+    const now = Date.now();
+    const sig = source + ':' + (meta?.command || meta?.doc || '');
+    if (now - lastPromptTime < PROMPT_DEDUPE_WINDOW_MS && sig === lastPromptSig) {
+        log('debug', 'prompt dedup (multi-source)', { source, sig });
+        return;
+    }
+    lastPromptSig = sig;
+    lastPromptTime = now;
+    incPrompt();
+    const s = getSession();
+    updateStatusBar();
+    vscode.window.showInformationMessage(`Prompt #${s.promptCount}`); // immediate popup
+    if (workspaceRoot) runInstall(workspaceRoot);
+    log('debug', 'prompt recorded (immediate)', { source, count: s.promptCount, meta });
+}
+
 function handleCopilotCommand(command: string) {
     try {
-        incPrompt();
+        recordPrompt('command', { command });
         appendCopilotEvent(command);
-        const s = getSession();
-        updateStatusBar();
-        // Single lightweight notification (can be toggled later)
-        vscode.window.setStatusBarMessage(`Copilot prompt #${s.promptCount}`, 1500);
-        if (workspaceRoot) runInstall(workspaceRoot);
-        log('debug', 'copilot command handled', { command, count: s.promptCount });
     } catch (e) { logError('handleCopilotCommand failed', e); }
 }
 
@@ -162,12 +191,11 @@ function pollPromptFiles() { /* noop in command mode */ }
 
 // Copilot command hook (fallback shim if onDidExecuteCommand not available)
 function hookCopilotCommands(context: vscode.ExtensionContext) {
-    // VS Code stable does not expose onDidExecuteCommand; we monkey-patch executeCommand
     const orig = vscode.commands.executeCommand;
     (vscode.commands as any).executeCommand = async function(command: string, ...rest: any[]) {
         try {
-            if (command.startsWith('github.copilot') || command.startsWith('copilot.')) {
-                handleCopilotCommand(command);
+            if (isPromptCommand(command)) {
+                handleCopilotCommand(command); // BEFORE executing original for zero latency
             }
         } catch (e) { logError('executeCommand hook error', e); }
         return orig.apply(this, [command, ...rest]);
@@ -223,6 +251,20 @@ export async function activate(context: vscode.ExtensionContext) {
             try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'save'); } catch (e) { logError('save doc prompt tracking failed', e); }
         }));
     }
+
+    // Chat document heuristic: detect user pressing Enter in chat input (content changes with newline)
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
+        try {
+            if (USE_FILE_WATCHERS) return; // skip in file watcher mode
+            const doc = ev.document;
+            const scheme = doc.uri.scheme;
+            if (scheme.includes('chat') || doc.fileName.includes('copilot') || doc.languageId.includes('chat')) {
+                if (ev.contentChanges.some(c => c.text.includes('\n'))) {
+                    recordPrompt('chat-doc', { doc: doc.uri.toString() });
+                }
+            }
+        } catch (e) { logError('chat doc heuristic failed', e); }
+    }));
 
     log('debug', 'activate complete');
 }
