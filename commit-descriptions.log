@@ -9,3 +9,4 @@ v1.1.178 | add ctrl+alt+enter keybinding
 v1.1.179 | add ctrl+shift+enter keybinding with notification forwarding
 v1.1.180 | Increment counter also for empty prompt send (all keybindings) and refactor status bar update
 v1.1.181 | Add ctrl+enter keybinding (unbinding defaults) for unified forwarding & counter/notification
+v1.1.182 | Refactor: remove unused heuristic modules & runtime; integrate Chat API directly in extension.ts
