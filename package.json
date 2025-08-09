@@ -3,7 +3,7 @@
   "displayName": "SpecStory AutoSave",
   "publisher": "sunamocz",
   "description": "Minimal VS Code extension scaffold (logging + prompt history datastore).",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "engines": {
     "vscode": "^1.85.0"
   },

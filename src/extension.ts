@@ -2,6 +2,30 @@ import * as vscode from 'vscode';
 import { log, logError, validateRecentLogs } from './logging';
 import { loadHistory, incPrompt, getSession } from './datastore';
 
+// Status bar handling
+let statusBar: vscode.StatusBarItem | undefined;
+let extensionVersion = '0.0.0';
+function initStatusBar(context: vscode.ExtensionContext) {
+    try {
+        if (!statusBar) {
+            statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+            statusBar.command = 'specstoryAutosave.showStatus';
+            context.subscriptions.push(statusBar);
+        }
+        const selfExt = vscode.extensions.getExtension('sunamocz.specstory-autosave');
+        if (selfExt && typeof selfExt.packageJSON?.version === 'string') {
+            extensionVersion = selfExt.packageJSON.version;
+        }
+        updateStatusBar();
+        statusBar.show();
+    } catch (e) { logError('initStatusBar failed', e); }
+}
+function updateStatusBar() {
+    if (!statusBar) return;
+    const s = getSession();
+    statusBar.text = `AI Prompt: ${s.promptCount} | v${extensionVersion}`;
+}
+
 // New: prompt event handling via FS watcher
 function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
     try {
@@ -17,6 +41,7 @@ function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
                 incPrompt();
                 const s = getSession();
                 log('debug', 'prompt detected (fs)', { file: uri.fsPath, kind, promptCount: s.promptCount });
+                updateStatusBar();
                 vscode.window.showInformationMessage(`Prompt odeslán (#${s.promptCount})`);
             } catch (e) {
                 logError('prompt watcher handler failed', e);
@@ -39,10 +64,13 @@ export async function activate(context: vscode.ExtensionContext) {
         logError('log validation failed', e);
     }
 
+    initStatusBar(context);
+
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (root) {
         loadHistory(root);
         registerPromptWatcher(context, root);
+        updateStatusBar();
     }
 
     context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => {
@@ -61,6 +89,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (ev.document.fileName.includes('.specstory')) {
                 incPrompt();
                 log('debug', 'prompt increment (text change)', { file: ev.document.fileName });
+                updateStatusBar();
             }
         } catch (e) {
             logError('prompt tracking failed', e);
