@@ -1,7 +1,4 @@
-# AI Assistant Instructions - AI Prompt Detector Extension
-
-### ✅ CODE COMMENT ENFORCEMENT (CZECH ONLY)
-All inline code comments in source files MUST be written in Czech (e.g. // Načte aktuální vstup). Do NOT use English in code comments. Documentation, logs, messages, commit texts remain English per Language Policy below.
+# AI Assistant Instructions - SpecStory AutoSave Extension
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
@@ -18,9 +15,9 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
-- **Copilot chat responses to the user must be in Czech; code comments stay Czechis always in czech! all other artifacts and strings (README, logs, commit messages) remain in English;**
+- **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
 - **ONLY cs.json localization file** is allowed to contain non-English text
-- **ALL code comments in Czech**
+- **ALL code comments in English**
 - **ALL commit messages in English**
 - **ALL documentation in English**
 - **ALL debug logs in English**
@@ -60,7 +57,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **NEVER write texts directly in code** - always through i18n system
 - **CHANGELOG.md, README.md and all documents only in English**
 - **Commit messages in English**
-- **Code comments in Czech**
+- **Code comments in English**
 - **Debug logs in English**
 - Use: `i18n.t('key')` instead of hardcoded texts
 
@@ -260,12 +257,12 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-For the app name, use AI Prompt Detector + AI Copilot Prompt Detection everywhere, no shorter or other versions
+For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywhere, no shorter or other versions
 
 Create files as small as possible, no more than 200 lines each.
 
 distinguish between those that are always displayed and debug logs. Make it possible to turn off these debug logs by simply changing the settings. Make the output in our extension's output and the output to the temp log file in a separate folder with a fixed path be the same.
 
-I added the folder C:\temp\ai-prompt-detector-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
+I added the folder C:\temp\specstory-autosave-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
 
 enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.
