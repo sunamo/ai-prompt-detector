@@ -141,7 +141,8 @@ export async function activate(context: vscode.ExtensionContext) {
   if (!snapshotTimer) {
     snapshotTimer = setInterval(async () => {
       try {
-        const txt = await getChatInputText();
+        // Nepřetahovat fokus při pasivním snapshotu (attemptFocus=false)
+        const txt = await getChatInputText(false);
         if (txt && txt !== typingBuffer) {
           lastSnapshot = txt;
         }

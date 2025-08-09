@@ -43,11 +43,16 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 
 /**
  * Získá text z chat inputu neinvazivně (kopírovacími příkazy) a ponechá původní schránku.
+ * Nově: parametr attemptFocus (default true) – když je false, nepokouší se přesunout fokus
+ * a tím nekrade fokus z Activity Bar webview při periodickém snapshotu.
+ * @param attemptFocus zda aktivně přesměrovat fokus do chat vstupu
  * @returns Trimovaný text vstupu nebo prázdný řetězec.
  */
-export const getChatInputText = async (): Promise<string> => {
+export const getChatInputText = async (
+	attemptFocus: boolean = true,
+): Promise<string> => {
   try {
-    await focusChatInput();
+    if (attemptFocus) await focusChatInput();
     const prev = await vscode.env.clipboard.readText();
     let captured = '';
     const all = await vscode.commands.getCommands(true);
