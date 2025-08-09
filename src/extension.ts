@@ -89,6 +89,28 @@ export async function activate(context: vscode.ExtensionContext) {
 			return (captured || '').trim();
 		} catch { return ''; }
 	};
+	const captureChatInputSilently = async (): Promise<string> => {
+		try {
+			await vscode.commands.executeCommand('github.copilot.chat.focusInput');
+		} catch {}
+		const prev = await vscode.env.clipboard.readText();
+		let captured = '';
+		try {
+			const all = await vscode.commands.getCommands(true);
+			const copyIds = ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'];
+			for (const id of copyIds.filter(i => all.includes(i))) {
+				try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {}
+			}
+			if (!captured.trim()) {
+				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) {
+					try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {}
+				}
+			}
+		} finally {
+			try { await vscode.env.clipboard.writeText(prev); } catch {}
+		}
+		return captured.trim();
+	};
 
 	// Enter → add prompt immediately (#1), then forward to Copilot, then notify
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
@@ -152,29 +174,33 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 	}
 
-	// Start lightweight poller to detect button submit (buffer cleared without Enter handler firing)
-	let lastPolledBuffer = '';
+	// Start improved poller using actual chat input snapshot (not our buffer) to detect button submits
+	let lastSnapshot = '';
+	let lastHandledPrompt = '';
 	let pollTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
 		pollTimer = setInterval(async () => {
 			try {
-				// If buffer cleared and we had previous text, treat as submit via button
-				if (!chatInputBuffer.trim() && lastPolledBuffer.trim().length > 0) {
-					const candidate = lastPolledBuffer.trim();
-					// Avoid duplicate if already most recent
-					if (recentPrompts[0] !== candidate) {
-						aiPromptCounter++;
-						recentPrompts.unshift(candidate);
-						if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-						provider.refresh();
-						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+				const current = await captureChatInputSilently();
+				// Detect transition from non-empty -> empty without Enter handler (button click)
+				if (!current && lastSnapshot && lastSnapshot !== lastHandledPrompt) {
+					// Ensure we did not just handle Enter
+					if (Date.now() - lastEnterSubmitAt > 140) {
+						if (recentPrompts[0] !== lastSnapshot) {
+							recentPrompts.unshift(lastSnapshot);
+							if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+							aiPromptCounter++;
+							const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+							const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+							vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+							provider.refresh();
+							lastHandledPrompt = lastSnapshot;
+						}
 					}
 				}
-				lastPolledBuffer = chatInputBuffer; // update snapshot
+				if (current) lastSnapshot = current; // update snapshot only when there's content
 			} catch {}
-		}, 400);
+		}, 500);
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); } });
 	}
 
