@@ -54,8 +54,8 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      // Nově: nepřevracet. Pole recentPrompts má nejnovější položku na indexu 0 (unshift), takže zobrazíme přímo pořadí.
-      const renderList = recentPrompts.slice(0, maxPrompts);
+      // Show newest as #1 (reverse the sliced array so last captured becomes first visually)
+      const renderList = recentPrompts.slice(0, maxPrompts).slice().reverse();
       promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
@@ -65,16 +65,16 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
           return (
-            `<div class="prompt-item" data-index="${index}">\n` +
-            `\t<div class="ln">#${index + 1}</div>\n` +
-            `\t<div class="txt" title="${safePrompt}">${safePrompt}</div>\n` +
+            `<div class=\"prompt-item\" data-index=\"${index}\">\n` +
+            `\t<div class=\"ln\">#${index + 1}</div>\n` +
+            `\t<div class=\"txt\" title=\"${safePrompt}\">${safePrompt}</div>\n` +
             `</div>`
           );
         })
         .join('');
     } else {
       promptsHtml = (
-        `<div class="empty">\n` +
+        `<div class=\"empty\">\n` +
         `\t<p>🔍 No SpecStory prompts found</p>\n` +
         `\t<p>Create a SpecStory conversation to display prompts</p>\n` +
         `</div>`
