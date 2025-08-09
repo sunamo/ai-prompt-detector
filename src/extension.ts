@@ -13,7 +13,7 @@ let chatInputBuffer = '';
 let lastEnterSubmitAt = 0;
 const explicitSubmitCommands = new Set([
 	'github.copilot.chat.acceptInput','github.copilot.chat.submit','github.copilot.chat.send','github.copilot.chat.sendMessage',
-	'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage',
+	'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.submitWithoutDispatching','workbench.action.chat.submitWithCodebase','workbench.action.chat.sendToNewChat','workbench.action.chat.createRemoteAgentJob','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage',
 	'chat.acceptInput','inlineChat.accept','interactive.acceptInput'
 ]);
 let providerRef: PromptsProvider | undefined;
@@ -71,7 +71,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		try { await focusChatInput(); const prev = await vscode.env.clipboard.readText(); let captured = ''; const all = await vscode.commands.getCommands(true); for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } if (!captured.trim()) { for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } } try { await vscode.env.clipboard.writeText(prev); } catch {} return captured.trim(); } catch { return ''; }
 	};
 	const captureChatInputSilently = async (): Promise<string> => {
-		try { await vscode.commands.executeCommand('github.copilot.chat.focusInput'); } catch {} const prev = await vscode.env.clipboard.readText(); let captured = ''; try { const all = await vscode.commands.getCommands(true); for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } if (!captured.trim()) { for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} } } } finally { try { await vscode.env.clipboard.writeText(prev); } catch {} } return captured.trim();
+		try {
+			for (const id of ['workbench.action.chat.focusInput','github.copilot.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} }
+		} catch {}
+		const prev = await vscode.env.clipboard.readText();
+		let captured = '';
+		try {
+			const all = await vscode.commands.getCommands(true);
+			for (const id of ['workbench.action.chat.copyInput','chat.copyInput','github.copilot.chat.copyInput'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(id); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
+			if (!captured.trim()) {
+				for (const sid of ['workbench.action.chat.selectAll','chat.selectAll'].filter(i => all.includes(i))) { try { await vscode.commands.executeCommand(sid); await vscode.commands.executeCommand('editor.action.clipboardCopyAction'); captured = await vscode.env.clipboard.readText(); if (captured.trim()) break; } catch {} }
+			}
+		} finally { try { await vscode.env.clipboard.writeText(prev); } catch {} }
+		return captured.trim();
 	};
 
 	// List available chat/copilot commands once for diagnostics
@@ -118,7 +130,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
 	if (!pollTimer) {
-		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; } else { if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); } lastPollHadText = false; } } catch {} }, 200);
+		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; } else { if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); } lastPollHadText = false; } } catch {} }, 150);
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); if (forceSnapshotTimer) clearInterval(forceSnapshotTimer); } });
 		forceSnapshotTimer = setInterval(async () => { try { if (!lastNonEmptySnapshot && chatInputBuffer.trim().length > 2) { const txt = await getChatInputText(); if (txt) { lastNonEmptySnapshot = txt; outputChannel.appendLine('🧪 Forced snapshot captured'); } } } catch {} }, 800);
 	}
