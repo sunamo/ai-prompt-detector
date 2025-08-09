@@ -9,8 +9,22 @@ export const focusChatInput = async () => {
 export const forwardToChatAccept = async (): Promise<boolean> => {
 	try {
 		const all = await vscode.commands.getCommands(true);
+		// Rozsireny seznam prikazu pro odeslani (pro ruzne buildy Copilot / Chat UI)
 		const ids = [
-			'github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage','inlineChat.accept','interactive.acceptInput','chat.acceptInput'
+			'github.copilot.chat.acceptInput',
+			'github.copilot.chat.send',
+			'github.copilot.chat.sendMessage',
+			'github.copilot.chat.submit',
+			'github.copilot.chat.executeSubmit',
+			'github.copilot.chat.inlineSubmit',
+			'workbench.action.chat.acceptInput',
+			'workbench.action.chat.submit',
+			'workbench.action.chat.executeSubmit',
+			'workbench.action.chat.send',
+			'workbench.action.chat.sendMessage',
+			'inlineChat.accept',
+			'interactive.acceptInput',
+			'chat.acceptInput'
 		].filter(i => all.includes(i));
 		for (const id of ids) { try { await vscode.commands.executeCommand(id); return true; } catch {} }
 		try { await vscode.commands.executeCommand('type', { text: '\n' }); return true; } catch {}

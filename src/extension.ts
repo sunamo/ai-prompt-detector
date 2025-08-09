@@ -48,9 +48,16 @@ export async function activate(context: vscode.ExtensionContext) {
 			await focusChatInput();
 			let ok = await forwardToChatAccept();
 			if (!ok) {
-				for (const id of ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit']) {
-					try { await vscode.commands.executeCommand(id); ok = true; break; } catch {}
-				}
+				for (const id of [
+					'github.copilot.chat.acceptInput',
+					'github.copilot.chat.send',
+					'github.copilot.chat.sendMessage',
+					'github.copilot.chat.submit',
+					'workbench.action.chat.acceptInput',
+					'workbench.action.chat.submit',
+					'workbench.action.chat.send',
+					'workbench.action.chat.sendMessage'
+				]) { try { await vscode.commands.executeCommand(id); ok = true; break; } catch {} }
 			}
 			if (ok) {
 				// Inkrement jen pokud jsme skutečně odeslali a máme nějaký obsah
