@@ -19,3 +19,4 @@ v1.1.189 | Fix: add pre-send capture (onWillExecuteCommand) for mouse SEND to sh
 v1.1.190 | ...
 v1.1.191 | Fix: reliable capture for Enter & mouse SEND (buffer pre-capture + extended fallback commands)
 v1.1.192 | Acknowledge: assistant will always supply commit description and trigger version bump automatically
+v1.1.193 | Fix: heuristic mouse send detection, remove focus poll closing dropdown
