@@ -13,6 +13,7 @@ import { finalizePrompt as externalFinalizePrompt } from './finalize';
 import { registerCommandListener } from './commandListener';
 import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
 import { focusChatInput, forwardToChatAccept, getChatInputText, captureChatInputSilently } from './chatHelpers';
+import { startDetectionTimers } from './detectionTimers';
 
 let outputChannel: vscode.OutputChannel; // legacy local retained for minimal change
 let recentPrompts: string[] = state.recentPrompts;
@@ -96,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	setupChatResponseWatcher(context, doFinalize);
 	registerChatApiHook(context, doFinalize);
 	registerCommandListener(context);
+	startDetectionTimers(context);
 
 	// helpers imported now (previous local implementations removed)
 
