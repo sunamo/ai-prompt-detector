@@ -2,7 +2,7 @@
   "name": "ai-prompt-detector",
   "displayName": "AI Copilot Prompt Detector",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.206",
+  "version": "1.1.214",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -75,39 +75,7 @@
 				"command": "ai-prompt-detector.forwardEnterToChat",
 				"key": "enter",
 				"mac": "enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "-workbench.action.chat.acceptInput",
-				"key": "ctrl+alt+enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "-github.copilot.chat.acceptInput",
-				"key": "ctrl+alt+enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "ai-prompt-detector.forwardEnterToChat",
-				"key": "ctrl+alt+enter",
-				"mac": "ctrl+alt+enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "-workbench.action.chat.acceptInput",
-				"key": "ctrl+shift+enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "-github.copilot.chat.acceptInput",
-				"key": "ctrl+shift+enter",
-				"when": "inChatInput"
-			},
-			{
-				"command": "ai-prompt-detector.forwardEnterToChat",
-				"key": "ctrl+shift+enter",
-				"mac": "ctrl+shift+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "-workbench.action.chat.acceptInput",
@@ -123,7 +91,39 @@
 				"command": "ai-prompt-detector.forwardEnterToChat",
 				"key": "ctrl+enter",
 				"mac": "ctrl+enter",
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
+			},
+			{
+				"command": "-workbench.action.chat.acceptInput",
+				"key": "ctrl+shift+enter",
 				"when": "inChatInput"
+			},
+			{
+				"command": "-github.copilot.chat.acceptInput",
+				"key": "ctrl+shift+enter",
+				"when": "inChatInput"
+			},
+			{
+				"command": "ai-prompt-detector.forwardEnterToChat",
+				"key": "ctrl+shift+enter",
+				"mac": "ctrl+shift+enter",
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
+			},
+			{
+				"command": "-workbench.action.chat.acceptInput",
+				"key": "ctrl+alt+enter",
+				"when": "inChatInput"
+			},
+			{
+				"command": "-github.copilot.chat.acceptInput",
+				"key": "ctrl+alt+enter",
+				"when": "inChatInput"
+			},
+			{
+				"command": "ai-prompt-detector.forwardEnterToChat",
+				"key": "ctrl+alt+enter",
+				"mac": "ctrl+alt+enter",
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			}
 		]
 	},
