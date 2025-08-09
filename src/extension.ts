@@ -38,17 +38,31 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 		try {
-			const text = await getChatInputText();
-			if (!text) return; // nic k odeslání
-			recentPrompts.unshift(text);
-			if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-			providerRef?.refresh();
+			let text = await getChatInputText();
+			// NEVRACEJ se pri prazdnem textu - stale musime propustit Enter do Copilota
+			if (text) {
+				recentPrompts.unshift(text);
+				if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+				providerRef?.refresh();
+			}
 			await focusChatInput();
-			const ok = await forwardToChatAccept();
-			if (ok) { aiPromptCounter++; providerRef?.refresh(); updateStatusBar(); }
-			const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
-			const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-			setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10);
+			// Pokus o odeslání
+			let ok = await forwardToChatAccept();
+			// Pokud primary cesty selhaly, fallback zkusit explicitní příkazy
+			if (!ok) {
+				for (const id of ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit']) {
+					try { await vscode.commands.executeCommand(id); ok = true; break; } catch {}
+				}
+			}
+			if (ok && text) {
+				aiPromptCounter++;
+				providerRef?.refresh();
+				const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+				const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+				setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10);
+				const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '';
+				statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
+			}
 		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
 
