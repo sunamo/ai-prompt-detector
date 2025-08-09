@@ -2,11 +2,16 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { writeLog } from './logger';
 
+// Konfigurace automatického ukládání (interval, povolení, sledované přípony)
 const AUTO_SAVE_ENABLED = true;
-const AUTO_SAVE_INTERVAL = 5000;
+const AUTO_SAVE_INTERVAL = 5000; // ms interval mezi kontrolami
 const AUTO_SAVE_PATTERNS = ['**/*.md', '**/*.txt', '**/*.json'];
-let autoSaveTimer: NodeJS.Timeout | undefined;
+let autoSaveTimer: NodeJS.Timeout | undefined; // Ref na interval pro zrušení
 
+/**
+ * Spustí periodické automatické ukládání otevřených souborů, které odpovídají
+ * definovaným patternům a mají stav "dirty" (neuložené změny).
+ */
 export function startAutoSave(): void {
 	if (!AUTO_SAVE_ENABLED) return;
 	
@@ -42,6 +47,9 @@ export function startAutoSave(): void {
 	}, AUTO_SAVE_INTERVAL);
 }
 
+/**
+ * Zastaví běžící časovač automatického ukládání (pokud existuje).
+ */
 export function stopAutoSave(): void {
 	if (autoSaveTimer) {
 		clearInterval(autoSaveTimer);
@@ -50,6 +58,10 @@ export function stopAutoSave(): void {
 	}
 }
 
+/**
+ * Vytvoří disposable objekt, který při dispose zavolá stopAutoSave.
+ * Užitečné pro správné uvolnění při deaktivaci rozšíření.
+ */
 export function createAutoSaveDisposable(): vscode.Disposable {
 	return {
 		dispose: () => {

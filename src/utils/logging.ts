@@ -5,7 +5,7 @@ import { state } from '../state';
 
 const LOG_FILE_PATH = 'C:\\temp\\ai-prompt-detector-logs\\extension.log';
 
-// Ensure log directory exists
+// Zajistí existenci cílové složky pro log soubor
 function ensureLogDirectory(): void {
 	const logDir = path.dirname(LOG_FILE_PATH);
 	if (!fs.existsSync(logDir)) {
@@ -17,6 +17,9 @@ function ensureLogDirectory(): void {
 	}
 }
 
+/**
+ * Zapíše zprávu do output channelu a do souboru – respektuje nastavení debug logů.
+ */
 export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'INFO'): void {
 	const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 	const debugEnabled = config.get<boolean>('enableDebugLogs', true);
@@ -45,6 +48,10 @@ export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'I
 	}
 }
 
+/**
+ * Ověří že log soubor reálně existuje, není prázdný a není příliš starý.
+ * V případě problému informuje uživatele chybovou hláškou.
+ */
 export function verifyLogFile(): void {
 	try {
 		if (fs.existsSync(LOG_FILE_PATH)) {

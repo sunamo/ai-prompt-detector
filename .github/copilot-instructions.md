@@ -18,7 +18,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
-- **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
+- **Copilot chat responses to the user must be in Czech; code comments stay Czechis always in czech! all other artifacts and strings (README, logs, commit messages) remain in English;**
 - **ONLY cs.json localization file** is allowed to contain non-English text
 - **ALL code comments in Czech**
 - **ALL commit messages in English**

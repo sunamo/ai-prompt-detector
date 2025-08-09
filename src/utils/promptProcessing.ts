@@ -2,6 +2,9 @@ import * as fs from 'fs';
 import { state } from '../state';
 import { writeLog } from './logging';
 
+/**
+ * Načte SpecStory markdown soubor a přidá všechny nové unikátní user prompty do globálního stavu.
+ */
 export function addRecentPrompt(filePath: string): void {
 	try {
 		writeLog(`Processing SpecStory file: ${filePath}`, 'DEBUG');
@@ -26,6 +29,9 @@ export function addRecentPrompt(filePath: string): void {
 	}
 }
 
+/**
+ * Extrahuje uživatelské zprávy z obsahu – mezi markerem _**User**_ a oddělovačem / _**Assistant**_.
+ */
 function extractUserMessages(content: string): string[] {
 	const messages: string[] = [];
 	const lines = content.split('\n');

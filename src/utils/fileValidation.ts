@@ -1,6 +1,10 @@
 import * as path from 'path';
 import { writeLog } from './logging';
 
+/**
+ * Ověří zda zadaný soubor odpovídá jednoduché heuristice SpecStory konverzace.
+ * (Markdown + obsahuje fragment 'conversation-' v názvu.)
+ */
 export function isValidSpecStoryFile(filePath: string): boolean {
 	const fileName = path.basename(filePath);
 	writeLog(`Validating file: ${fileName}`, 'DEBUG');

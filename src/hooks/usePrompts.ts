@@ -7,7 +7,11 @@ import { addRecentPrompt } from '../utils/promptProcessing';
 import { extractTimestampFromFileName } from '../utils/timeUtils';
 import { updateStatusBar } from '../utils/statusBar';
 
+// Hook pro práci s prompty – načítání a doplňování activity baru
 export const usePrompts = () => {
+	/**
+	 * Načte existující SpecStory soubory, extrahuje prompty a naplní globální stav.
+	 */
 	const loadExistingPrompts = async (): Promise<void> => {
 		writeLog('=== LOAD EXISTING PROMPTS START ===', 'INFO');
 		
@@ -15,7 +19,7 @@ export const usePrompts = () => {
 			const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
 			writeLog(`Found ${files.length} SpecStory files to analyze`, 'INFO');
 			
-			// Sort files by timestamp (newest first)
+			// Seřazení dle timestampu v názvu (nejnovější první)
 			const sortedFiles = files.sort((a, b) => {
 				const nameA = path.basename(a.fsPath);
 				const nameB = path.basename(b.fsPath);
@@ -25,10 +29,10 @@ export const usePrompts = () => {
 				return timestampB.getTime() - timestampA.getTime(); // Newest first
 			});
 			
-			// Clear existing prompts
+			// Reset stávajícího pole
 			state.recentPrompts = [];
 			
-			// Process each file and extract user prompts
+			// Zpracuj každý soubor a extrahuj uživatelské prompty
 			sortedFiles.forEach(file => {
 				writeLog(`Checking file: ${file.fsPath}`, 'DEBUG');
 				if (isValidSpecStoryFile(file.fsPath)) {

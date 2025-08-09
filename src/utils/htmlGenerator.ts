@@ -1,3 +1,7 @@
+/**
+ * Generuje HTML pro zobrazení seznamu promptů v activity baru.
+ * Vše je self‑contained bez externích skriptů kromě VS Code messaging API.
+ */
 export function getHtmlForWebview(prompts: Array<{number: string; shortPrompt: string; fullContent: string}>): string {
 	console.log(`getHtmlForWebview called with ${prompts.length} prompts`);
 	
@@ -31,9 +35,7 @@ export function getHtmlForWebview(prompts: Array<{number: string; shortPrompt: s
 			<button class="refresh-btn" onclick="refresh()">Refresh</button>
 			<script>
 				const vscode = acquireVsCodeApi();
-				function refresh() {
-					vscode.postMessage({ type: 'refresh' });
-				}
+				function refresh() { vscode.postMessage({ type: 'refresh' }); }
 			</script>
 		</body>
 		</html>`;
@@ -113,9 +115,7 @@ export function getHtmlForWebview(prompts: Array<{number: string; shortPrompt: s
 		${promptItems}
 		<script>
 			const vscode = acquireVsCodeApi();
-			function refresh() {
-				vscode.postMessage({ type: 'refresh' });
-			}
+			function refresh() { vscode.postMessage({ type: 'refresh' }); }
 		</script>
 	</body>
 	</html>`;
