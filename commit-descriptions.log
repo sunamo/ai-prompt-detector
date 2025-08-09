@@ -30,3 +30,4 @@ v1.1.201 | Fix: remove polling that closed Send dropdown; keep prompt capture vi
 v1.1.202 | Docs: add core functional requirements + disallowed approaches; beginning minimal cleanup prep
 v1.1.206 | Odstranění nepoužívaných legacy souborů
 v1.1.214 | Remove residual imports from usePrompts.ts (comment only)
+v1.1.215 | Unify all Enter variant unbind when-clauses + forbid legacy stub files in instructions

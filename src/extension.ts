@@ -16,6 +16,7 @@ let lastSnapshot = '';
 let lastTypingChangeAt = Date.now();
 let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
+let snapshotTimer: NodeJS.Timeout | undefined;
 
 function refreshDebugFlag() {
 	debugEnabled = vscode.workspace.getConfiguration('ai-prompt-detector').get<boolean>('enableDebugLogs', false) ?? false;
@@ -71,7 +72,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const recordPrompt = (raw: string, source: string): boolean => {
 		const text = (raw || '').trim();
-		if (!text || text === lastSubmittedText) return false;
+		if (!text) return false; // empty
+		if (text === lastSubmittedText) return false; // duplicate
 		lastSubmittedText = text;
 		state.recentPrompts.unshift(text);
 		if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
@@ -87,6 +89,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		debug(`recordPrompt ok src=${source} len=${text.length}`);
 		return true;
 	};
+
+	// lightweight periodic snapshot of chat input so plain Enter (without preceding type event captured) still works
+	if (!snapshotTimer) {
+		snapshotTimer = setInterval(async () => {
+			try {
+				const txt = await getChatInputText();
+				if (txt && txt !== typingBuffer) {
+					lastSnapshot = txt;
+				}
+			} catch {}
+		}, 1200);
+		context.subscriptions.push({ dispose: () => snapshotTimer && clearInterval(snapshotTimer) });
+	}
 
 	updateStatusBar();
 
