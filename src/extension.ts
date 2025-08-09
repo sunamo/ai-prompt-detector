@@ -13,6 +13,7 @@ let lastSubmittedText = '';
 let aiPromptCounter = 0;
 let typingBuffer = '';
 let lastSnapshot = '';
+let lastTypingChangeAt = Date.now(); // čas poslední změny bufferu
 
 export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
@@ -49,16 +50,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	providerRef = new PromptsProvider();
 	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
 
-	// Periodicke tiche snimani obsahu (pro klik mysi na SEND kdy neprichazi type prikazy)
-	const poll = setInterval(async () => {
-		try {
-			const snap = await captureChatInputSilently();
-			if (snap && snap !== lastSnapshot) lastSnapshot = snap;
-		} catch {}
-	}, 600);
-	context.subscriptions.push({ dispose: () => clearInterval(poll) });
+	// Odebrán periodický poll který fokusoval input a rušil dropdown
 
-	// 1) Chat API (myší SEND) – může nastat ještě před naším command listenerem
+	// 1) Chat API (myší SEND)
 	try {
 		const chatNs: any = (vscode as any).chat;
 		if (chatNs?.onDidSubmitRequest) {
@@ -67,17 +61,13 @@ export async function activate(context: vscode.ExtensionContext) {
 					try {
 						const txt = String(e?.request?.message || e?.request?.prompt || e?.prompt || '').trim();
 						if (recordPrompt(txt, 'chatApi')) debug('chatApi captured');
-					} catch (err) {
-						debug('chat api err ' + err);
-					}
+					} catch (err) { debug('chat api err ' + err); }
 				})
 			);
 		}
-	} catch (e) {
-		debug('chat api init err ' + e);
-	}
+	} catch (e) { debug('chat api init err ' + e); }
 
-	// 2) Command listener: typování + SEND příkazy (záznam bufferu před vyčištěním UI)
+	// 2) Command listener + heuristika
 	try {
 		const cmdsAny = vscode.commands as any;
 		if (cmdsAny?.onDidExecuteCommand) {
@@ -89,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				'github.copilot.chat.executeSubmit',
 				'github.copilot.chat.inlineSubmit',
 				'github.copilot.interactive.submit',
+				'github.copilot.interactive.acceptInput', // přidáno
 				'workbench.action.chat.acceptInput',
 				'workbench.action.chat.submit',
 				'workbench.action.chat.executeSubmit',
@@ -107,55 +98,50 @@ export async function activate(context: vscode.ExtensionContext) {
 					try {
 						const cmd = ev?.command as string;
 						if (!cmd) return;
-						// build buffer while typing
+						const lower = cmd.toLowerCase();
+						// Stavění bufferu (psaní)
 						if (cmd === 'type') {
 							const t = ev?.args?.[0]?.text as string | undefined;
 							if (t && !t.includes('\n')) {
 								typingBuffer += t;
+								lastTypingChangeAt = Date.now();
 								if (typingBuffer.length > 8000) typingBuffer = typingBuffer.slice(-8000);
 							}
 							return;
 						}
-						if (cmd === 'deleteLeft') {
-							typingBuffer = typingBuffer.slice(0, -1);
-							return;
-						}
+						if (cmd === 'deleteLeft') { typingBuffer = typingBuffer.slice(0, -1); lastTypingChangeAt = Date.now(); return; }
 						if (cmd === 'editor.action.clipboardPasteAction') {
-							try {
-								const clip = await vscode.env.clipboard.readText();
-								if (clip) typingBuffer += clip;
-							} catch {}
+							try { const clip = await vscode.env.clipboard.readText(); if (clip) { typingBuffer += clip; lastTypingChangeAt = Date.now(); } } catch {}
 							return;
 						}
-						if (sendCommands.has(cmd)) {
+
+						const heuristicMatch = !sendCommands.has(cmd) && ( (lower.includes('copilot') || lower.includes('chat')) && (lower.includes('submit') || lower.includes('send') || lower.includes('accept')) );
+						if (heuristicMatch) {
+							debug('Heuristic SEND command detected: ' + cmd);
+						}
+
+						if (sendCommands.has(cmd) || heuristicMatch) {
 							const immediate = typingBuffer.trim() || lastSnapshot;
 							if (immediate) {
-								recordPrompt(immediate, typingBuffer.trim() ? 'cmd-buffer' : 'snapshot');
+								recordPrompt(immediate, typingBuffer.trim() ? (heuristicMatch ? 'heuristic-buffer' : 'cmd-buffer') : 'snapshot');
 							} else {
-								// Fallback: po krátkém delay zkus clipboardovou extrakci
 								setTimeout(async () => {
 									try {
 										const snap = await getChatInputText();
-										if (!recordPrompt(snap, 'cmd')) {
+										if (!recordPrompt(snap, heuristicMatch ? 'heuristic-cmd' : 'cmd')) {
 											if (lastSnapshot) recordPrompt(lastSnapshot, 'snapshot-late');
 										}
-									} catch (e2) {
-										debug('post-send capture err ' + e2);
-									}
+									} catch (e2) { debug('post-send capture err ' + e2); }
 								}, 25);
 							}
 						}
-					} catch (err) {
-						debug('cmd hook err ' + err);
-					}
+					} catch (err) { debug('cmd hook err ' + err); }
 				})
 			);
 		}
-	} catch (e) {
-		debug('cmd hook init err ' + e);
-	}
+	} catch (e) { debug('cmd hook init err ' + e); }
 
-	// 3) Enter / klávesové zkratky – posíláme a pokud nebyl text, zkusíme buffer
+	// 3) Enter / klávesové zkratky
 	context.subscriptions.push(
 		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 			try {
@@ -180,19 +166,13 @@ export async function activate(context: vscode.ExtensionContext) {
 						'workbench.action.chat.submit',
 						'workbench.action.chatEditor.acceptInput',
 					]) {
-						try {
-							await vscode.commands.executeCommand(id);
-							ok = true;
-							break;
-						} catch {}
+						try { await vscode.commands.executeCommand(id); ok = true; break; } catch {}
 					}
 				}
 				if (ok && !text && !typingBuffer.trim() && !lastSnapshot) {
 					recordPrompt('(empty prompt)', 'enter-empty');
 				}
-			} catch (e) {
-				debug('forward err ' + e);
-			}
+			} catch (e) { debug('forward err ' + e); }
 		})
 	);
 
