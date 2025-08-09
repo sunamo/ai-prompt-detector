@@ -29,3 +29,4 @@ v1.1.200 | Fix: prevent Send dropdown auto-close (remove exec monkey patch, dela
 v1.1.201 | Fix: remove polling that closed Send dropdown; keep prompt capture via events only
 v1.1.202 | Docs: add core functional requirements + disallowed approaches; beginning minimal cleanup prep
 v1.1.206 | Odstranění nepoužívaných legacy souborů
+v1.1.214 | Remove residual imports from usePrompts.ts (comment only)

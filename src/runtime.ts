@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { state } from './state';
 import type { PromptsProvider } from './activityBarProvider';
 
-// Legacy removed: runtime.ts (global mutable state). Superseded by local closure state in extension.ts. Do NOT recreate without explicit request.
+// Legacy removed (do not recreate): runtime.ts
 
 export function activate(context: vscode.ExtensionContext) {
 	// Extension activation logic here

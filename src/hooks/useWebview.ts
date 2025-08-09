@@ -1,1 +1,1 @@
-// Legacy removed: hooks/useWebview.ts. Activity bar webview now handled by activityBarProvider.ts + extension.ts. Stub only.
+// Legacy removed (do not recreate): hooks/useWebview.ts

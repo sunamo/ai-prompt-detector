@@ -1,1 +1,1 @@
-// Legacy removed: constants.ts (path constants). Not required for current minimal implementation.
+// Legacy removed (do not recreate): constants.ts

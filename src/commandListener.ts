@@ -1,1 +1,1 @@
-// Legacy removed: commandListener.ts (broad command logging heuristic). Intentionally stubbed. Do NOT reintroduce without explicit user request.
+// Legacy removed (do not recreate): commandListener.ts

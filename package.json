@@ -2,7 +2,7 @@
   "name": "ai-prompt-detector",
   "displayName": "AI Copilot Prompt Detector",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.214",
+  "version": "1.1.215",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -64,12 +64,12 @@
 			{
 				"command": "-workbench.action.chat.acceptInput",
 				"key": "enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "-github.copilot.chat.acceptInput",
 				"key": "enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "ai-prompt-detector.forwardEnterToChat",
@@ -80,12 +80,12 @@
 			{
 				"command": "-workbench.action.chat.acceptInput",
 				"key": "ctrl+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "-github.copilot.chat.acceptInput",
 				"key": "ctrl+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "ai-prompt-detector.forwardEnterToChat",
@@ -96,12 +96,12 @@
 			{
 				"command": "-workbench.action.chat.acceptInput",
 				"key": "ctrl+shift+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "-github.copilot.chat.acceptInput",
 				"key": "ctrl+shift+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "ai-prompt-detector.forwardEnterToChat",
@@ -112,12 +112,12 @@
 			{
 				"command": "-workbench.action.chat.acceptInput",
 				"key": "ctrl+alt+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "-github.copilot.chat.acceptInput",
 				"key": "ctrl+alt+enter",
-				"when": "inChatInput"
+				"when": "inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus"
 			},
 			{
 				"command": "ai-prompt-detector.forwardEnterToChat",
