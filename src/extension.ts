@@ -1,173 +1,547 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
-import * as fs from 'fs'; // added for file logging
-import { state } from './state';
-import { PromptsProvider } from './activityBarProvider';
-import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
-import { startAutoSave, createAutoSaveDisposable } from './autoSave';
-import { initLogger, info } from './logger';
-import { setupChatResponseWatcher } from './chatResponseWatcher';
-import { registerChatApiHook } from './chatApiHook';
-import { runtime } from './runtime';
-import { finalizePrompt as externalFinalizePrompt } from './finalize';
-import { registerCommandListener } from './commandListener';
-import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
-import { focusChatInput, forwardToChatAccept, getChatInputText, captureChatInputSilently } from './chatHelpers';
-import { startDetectionTimers } from './detectionTimers';
 
-let outputChannel: vscode.OutputChannel; // legacy local retained for minimal change
-let recentPrompts: string[] = state.recentPrompts;
-let aiPromptCounter = 0;
+let outputChannel: vscode.OutputChannel;
+let recentPrompts: string[] = [];
+let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
-let chatInputBuffer = '';
-let lastEnterSubmitAt = 0;
-const explicitSubmitCommands = new Set([
-	'github.copilot.chat.acceptInput','github.copilot.chat.submit','github.copilot.chat.send','github.copilot.chat.sendMessage',
-	'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.submitWithoutDispatching','workbench.action.chat.submitWithCodebase','workbench.action.chat.sendToNewChat','workbench.action.chat.createRemoteAgentJob','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage',
-	'chat.acceptInput','inlineChat.accept','interactive.acceptInput'
-]);
-let providerRef: PromptsProvider | undefined;
-let lastNonEmptySnapshot = '';
-let lastSubmittedText = '';
-let lastFinalizeAt = 0;
-const chatDocState = new Map<string,string>();
-let lastEditorPollText = '';
-let lastBufferChangedAt = Date.now();
-const finalize = externalFinalizePrompt;
 
-// Lightweight finalize wrapper also used by heuristic watcher
-function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
+// Logging system
+const LOG_DIR = 'C:\\temp\\ai-prompt-detector-logs';
 
-// Use external finalize directly
-const finalizePrompt = externalFinalizePrompt;
-
-export async function activate(context: vscode.ExtensionContext) {
-	initLogger();
-	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
-	info('🚀 ACTIVATION: Extension starting...');
-	// Daily log file handling (clear on each activation)
+function ensureLogDir(): void {
 	try {
-		const logDir = LOG_DIR; // reference constant so it is tracked
-		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-		const today = new Date().toISOString().slice(0,10);
-		const dailyLogPath = path.join(logDir, `extension-${today}.log`);
-		fs.writeFileSync(dailyLogPath, ''); // clear file
-		const origAppend = outputChannel.appendLine.bind(outputChannel);
-		outputChannel.appendLine = (v: string) => { origAppend(v); try { fs.appendFileSync(dailyLogPath, `[${new Date().toISOString()}] ${v}\n`); } catch {} };
-		outputChannel.appendLine(`🧹 Cleared daily log file ${dailyLogPath}`);
-	} catch {}
-	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
-	outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // activation reference line
-
-	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarItem.show();
-	const updateStatusBar = () => {
-		const v = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
-		statusBarItem.text = `🤖 AI Prompts: ${runtime.aiPromptCounter} | v${v}`;
-		statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
-	};
-	updateStatusBar();
-
-	await loadExistingPrompts();
-	providerRef = new PromptsProvider();
-	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
-	runtime.providerRef = providerRef; runtime.outputChannel = outputChannel;
-
-	setTimeout(async () => {
-		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
-	}, 400);
-
-	// Setup heuristic watcher (additive)
-	setupChatResponseWatcher(context, doFinalize);
-	registerChatApiHook(context, doFinalize);
-	registerCommandListener(context);
-	startDetectionTimers(context);
-
-	// helpers imported now (previous local implementations removed)
-
-	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
-		try {
-			outputChannel.appendLine('🧪 forwardEnterToChat start');
-			const rawDirect = await getChatInputText();
-			const rawSilent = await captureChatInputSilently();
-			const buf = runtime.chatInputBuffer;
-			const lastSnap = runtime.lastNonEmptySnapshot;
-			let snapshotCandidates = [rawDirect, rawSilent, buf, lastSnap].filter((v): v is string => !!v && v.trim().length > 0);
-			let text = snapshotCandidates.sort((a,b)=>b.length-a.length)[0] || '';
-			if (text) { runtime.chatInputBuffer = text; runtime.lastNonEmptySnapshot = text; }
-			outputChannel.appendLine(`🧪 snapshot pre-send len=${text.length}`);
-			runtime.lastEnterSubmitAt = Date.now(); lastEnterSubmitAt = runtime.lastEnterSubmitAt;
-			await focusChatInput();
-			await forwardToChatAccept();
-			setTimeout(() => {
-				const finalSnap = text || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || '';
-				outputChannel.appendLine(`🧪 finalize enter-forward primary len=${finalSnap.length}`);
-				finalize('enter-forward', finalSnap);
-			}, 12);
-			if (!text) { setTimeout(()=>{ const late = runtime.lastNonEmptySnapshot || runtime.chatInputBuffer || ''; if (late.trim()) { outputChannel.appendLine(`🧪 late snapshot finalize len=${late.length}`); finalize('enter-forward-late', late); } }, 60); }
-		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
-	}));
-
-	const commandsAny = vscode.commands as any;
-	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
-		outputChannel.appendLine('🛰️ Command listener active');
-		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
-			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) { chatInputBuffer = chatInputBuffer.slice(0, -1); lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; } return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; lastBufferChangedAt = Date.now(); return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalize(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalize(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
-		}));
+		if (!fs.existsSync(LOG_DIR)) {
+			fs.mkdirSync(LOG_DIR, { recursive: true });
+		}
+	} catch (error) {
+		console.error('Failed to create log directory:', error);
 	}
-
-	// NEW: log any Copilot/Chat related document open (response appears) -> finalize if pending
-	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
-		try {
-			const name = doc.fileName.toLowerCase();
-			if (/(copilot|chat)/.test(name)) {
-				outputChannel.appendLine(`📄 OPEN doc=${path.basename(doc.fileName)} len=${doc.getText().length} lang=${doc.languageId}`);
-				if ((chatInputBuffer.trim() || lastNonEmptySnapshot) && Date.now() - lastFinalizeAt > 120) {
-					finalize('open-doc');
-				}
-			}
-		} catch {}
-	}));
-
-	// Strengthen change listener: always log when chat doc transitions to empty
-	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-		try {
-			const doc = ev.document; const name = doc.fileName.toLowerCase(); if (!(name.includes('copilot') || name.includes('chat'))) return;
-			const id = doc.uri.toString(); const prev = chatDocState.get(id) || ''; const curr = doc.getText();
-			if (curr.trim()) { chatDocState.set(id, curr); }
-			if (prev && !curr.trim()) {
-				outputChannel.appendLine(`🧹 CLEAR doc=${path.basename(doc.fileName)} prevLen=${prev.length}`);
-				if (Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalize('doc-clear2', prev); }
-			}
-		} catch {}
-	}));
-
-	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
-	if (!pollTimer) {
-		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; lastEditorPollText = current; } else { if (lastEditorPollText && !current) { // transition non-empty -> empty in editor
-				// If internal buffer still holds text we likely had a button submission
-				if (chatInputBuffer.trim() && Date.now() - lastFinalizeAt > 140) {
-					outputChannel.appendLine('🧲 Heuristic: editor cleared while buffer still has text (button send?)');
-					await finalize('editor-clear-buffer');
-				}
-			}
-			if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalize('poll-clear'); }
-			lastPollHadText = false; lastEditorPollText = current; } } catch {} }, 150);
-		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); if (forceSnapshotTimer) clearInterval(forceSnapshotTimer); } });
-		forceSnapshotTimer = setInterval(async () => { try { if (!lastNonEmptySnapshot && chatInputBuffer.trim().length > 2) { const txt = await getChatInputText(); if (txt) { lastNonEmptySnapshot = txt; outputChannel.appendLine('🧪 Forced snapshot captured'); } } } catch {} }, 800);
-	}
-
-	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); providerRef?.refresh(); } });
-	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) providerRef?.refresh(); });
-	startAutoSave();
-	const autoSaveDisposable = createAutoSaveDisposable();
-	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
-	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
-
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => { try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalize('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {} }));
 }
 
-async function loadExistingPrompts(): Promise<void> { outputChannel.appendLine('🔍 Searching for existing SpecStory files...'); const files = await vscode.workspace.findFiles('**/.specstory/history/*.md'); outputChannel.appendLine(`📊 Found ${files.length} SpecStory files`); if (files.length === 0) { recentPrompts.push('Welcome to SpecStory AutoSave + AI Copilot Prompt Detection', 'TEST: Dummy prompt for demonstration'); return; } const sorted = files.sort((a, b) => path.basename(b.fsPath).localeCompare(path.basename(a.fsPath))); sorted.forEach(f => { if (isValidSpecStoryFile(f.fsPath)) loadPromptsFromFile(f.fsPath, recentPrompts); }); outputChannel.appendLine(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`); }
+function writeLog(message: string, isDebug: boolean = false): void {
+	const timestamp = new Date().toISOString();
+	const logMessage = `[${timestamp}] ${message}`;
+	
+	if (outputChannel) {
+		outputChannel.appendLine(logMessage);
+	}
+	
+	const config = vscode.workspace.getConfiguration('ai-prompt-detector');
+	const debugEnabled = config.get<boolean>('enableDebugLogs', false);
+	
+	if (!isDebug || debugEnabled) {
+		try {
+			ensureLogDir();
+			const logFile = path.join(LOG_DIR, `extension-${new Date().toISOString().split('T')[0]}.log`);
+			fs.appendFileSync(logFile, logMessage + '\n', 'utf8');
+		} catch (error) {
+			console.error('Failed to write to log file:', error);
+		}
+	}
+}
 
-export function deactivate() { outputChannel.appendLine('🚀 DEACTIVATION: Extension shutting down'); outputChannel.appendLine('🚀 Extension deactivated'); }
+// ---------- NEW: duplicate suppression and doc ignore helpers ----------
+const DUPLICATE_TTL_MS = 5000;
+let lastProcessedText = '';
+let lastProcessedAt = 0;
+const lastDuplicateLog = new Map<string, number>();
+
+function shouldIgnoreDocument(doc: vscode.TextDocument): boolean {
+	try {
+		const fp = (doc.uri.fsPath || '').toLowerCase();
+		if (!fp) return false;
+		// Ignore our own log files and any .log document
+		if (fp.includes('c:\\temp\\ai-prompt-detector-logs') || fp.endsWith('.log')) return true;
+		const name = path.basename(fp);
+		if (name.startsWith('extension-') && name.endsWith('.log')) return true;
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+function shouldSuppressDuplicateLog(text: string): boolean {
+	const now = Date.now();
+	const prev = lastDuplicateLog.get(text);
+	if (prev && now - prev < DUPLICATE_TTL_MS) return true;
+	lastDuplicateLog.set(text, now);
+	return false;
+}
+
+// Auto-save configuration
+const AUTO_SAVE_ENABLED = true;
+const AUTO_SAVE_INTERVAL = 5000;
+const AUTO_SAVE_PATTERNS = ['**/*.md', '**/*.txt', '**/*.json'];
+let autoSaveTimer: NodeJS.Timeout | undefined;
+
+function isValidSpecStoryFile(filePath: string): boolean {
+	try {
+		const fileName = path.basename(filePath);
+		const specStoryPattern = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}Z-.+\.md$/;
+		if (!specStoryPattern.test(fileName)) {
+			return false;
+		}
+		
+		if (!fs.existsSync(filePath)) {
+			return false;
+		}
+		
+		const content = fs.readFileSync(filePath, 'utf8');
+		return content.includes('<!-- Generated by SpecStory -->') || 
+		       content.includes('_**User**_') || 
+		       content.includes('_**Assistant**_');
+	} catch (error) {
+		return false;
+	}
+}
+
+function extractPromptsFromContent(content: string): string[] {
+	const prompts: string[] = [];
+	
+	try {
+		const sections = content.split(/(?=_\*\*User\*\*_|_\*\*Assistant\*\*_)/);
+		
+		for (let i = 0; i < sections.length; i++) {
+			const section = sections[i];
+			if (section.includes('_**User**_')) {
+				const lines = section.split('\n');
+				const userPrompt: string[] = [];
+				let foundUserMarker = false;
+				
+				for (const line of lines) {
+					if (line.includes('_**User**_')) {
+						foundUserMarker = true;
+						continue;
+					}
+					
+					if (foundUserMarker) {
+						if (line.includes('---') || line.includes('_**Assistant**_')) {
+							break;
+						}
+						
+						const trimmedLine = line.trim();
+						if (trimmedLine) {
+							userPrompt.push(trimmedLine);
+						}
+					}
+				}
+				
+				if (userPrompt.length > 0) {
+					const fullPrompt = userPrompt.join(' ').trim();
+					if (fullPrompt.length > 0) {
+						prompts.push(fullPrompt);
+					}
+				}
+			}
+		}
+		
+		return prompts.reverse();
+		
+	} catch (error) {
+		writeLog(`Error extracting prompts: ${error}`, false);
+	}
+	
+	return prompts;
+}
+
+function loadPromptsFromFile(filePath: string): void {
+	try {
+		const content = fs.readFileSync(filePath, 'utf8');
+		const extractedPrompts = extractPromptsFromContent(content);
+		
+		extractedPrompts.forEach(prompt => {
+			recentPrompts.push(prompt);
+		});
+		
+		writeLog(`📁 Loaded ${extractedPrompts.length} prompts from ${path.basename(filePath)}`, false);
+	} catch (error) {
+		writeLog(`Error loading prompts from file: ${error}`, false);
+	}
+}
+
+class PromptsProvider implements vscode.WebviewViewProvider {
+	public static readonly viewType = 'ai-prompt-detector-view';
+	private _view?: vscode.WebviewView;
+
+	constructor() {
+		writeLog('🎯 PROMPTS: Provider created', true);
+	}
+
+	public resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken,
+	) {
+		writeLog('🎯 PROMPTS: resolveWebviewView called', true);
+		
+		this._view = webviewView;
+		
+		webviewView.webview.options = {
+			enableScripts: false,
+			localResourceRoots: []
+		};
+
+		this.updateWebview();
+		
+		writeLog('🎯 PROMPTS: Real prompts set', true);
+		writeLog('🎯 PROMPTS: Showing real prompts from SpecStory files', false);
+		writeLog(`🎯 PROMPTS: Number of prompts to display: ${recentPrompts.length}`, false);
+	}
+
+	public refresh(): void {
+		if (this._view) {
+			this.updateWebview();
+		}
+	}
+
+	private updateWebview(): void {
+		if (!this._view) {
+			writeLog('🎯 PROMPTS: Webview not ready yet', true);
+			return;
+		}
+		
+		const html = this.createPromptsHtml();
+		this._view.webview.html = html;
+		
+		writeLog(`🎯 PROMPTS: HTML set, displaying ${recentPrompts.length} prompts`, true);
+	}
+
+	private createPromptsHtml(): string {
+		let promptsHtml = '';
+		
+		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
+		const maxPrompts = config.get<number>('maxPrompts', 50);
+		
+		if (recentPrompts.length > 0) {
+			const displayPrompts = recentPrompts.slice(0, maxPrompts);
+			
+			promptsHtml = displayPrompts.map((prompt, index) => {
+				const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
+				
+				const safePrompt = shortPrompt
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;');
+				
+				return `
+<div class="prompt-item">
+	<div class="prompt-number">#${index + 1}</div>
+	<div class="prompt-text">${safePrompt}</div>
+</div>`;
+			}).join('');
+		} else {
+			promptsHtml = `
+<div class="no-prompts">
+	<p>🔍 No SpecStory prompts found</p>
+	<p>Create a SpecStory conversation to display prompts</p>
+</div>`;
+		}
+
+	const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpecStory Prompts</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background-color: #1e1e1e;
+			color: #cccccc;
+			margin: 0;
+			padding: 8px;
+			font-size: 12px;
+			line-height: 1.4;
+		}
+		.prompt-item {
+			background-color: #252526;
+			border: 1px solid #3c3c3c;
+			border-left: 4px solid #007acc;
+			margin: 6px 0;
+			padding: 8px;
+			border-radius: 3px;
+			transition: background-color 0.2s;
+		}
+		.prompt-item:hover {
+			background-color: #2d2d30;
+		}
+		.prompt-number {
+			font-weight: bold;
+			color: #569cd6;
+			margin-bottom: 4px;
+			font-size: 11px;
+		}
+		.prompt-text {
+			color: #d4d4d4;
+			font-size: 11px;
+			line-height: 1.3;
+			word-wrap: break-word;
+		}
+		.no-prompts {
+			text-align: center;
+			padding: 20px;
+			color: #888;
+		}
+		.header-bar {
+			margin-bottom: 15px;
+			padding: 8px;
+			background-color: #0e639c;
+			border-radius: 3px;
+			text-align: center;
+			color: white;
+			font-size: 10px;
+		}
+	</style>
+</head>
+<body>
+
+<div class="header-bar">
+	📊 Total: ${recentPrompts.length} prompts (max ${maxPrompts}) | ⚙️ Change max count in settings
+</div>
+
+${promptsHtml}
+
+</body>
+</html>`;
+	}
+}
+
+export async function activate(context: vscode.ExtensionContext) {
+	writeLog('🚀 ACTIVATION: Extension starting...', true);
+	
+	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
+	outputChannel.show();
+	writeLog('🚀 PROMPTS: Extension starting...', false);
+	
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.show();
+	
+	const updateStatusBar = () => {
+		const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
+		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}`;
+		statusBarItem.tooltip = 'AI Prompt Detector + AI Copilot Prompt Detection';
+	};
+	updateStatusBar();
+	
+	await loadExistingPrompts();
+	writeLog(`🚀 PROMPTS: After loading we have ${recentPrompts.length} prompts`, false);
+	
+	const promptsProvider = new PromptsProvider();
+	
+	writeLog(`🚀 PROMPTS: Registering provider with viewType: ${PromptsProvider.viewType}`, true);
+	const registration = vscode.window.registerWebviewViewProvider(
+		PromptsProvider.viewType,
+		promptsProvider
+	);
+	
+	writeLog('🚀 PROMPTS: Provider registered successfully', false);
+	
+	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
+	
+	watcher.onDidCreate(uri => {
+		if (isValidSpecStoryFile(uri.fsPath)) {
+			writeLog(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`, false);
+			loadPromptsFromFile(uri.fsPath);
+			promptsProvider.refresh();
+		}
+	});
+
+	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('ai-prompt-detector.maxPrompts')) {
+			const config = vscode.workspace.getConfiguration('ai-prompt-detector');
+			const maxPrompts = config.get<number>('maxPrompts', 50);
+			writeLog(`⚙️ Settings changed: maxPrompts = ${maxPrompts}`, false);
+			promptsProvider.refresh();
+		}
+	});
+
+	// Improved Copilot prompt detection via TextDocument changes
+	const textDocumentWatcher = vscode.workspace.onDidChangeTextDocument(e => {
+		try {
+			// Ignore our own log files or any .log buffers
+			if (shouldIgnoreDocument(e.document)) {
+				return;
+			}
+			const changes = e.contentChanges;
+			for (const change of changes) {
+				const text = change.text;
+				// Skip our own log lines to avoid feedback loops
+				if (text.includes('🔍 POTENTIAL AI PROMPT') || text.includes('🔄 DUPLICATE PROMPT') || text.includes('📝 PROMPT:') || text.includes('🤖 NEW AI PROMPT')) {
+					continue;
+				}
+				// Better prompt detection patterns
+				if (text.length > 10 && (
+					text.toLowerCase().includes('explain') ||
+					text.toLowerCase().includes('help me') ||
+					text.toLowerCase().includes('generate') ||
+					text.toLowerCase().includes('create') ||
+					text.toLowerCase().includes('fix') ||
+					text.toLowerCase().includes('debug') ||
+					text.toLowerCase().includes('how to') ||
+					text.toLowerCase().includes('what is') ||
+					text.includes('?') ||
+					(text.length > 30 && text.trim().split(' ').length > 5)
+				)) {
+					writeLog(`🔍 POTENTIAL AI PROMPT: "${text.substring(0, 50)}..."`, true);
+					setTimeout(() => {
+						const editor = vscode.window.activeTextEditor;
+						if (editor && editor.document === e.document) {
+							if (shouldIgnoreDocument(editor.document)) return;
+							const currentLine = editor.document.lineAt(editor.selection.active.line);
+							const lineText = currentLine.text.trim();
+							if (lineText.length > 15) {
+								// Debounce identical line processed too recently
+								if (lineText === lastProcessedText && Date.now() - lastProcessedAt < 2000) {
+									return;
+								}
+								lastProcessedText = lineText;
+								lastProcessedAt = Date.now();
+								processPotentialPrompt(lineText);
+							}
+						}
+					}, 600);
+				}
+			}
+		} catch (error) {
+			writeLog(`❌ Error in text watcher: ${error}`, false);
+		}
+	});
+
+	function processPotentialPrompt(promptText: string) {
+		try {
+			const cleanPrompt = promptText.trim();
+			if (cleanPrompt.length < 15 || cleanPrompt.length > 1000) {
+				return;
+			}
+			if (recentPrompts.includes(cleanPrompt)) {
+				if (!shouldSuppressDuplicateLog(cleanPrompt)) {
+					writeLog(`🔄 DUPLICATE PROMPT: "${cleanPrompt.substring(0, 30)}..."`, true);
+				}
+				return;
+			}
+			aiPromptCounter++;
+			writeLog(`🤖 NEW AI PROMPT DETECTED! Counter: ${aiPromptCounter}`, false);
+			writeLog(`📝 PROMPT: "${cleanPrompt}"`, false);
+			const config = vscode.workspace.getConfiguration('ai-prompt-detector');
+			const customMessage = config.get<string>('customMessage', '');
+			const notificationMessage = customMessage 
+				? `AI Prompt detected\n${customMessage}`
+				: 'AI Prompt detected\nCheck: Quality & accuracy of response';
+			vscode.window.showInformationMessage(notificationMessage);
+			writeLog(`📢 NOTIFICATION SHOWN: ${notificationMessage.replace('\n', ' | ')}`, false);
+			recentPrompts.unshift(cleanPrompt);
+			writeLog(`➕ PROMPT ADDED TO ACTIVITY BAR: "${cleanPrompt.substring(0, 50)}..."`, false);
+			if (recentPrompts.length > 1000) {
+				recentPrompts = recentPrompts.slice(0, 1000);
+				writeLog(`🔄 TRIMMED PROMPTS ARRAY TO 1000 ITEMS`, true);
+			}
+			updateStatusBar();
+			promptsProvider.refresh();
+			writeLog(`🔄 UI UPDATED`, true);
+		} catch (error) {
+			writeLog(`❌ Error processing prompt: ${error}`, false);
+		}
+	}
+
+	// Auto-save functionality
+	if (AUTO_SAVE_ENABLED) {
+		writeLog(`💾 AUTO-SAVE: Enabled with interval ${AUTO_SAVE_INTERVAL}ms`, false);
+		writeLog(`💾 AUTO-SAVE: Patterns: ${AUTO_SAVE_PATTERNS.join(', ')}`, false);
+		
+		const startAutoSave = () => {
+			if (autoSaveTimer) {
+				clearInterval(autoSaveTimer);
+			}
+			
+			autoSaveTimer = setInterval(async () => {
+				try {
+					const dirtyEditors = vscode.window.visibleTextEditors.filter(editor => 
+						editor.document.isDirty && 
+						AUTO_SAVE_PATTERNS.some(pattern => 
+							editor.document.fileName.includes('.md') || 
+							editor.document.fileName.includes('.txt') || 
+							editor.document.fileName.includes('.json')
+						)
+					);
+					
+					if (dirtyEditors.length > 0) {
+						writeLog(`💾 AUTO-SAVE: Saving ${dirtyEditors.length} dirty files`, true);
+						
+						for (const editor of dirtyEditors) {
+							await editor.document.save();
+							writeLog(`💾 AUTO-SAVE: Saved ${path.basename(editor.document.fileName)}`, true);
+						}
+					}
+				} catch (error) {
+					writeLog(`❌ AUTO-SAVE: Error saving files: ${error}`, false);
+				}
+			}, AUTO_SAVE_INTERVAL);
+		};
+		
+		startAutoSave();
+	}
+	
+	context.subscriptions.push(outputChannel, registration, watcher, configWatcher, textDocumentWatcher, statusBarItem);
+	
+	context.subscriptions.push({
+		dispose: () => {
+			if (autoSaveTimer) {
+				clearInterval(autoSaveTimer);
+				autoSaveTimer = undefined;
+				writeLog('💾 AUTO-SAVE: Timer cleared', false);
+			}
+		}
+	});
+	
+	writeLog(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`, false);
+	writeLog('🚀 PROMPTS: Open Activity Bar panel SpecStory AI!', false);
+}
+
+async function loadExistingPrompts(): Promise<void> {
+	try {
+		writeLog('🔍 Searching for existing SpecStory files...', false);
+		
+		const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
+		writeLog(`📊 Found ${files.length} SpecStory files`, false);
+		
+		if (files.length > 0) {
+			const sortedFiles = files.sort((a, b) => {
+				const nameA = path.basename(a.fsPath);
+				const nameB = path.basename(b.fsPath);
+				return nameB.localeCompare(nameA);
+			});
+			
+			sortedFiles.forEach(file => {
+				if (isValidSpecStoryFile(file.fsPath)) {
+					loadPromptsFromFile(file.fsPath);
+				}
+			});
+			
+			writeLog(`✅ Total loaded ${recentPrompts.length} prompts from ${sortedFiles.length} files`, false);
+		} else {
+			writeLog('ℹ️ No SpecStory files found', false);
+			recentPrompts.push('Welcome to AI Prompt Detector + AI Copilot Prompt Detection');
+			recentPrompts.push('TEST: Dummy prompt for demonstration');
+			writeLog('🎯 Added test prompts for demonstration', false);
+		}
+	} catch (error) {
+		writeLog(`❌ Error loading prompts: ${error}`, false);
+	}
+}
+
+export function deactivate() {
+	writeLog('🚀 DEACTIVATION: Extension shutting down', false);
+	
+	if (autoSaveTimer) {
+		clearInterval(autoSaveTimer);
+		autoSaveTimer = undefined;
+	}
+	
+	writeLog('💾 AUTO-SAVE: Extension deactivated, timer cleared', false);
+	writeLog('🚀 Extension deactivated', false);
+}

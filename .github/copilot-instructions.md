@@ -1,4 +1,4 @@
-# AI Assistant Instructions - SpecStory AutoSave Extension
+# AI Assistant Instructions - AI Prompt Detector Extension
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
@@ -257,12 +257,12 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywhere, no shorter or other versions
+For the app name, use AI Prompt Detector + AI Copilot Prompt Detection everywhere, no shorter or other versions
 
 Create files as small as possible, no more than 200 lines each.
 
 distinguish between those that are always displayed and debug logs. Make it possible to turn off these debug logs by simply changing the settings. Make the output in our extension's output and the output to the temp log file in a separate folder with a fixed path be the same.
 
-I added the folder C:\temp\specstory-autosave-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
+I added the folder C:\temp\ai-prompt-detector-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
 
 enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.

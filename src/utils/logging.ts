@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { state } from '../state';
 
-const LOG_FILE_PATH = 'C:\\temp\\specstory-autosave-logs\\extension.log';
+const LOG_FILE_PATH = 'C:\\temp\\ai-prompt-detector-logs\\extension.log';
 
 // Ensure log directory exists
 function ensureLogDirectory(): void {
@@ -18,7 +18,7 @@ function ensureLogDirectory(): void {
 }
 
 export function writeLog(message: string, level: 'INFO' | 'DEBUG' | 'ERROR' = 'INFO'): void {
-	const config = vscode.workspace.getConfiguration('specstory-autosave');
+	const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 	const debugEnabled = config.get<boolean>('enableDebugLogs', true);
 
 	// Skip debug messages if debugging is disabled

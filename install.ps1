@@ -1,5 +1,5 @@
-# SpecStory AutoSave - Build, Release & Install Script
-Write-Host "SpecStory AutoSave - Build, Release & Install Script" -ForegroundColor Green
+# AI Prompt Detector - Build, Release & Install Script
+Write-Host "AI Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Green
 
 # Get current version from package.json and increment it
@@ -70,7 +70,7 @@ Write-Host "   ✅ Git commit and push completed" -ForegroundColor Green
 
 # Create VSIX package with current version name
 Write-Host "4. Creating VSIX package..." -ForegroundColor Yellow
-$vsixName = "specstory-autosave-$newVersion.vsix"
+$vsixName = "ai-prompt-detector-$newVersion.vsix"
 Write-Host "   Running: vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies" -ForegroundColor Gray
 $env:VSCE_INTERACTIVE = "0"
 $output = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
@@ -84,7 +84,7 @@ Write-Host "   ✅ Created: $vsixName" -ForegroundColor Green
 
 # Clean old extensions (completely silent)
 Write-Host "5. Cleaning old extensions..." -ForegroundColor Yellow
-Start-Process -FilePath "code-insiders" -ArgumentList "--uninstall-extension", "sunamocz.specstory-autosave" -WindowStyle Hidden -Wait 2>$null
+Start-Process -FilePath "code-insiders" -ArgumentList "--uninstall-extension", "sunamocz.ai-prompt-detector" -WindowStyle Hidden -Wait 2>$null
 
 # Wait a moment
 Start-Sleep -Seconds 2

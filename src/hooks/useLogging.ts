@@ -4,7 +4,7 @@ import { writeLog, verifyLogFile } from '../utils/logging';
 
 export const useLogging = () => {
 	const initializeLogging = (): vscode.OutputChannel => {
-		const outputChannel = vscode.window.createOutputChannel('SpecStory AutoSave + AI Copilot Prompt Detection');
+		const outputChannel = vscode.window.createOutputChannel('AI Prompt Detector + AI Copilot Prompt Detection');
 		state.outputChannel = outputChannel;
 		
 		// Write initial log entry

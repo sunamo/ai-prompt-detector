@@ -3,7 +3,7 @@ import { writeLog } from './logger';
 import { state } from './state';
 
 export class PromptsProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = 'specstory-autosave-view';
+	public static readonly viewType = 'ai-prompt-detector-view';
 	private _view?: vscode.WebviewView;
 
 	constructor() {
@@ -38,7 +38,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 	private createPromptsHtml(): string {
 		let promptsHtml = '';
 		const recentPrompts = state.recentPrompts;
-		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 		const maxPrompts = config.get<number>('maxPrompts', 50);
 		if (recentPrompts.length > 0) {
 			const displayPrompts = recentPrompts.slice(0, maxPrompts);
@@ -62,7 +62,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 	<p>Create a SpecStory conversation to display prompts</p>
 </div>`;
 		}
-		const extensionVersion = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
+		const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
 		return `<!DOCTYPE html>
 <html lang="en">
 <head>

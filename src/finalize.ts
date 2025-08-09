@@ -13,7 +13,7 @@ export async function finalizePrompt(source: string, directText?: string) {
 		runtime.chatInputBuffer = '';
 		runtime.aiPromptCounter++;
 		runtime.lastFinalizeAt = Date.now();
-		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+		const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
 		const custom = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
 		const short = txt.length > 160 ? txt.slice(0,160)+'…' : txt;
 		vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${short}\n${custom}`);

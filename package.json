@@ -1,12 +1,12 @@
 {
-  "name": "specstory-autosave",
-  "displayName": "SpecStory AutoSave + AI Copilot Prompt Detection",
+  "name": "ai-prompt-detector",
+  "displayName": "AI Prompt Detector + AI Copilot Prompt Detection",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.162",
+  "version": "1.1.163",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sunamo/specstory-autosave2.git"
+    "url": "https://github.com/sunamo/ai-prompt-detector2.git"
   },
   "icon": "icon.png",
 	"engines": { "vscode": "^1.74.0" },
@@ -15,19 +15,19 @@
 	"main": "./out/extension.js",
 	"contributes": {
 		"configuration": {
-			"title": "SpecStory AutoSave",
+			"title": "AI Prompt Detector",
 			"properties": {
-				"specstory-autosave.maxPrompts": { "type": "number", "default": 50, "description": "Maximum number of prompts to display" },
-				"specstory-autosave.enableDebugLogs": { "type": "boolean", "default": false, "description": "Enable debug logging" },
-				"specstory-autosave.customMessage": { "type": "string", "default": "", "description": "Custom notification message" }
+				"ai-prompt-detector.maxPrompts": { "type": "number", "default": 50, "description": "Maximum number of prompts to display" },
+				"ai-prompt-detector.enableDebugLogs": { "type": "boolean", "default": false, "description": "Enable debug logging" },
+				"ai-prompt-detector.customMessage": { "type": "string", "default": "", "description": "Custom notification message" }
 			}
 		},
-		"views": { "specstory-activity": [ { "id": "specstory-autosave-view", "name": "", "when": "true", "type": "webview", "icon": "icon.png" } ] },
-		"viewsContainers": { "activitybar": [ { "id": "specstory-activity", "title": "SpecStory AutoSave + AI Copilot Prompt Detection", "icon": "icon.png" } ] },
+		"views": { "specstory-activity": [ { "id": "ai-prompt-detector-view", "name": "", "when": "true", "type": "webview", "icon": "icon.png" } ] },
+		"viewsContainers": { "activitybar": [ { "id": "specstory-activity", "title": "AI Prompt Detector + AI Copilot Prompt Detection", "icon": "icon.png" } ] },
 		"keybindings": [
 			{ "command": "-workbench.action.chat.acceptInput", "key": "enter", "when": "inChatInput" },
 			{ "command": "-github.copilot.chat.acceptInput", "key": "enter", "when": "inChatInput" },
-			{ "command": "specstory-autosave.forwardEnterToChat", "key": "enter", "mac": "enter", "when": "inChatInput" }
+			{ "command": "ai-prompt-detector.forwardEnterToChat", "key": "enter", "mac": "enter", "when": "inChatInput" }
 		]
 	},
 	"scripts": { "compile": "tsc -p ./", "build": "tsc -p ./", "watch": "tsc -watch -p ./" },

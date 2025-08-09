@@ -57,7 +57,7 @@ async function forwardToChatAccept(): Promise<boolean> {
 }
 
 export function registerEnterHandler(context: vscode.ExtensionContext, provider: PromptsProvider) {
-	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
+	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 		try {
 			const text = (await getChatInputText())?.trim();
 			if (text) {
@@ -158,7 +158,7 @@ export function processCopilotPrompt(
 		updateStatusBar();
 		
 		// IMMEDIATE notification
-		const config = vscode.workspace.getConfiguration('specstory-autosave');
+		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
 		const customMessage = config.get<string>('customMessage', '');
 		
 		const notificationMessage = customMessage 
