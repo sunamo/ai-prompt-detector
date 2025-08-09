@@ -22,22 +22,6 @@
 	"exclude": [
 		"node_modules",
 		".vscode-test",
-		"out",
-		"src/chatApiHook.ts",
-		"src/chatResponseWatcher.ts",
-		"src/commandListener.ts",
-		"src/detectionTimers.ts",
-		"src/extension_new.ts",
-		"src/finalize.ts",
-		"src/hooks",
-		"src/promptDetector.ts",
-		"src/runtime.ts",
-		"src/specstoryParser.ts",
-		"src/utils/logging.ts",
-		"src/utils/promptProcessing.ts",
-		"src/utils/statusBar.ts",
-		"src/utils/fileValidation.ts",
-		"src/utils/htmlGenerator.ts",
-		"src/utils/timeUtils.ts"
+		"out"
 	]
 }

@@ -27,3 +27,4 @@ v1.1.198 | Docs: add content preservation policy forbidding deletions in copilot
 v1.1.199 | Fix: ensure all Enter variants unbound + added ctrl+alt+enter unbinding; docs: add preservation policy reiteration
 v1.1.200 | Fix: prevent Send dropdown auto-close (remove exec monkey patch, delayed notification) and add dropdown stability rules
 v1.1.201 | Fix: remove polling that closed Send dropdown; keep prompt capture via events only
+v1.1.202 | Docs: add core functional requirements + disallowed approaches; beginning minimal cleanup prep
