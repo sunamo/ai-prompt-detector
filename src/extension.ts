@@ -3,10 +3,7 @@ import * as path from 'path';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
-import { initLogger, info } from './logger';
-import { registerChatApiHook } from './chatApiHook';
-import { runtime } from './runtime';
-import { finalizePrompt as externalFinalizePrompt } from './finalize';
+import { initLogger, info, debug } from './logger';
 import { focusChatInput, forwardToChatAccept, getChatInputText } from './chatHelpers';
 
 let outputChannel: vscode.OutputChannel;
@@ -14,6 +11,7 @@ let recentPrompts: string[] = state.recentPrompts;
 let aiPromptCounter = 0;
 let statusBarItem: vscode.StatusBarItem;
 let providerRef: PromptsProvider | undefined;
+let lastSubmittedText = '';
 
 export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
@@ -23,7 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	statusBarItem.show();
 	const updateStatusBar = () => {
-		const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
+		const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.x';
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
 		statusBarItem.tooltip = 'AI Copilot Prompt Detector';
 	};
@@ -32,15 +30,39 @@ export async function activate(context: vscode.ExtensionContext) {
 	await loadExistingPrompts();
 	providerRef = new PromptsProvider();
 	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
-	runtime.providerRef = providerRef; runtime.outputChannel = outputChannel;
 
-	registerChatApiHook(context, externalFinalizePrompt);
+	// Integrovaný Chat API hook (pro kliknutí na tlačítko myší apod.)
+	try {
+		const chatNs: any = (vscode as any).chat;
+		if (chatNs?.onDidSubmitRequest) {
+			debug('🧩 Chat API hook aktivní');
+			context.subscriptions.push(chatNs.onDidSubmitRequest((e: any) => {
+				try {
+					const prompt = e?.request?.message || e?.request?.prompt || e?.prompt || '';
+					const text = String(prompt).trim();
+					if (!text) return;
+					if (text === lastSubmittedText) { debug('🧩 Chat API duplicitní zachyceni preskočeno'); return; }
+					lastSubmittedText = text;
+					recentPrompts.unshift(text);
+					if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+					aiPromptCounter++;
+					providerRef?.refresh();
+					updateStatusBar();
+					const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+					const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+					vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+				} catch (err) { debug('❌ Chat API event error: '+err); }
+			}));
+		} else {
+			debug('🧩 Chat API není dostupné');
+		}
+	} catch (e) { debug('❌ Chat API hook init error: '+e); }
 
 	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => {
 		try {
 			let text = await getChatInputText();
-			// Nevracej se pri prazdnem textu - Enter musi projit dal
 			if (text) {
+				lastSubmittedText = text; // označ pro vynechání duplicitního Chat API eventu
 				recentPrompts.unshift(text);
 				if (recentPrompts.length > 1000) recentPrompts.splice(1000);
 				providerRef?.refresh();
@@ -60,12 +82,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				]) { try { await vscode.commands.executeCommand(id); ok = true; break; } catch {} }
 			}
 			if (ok) {
-				// Inkrement vzdy kdyz jsme odeslali (i kdyz se nepodarilo ziskat text)
-				aiPromptCounter++;
+				aiPromptCounter++; // vždy inkrementuj po úspěšném odeslání
 				providerRef?.refresh();
 				const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
 				const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-				// Notifikace vzdy po uspesnem odeslani
 				setTimeout(() => { vscode.window.showInformationMessage(`AI Prompt sent${text ? '\n'+msg : ''}`); }, 10);
 				updateStatusBar();
 			}

@@ -8,3 +8,4 @@ v1.1.177 | Add extra send command IDs for Ctrl+Alt+Enter path
 v1.1.178 | add ctrl+alt+enter keybinding
 v1.1.179 | add ctrl+shift+enter keybinding with notification forwarding
 v1.1.180 | Increment counter also for empty prompt send (all keybindings) and refactor status bar update
+v1.1.181 | Add ctrl+enter keybinding (unbinding defaults) for unified forwarding & counter/notification
