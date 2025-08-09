@@ -21,3 +21,4 @@ v1.1.191 | Fix: reliable capture for Enter & mouse SEND (buffer pre-capture + ex
 v1.1.192 | Acknowledge: assistant will always supply commit description and trigger version bump automatically
 v1.1.193 | Fix: heuristic mouse send detection, remove focus poll closing dropdown
 v1.1.195 | Fix broken extension.ts block; finalize dynamic instrumentation & export hooking
+v1.1.196 | Docs: add formatting policy requiring Prettier-style human readable output in instructions

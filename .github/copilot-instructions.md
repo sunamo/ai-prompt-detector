@@ -48,7 +48,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - Always check that you have correct ending `.instructions.md`
 
 ### 🚀 RELEASE at the end of every prompt
-- **At the end of EVERY prompt run `\.\install.ps1`**
+- **At the end of EVERY prompt run `.\install.ps1`**
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
@@ -112,7 +112,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **API**: "AI created API! Check: • Error handling • Security • API documentation"
 
 ### 📝 Git commit workflow
-- Order: 1) Code change → 2) Increment PATCH → 3) `\.\install.ps1` (automatically: commit → push → package)
+- Order: 1) Code change → 2) Increment PATCH → 3) `.\install.ps1` (automatically: commit → push → package)
 - Format: `git commit -m "v1.1.3"` (always just patch++)
 - Everything is done automatically through install.ps1
 
@@ -126,23 +126,23 @@ As a copilot, you never change versions. The version changes fundamentally only 
 
 ### 🔨 BUILD at the end of every prompt
 - **NEVER run `pnpm run compile` separately!**
-- **WORKFLOW**: Increment version → run `\.\install.ps1`
+- **WORKFLOW**: Increment version → run `.\install.ps1`
 - If build fails in install.ps1:
   1. Decrease version back
   2. Fix errors
   3. Increment version again
-  4. Run `\.\install.ps1` again
+  4. Run `.\install.ps1` again
 - install.ps1 contains build, so separate compilation is unnecessary
 - **COMMIT ONLY AFTER SUCCESSFUL BUILD** - so all versions are buildable
 
 ### 🚀 RELEASE at the end of every prompt
-- **At the end of EVERY prompt run `\.\install.ps1`**
+- **At the end of EVERY prompt run `.\install.ps1`**
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
 
 ### 📝 Git commit workflow
-- Order: 1) Code change → 2) Build test → 3) `\.\install.ps1` (automatically: commit → push → package)
+- Order: 1) Code change → 2) Build test → 3) `.\install.ps1` (automatically: commit → push → package)
 - Format: `git commit -m "v1.1.1"`
 - Everything is done automatically through install.ps1
 
@@ -218,10 +218,10 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 
 ## Version Release Process
 
-**Automated process through `\.\install.ps1`:**
+**Automated process through `.\install.ps1`:**
 1. Update version in `package.json`
 2. Update `CHANGELOG.md`
-3. Run `\.\install.ps1` - does everything automatically:
+3. Run `.\install.ps1` - does everything automatically:
    - Git commit with version
    - Git push
    - pnpm run compile
@@ -240,7 +240,7 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 **AUTOMATICALLY run these commands:**
 - `pnpm install`
 - `pnpm run compile`
-- `\.\install.ps1`
+- `.\install.ps1`
 - `git add .`
 - `git commit -m "..."`
 - `git push`
@@ -249,6 +249,7 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 - `code --install-extension`
 
 User wants everything to run automatically without waiting for confirmation!
+
 follow the sources for a better solution to my requirements. I have attached the folders C:\_\vscode-copilot-chat\ and C:\_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
 
 Use only the copilot-instructions.md file to write instructions. Not ai-instructions.md as you keep trying to create. Write all instructions in English.
@@ -276,3 +277,12 @@ distinguish between those that are always displayed and debug logs. Make it poss
 I added the folder C:\temp\ai-prompt-detector-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
 
 enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.
+
+## 🔑 Mandatory Keybindings Requirement
+- The extension MUST fully support sending prompts (including detection, logging, notification, counter increment) with ALL of these keys:
+  - Enter
+  - Ctrl+Enter
+  - Ctrl+Shift+Enter
+  - Ctrl+Alt+Enter
+- Loss of functionality for ANY of these is considered a regression and must be fixed immediately before any other changes.
+- Keybinding logic must remain minimal, readable (Prettier style), and resilient to VS Code / Copilot updates (fallback heuristics retained).
