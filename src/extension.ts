@@ -269,43 +269,39 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	// 3) Enter / klávesové zkratky
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			'ai-prompt-detector.forwardEnterToChat',
-			async () => {
-				try {
-					let text = await getChatInputText();
-					if (text) recordPrompt(text, 'enter');
-					else if (typingBuffer.trim())
-						recordPrompt(typingBuffer, 'enter-buffer');
-					else if (lastSnapshot)
-						recordPrompt(lastSnapshot, 'enter-snapshot');
-					await focusChatInput();
-					let ok = await forwardToChatAccept();
-					if (!ok) {
-						for (const id of [
-							'github.copilot.chat.acceptInput',
-							'github.copilot.chat.send',
-							'github.copilot.chat.submit',
-							'github.copilot.interactive.submit',
-							'workbench.action.chat.acceptInput',
-							'workbench.action.chat.submit',
-							'workbench.action.chatEditor.acceptInput'
-						]) {
-							try {
-								await vscode.commands.executeCommand(id);
-								ok = true;
-								break;
-							} catch {}
-						}
-					}
-					if (ok && !text && !typingBuffer.trim() && !lastSnapshot)
-						recordPrompt('(empty prompt)', 'enter-empty');
-				} catch (e) {
-					debug('forward err ' + e);
+	const handleForwardEnter = async (variant: string) => {
+		try {
+			debug('Enter variant invoked: ' + variant);
+			let text = await getChatInputText();
+			if (text) recordPrompt(text, 'enter-' + variant);
+			else if (typingBuffer.trim()) recordPrompt(typingBuffer, 'enter-buffer-' + variant);
+			else if (lastSnapshot) recordPrompt(lastSnapshot, 'enter-snapshot-' + variant);
+			await focusChatInput();
+			let ok = await forwardToChatAccept();
+			if (!ok) {
+				for (const id of [
+					'github.copilot.chat.acceptInput',
+					'github.copilot.chat.send',
+					'github.copilot.chat.submit',
+					'github.copilot.interactive.submit',
+					'workbench.action.chat.acceptInput',
+					'workbench.action.chat.submit',
+					'workbench.action.chatEditor.acceptInput'
+				]) {
+					try { await vscode.commands.executeCommand(id); ok = true; break; } catch {}
 				}
 			}
-		)
+			if (ok && !text && !typingBuffer.trim() && !lastSnapshot) recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+		} catch (e) {
+			debug('forward err ' + e);
+		}
+	};
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', () => handleForwardEnter('ctrl')), // existing working variant
+		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterPlain', () => handleForwardEnter('plain')),
+		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterCtrlShift', () => handleForwardEnter('ctrl-shift')),
+		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterCtrlAlt', () => handleForwardEnter('ctrl-alt'))
 	);
 
 	// 5) SpecStory watcher + config
