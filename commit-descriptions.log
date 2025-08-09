@@ -31,3 +31,4 @@ v1.1.202 | Docs: add core functional requirements + disallowed approaches; begin
 v1.1.206 | Odstranění nepoužívaných legacy souborů
 v1.1.214 | Remove residual imports from usePrompts.ts (comment only)
 v1.1.215 | Unify all Enter variant unbind when-clauses + forbid legacy stub files in instructions
+v1.1.216 | Fix duplicate updateStatusBar declaration; add snapshot timer for Enter variants
