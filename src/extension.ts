@@ -152,6 +152,32 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 	}
 
+	// Start lightweight poller to detect button submit (buffer cleared without Enter handler firing)
+	let lastPolledBuffer = '';
+	let pollTimer: NodeJS.Timeout | undefined;
+	if (!pollTimer) {
+		pollTimer = setInterval(async () => {
+			try {
+				// If buffer cleared and we had previous text, treat as submit via button
+				if (!chatInputBuffer.trim() && lastPolledBuffer.trim().length > 0) {
+					const candidate = lastPolledBuffer.trim();
+					// Avoid duplicate if already most recent
+					if (recentPrompts[0] !== candidate) {
+						aiPromptCounter++;
+						recentPrompts.unshift(candidate);
+						if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+						provider.refresh();
+						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+					}
+				}
+				lastPolledBuffer = chatInputBuffer; // update snapshot
+			} catch {}
+		}, 400);
+		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); } });
+	}
+
 	// Watch SpecStory exports
 	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
 	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); provider.refresh(); } });
