@@ -11,16 +11,28 @@ export interface SessionData {
 
 let session: SessionData = { promptCount: 0, prompts: [] };
 
+/**
+ * CZ: Resetuje session data (vynuluje čítač a seznam promptů).
+ */
 export function resetSession() {
     session = { promptCount: 0, prompts: [] };
 }
 
+/**
+ * CZ: Inkrementuje počet promptů v aktuální session.
+ */
 export function incPrompt() {
     session.promptCount++;
 }
 
+/**
+ * CZ: Vrací objekt s daty aktuální session.
+ */
 export function getSession(): SessionData { return session; }
 
+/**
+ * CZ: Načte historické prompt soubory (pokud existují) a přidá je do session.prompts.
+ */
 export function loadHistory(workspaceRoot: string) {
     const dir = path.join(workspaceRoot, HISTORY_GLOB);
     if (!fs.existsSync(dir)) {
