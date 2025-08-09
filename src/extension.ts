@@ -3,9 +3,12 @@ import { log, logError, validateRecentLogs } from './logging';
 import { loadHistory, incPrompt, getSession } from './datastore';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 
 let instructionsPath: string | undefined; // new
-function ensureInstructions(root: string) { // new
+let workspaceRoot: string | undefined; // added
+
+function ensureInstructions(root: string) {
     try {
         const dir = path.join(root, '.github');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -16,7 +19,7 @@ function ensureInstructions(root: string) { // new
         }
     } catch (e) { logError('ensureInstructions failed', e); }
 }
-function appendPrompt(file: string) { // new
+function appendPrompt(file: string) {
     try {
         if (!instructionsPath) return;
         if (!fs.existsSync(file)) return;
@@ -28,76 +31,133 @@ function appendPrompt(file: string) { // new
     } catch (e) { logError('appendPrompt failed', e); }
 }
 
+// Added: run install.ps1 after each prompt (guard + debounce)
+let installing = false;
+let lastInstall = 0;
+const INSTALL_DEBOUNCE_MS = 2000; // prevent storms if multiple events fire rapidly
+function runInstall(root: string) {
+    try {
+        const script = path.join(root, 'install.ps1');
+        if (!fs.existsSync(script)) {
+            log('debug', 'install.ps1 not found, skipping');
+            return;
+        }
+        const now = Date.now();
+        if (installing) {
+            log('debug', 'install already running, skip');
+            return;
+        }
+        if (now - lastInstall < INSTALL_DEBOUNCE_MS) {
+            log('debug', 'install debounce skip');
+            return;
+        }
+        installing = true;
+        lastInstall = now;
+        log('normal', 'running install.ps1 after prompt');
+        const ps = spawn('powershell', ['-ExecutionPolicy','Bypass','-File', script], { cwd: root, stdio: 'inherit' });
+        ps.on('exit', code => {
+            installing = false;
+            if (code === 0) {
+                log('normal', 'install.ps1 completed', { code });
+            } else {
+                logError('install.ps1 failed', { code });
+                vscode.window.showWarningMessage(`install.ps1 failed (code ${code})`);
+            }
+        });
+        ps.on('error', err => {
+            installing = false;
+            logError('install.ps1 spawn failed', err);
+        });
+    } catch (e) {
+        installing = false;
+        logError('runInstall failed', e);
+    }
+}
+
+// Central prompt handling with dedup
+const PROMPT_DEDUP_MS = 600;
+let lastPromptToken: string | undefined;
+function handlePrompt(file: string, source: string) {
+    try {
+        const bucket = Math.floor(Date.now() / PROMPT_DEDUP_MS);
+        const token = file + ':' + bucket;
+        if (lastPromptToken === token) {
+            log('debug', 'prompt dedup', { file, source });
+            return;
+        }
+        lastPromptToken = token;
+        incPrompt();
+        appendPrompt(file);
+        const s = getSession();
+        updateStatusBar();
+        vscode.window.showInformationMessage(`Prompt odeslán (#${s.promptCount})`);
+        if (workspaceRoot) runInstall(workspaceRoot);
+        log('debug', 'prompt handled', { file, source, count: s.promptCount });
+    } catch (e) {
+        logError('handlePrompt failed', e);
+    }
+}
+
 // Status bar handling
 let statusBar: vscode.StatusBarItem | undefined;
 let extensionVersion = '0.0.0';
 function initStatusBar(context: vscode.ExtensionContext) {
     try {
         if (!statusBar) {
-            statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+            // Put LEFT with very high priority so it appears first and immediately
+            statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10000);
             statusBar.command = 'specstoryAutosave.showStatus';
+            statusBar.tooltip = 'AI Prompt Detector – click for session stats';
             context.subscriptions.push(statusBar);
+            log('debug', 'status bar item created (left)');
         }
-        const selfExt = vscode.extensions.getExtension('sunamocz.specstory-autosave');
-        if (selfExt && typeof selfExt.packageJSON?.version === 'string') {
-            extensionVersion = selfExt.packageJSON.version;
-        }
-        updateStatusBar();
+        // Resolve version
+        try {
+            const pkgVersion = context.extension.packageJSON?.version;
+            if (typeof pkgVersion === 'string') extensionVersion = pkgVersion;
+        } catch (e) { logError('version resolve failed', e); }
+        // Initial text instantly (even before any prompts)
+        const s = getSession();
+        statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
         statusBar.show();
     } catch (e) { logError('initStatusBar failed', e); }
 }
 function updateStatusBar() {
     if (!statusBar) return;
     const s = getSession();
-    statusBar.text = `AI Prompt: ${s.promptCount} | v${extensionVersion}`;
+    statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
+    statusBar.show();
 }
 
-// New: prompt event handling via FS watcher
 function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
     try {
         const pattern = new vscode.RelativePattern(root, '.specstory/history/*.md');
         const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-        const handled = new Set<string>();
-        const onEvent = (uri: vscode.Uri, kind: 'create' | 'change') => {
-            try {
-                // Debounce duplicate events
-                const key = uri.fsPath + ':' + kind + ':' + Date.now().toString().slice(0, -2);
-                if (handled.has(key)) return;
-                handled.add(key);
-                incPrompt();
-                const s = getSession();
-                log('debug', 'prompt detected (fs)', { file: uri.fsPath, kind, promptCount: s.promptCount });
-                appendPrompt(uri.fsPath); // new
-                updateStatusBar();
-                vscode.window.showInformationMessage(`Prompt odeslán (#${s.promptCount})`);
-            } catch (e) {
-                logError('prompt watcher handler failed', e);
-            }
-        };
-        watcher.onDidCreate(uri => onEvent(uri, 'create'), null, context.subscriptions);
-        watcher.onDidChange(uri => onEvent(uri, 'change'), null, context.subscriptions);
+        watcher.onDidCreate(uri => handlePrompt(uri.fsPath, 'fs-create'), null, context.subscriptions);
+        watcher.onDidChange(uri => handlePrompt(uri.fsPath, 'fs-change'), null, context.subscriptions);
         context.subscriptions.push(watcher);
         log('debug', 'prompt watcher registered');
-    } catch (e) {
-        logError('registerPromptWatcher failed', e);
-    }
+    } catch (e) { logError('registerPromptWatcher failed', e); }
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-    try {
-        log('debug', 'activate start');
-        validateRecentLogs();
-    } catch (e) {
-        logError('log validation failed', e);
-    }
+    log('debug', 'activate start');
 
+    // Show status bar immediately
     initStatusBar(context);
+    // Fallback: re-show shortly after startup in case VS Code layout hides it initially
+    setTimeout(() => { try { updateStatusBar(); } catch {/* ignore */} }, 1200);
+
+    try { validateRecentLogs(); } catch (e) { logError('log validation failed', e); }
 
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (root) {
-        ensureInstructions(root); // new
+        workspaceRoot = root;
+        ensureInstructions(root);
         loadHistory(root);
         registerPromptWatcher(context, root);
+        updateStatusBar();
+    } else {
         updateStatusBar();
     }
 
@@ -106,28 +166,23 @@ export async function activate(context: vscode.ExtensionContext) {
             const s = getSession();
             vscode.window.showInformationMessage(`Prompts this session: ${s.promptCount}. Loaded history: ${s.prompts.length}`);
             log('normal', 'status requested', s);
-        } catch (e) {
-            logError('showStatus failed', e);
-        }
+        } catch (e) { logError('showStatus failed', e); }
     }));
 
-    // Legacy placeholder (keep): text change listener inside .specstory
+    // Text change inside .specstory
     context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-        try {
-            if (ev.document.fileName.includes('.specstory')) {
-                incPrompt();
-                log('debug', 'prompt increment (text change)', { file: ev.document.fileName });
-                appendPrompt(ev.document.fileName); // new
-                updateStatusBar();
-            }
-        } catch (e) {
-            logError('prompt tracking failed', e);
-        }
+        try { if (ev.document.fileName.includes('.specstory')) handlePrompt(ev.document.fileName, 'text-change'); } catch (e) { logError('prompt tracking failed', e); }
+    }));
+    // Open document
+    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
+        try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'open'); } catch (e) { logError('open doc prompt tracking failed', e); }
+    }));
+    // Save document
+    context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc => {
+        try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'save'); } catch (e) { logError('save doc prompt tracking failed', e); }
     }));
 
     log('debug', 'activate complete');
 }
 
-export function deactivate() {
-    log('debug', 'deactivate');
-}
+export function deactivate() { log('debug', 'deactivate'); }

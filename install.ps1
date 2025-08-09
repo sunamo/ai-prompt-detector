@@ -1,5 +1,5 @@
-# SpecStory AutoSave - Build, Release & Install Script
-Write-Host "SpecStory AutoSave - Build, Release & Install Script" -ForegroundColor Green
+# AI Prompt Detector - Build, Release & Install Script
+Write-Host "AI Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Green
 
 # Get current version from package.json and increment it

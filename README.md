@@ -1,4 +1,4 @@
-# SpecStory AutoSave
+# AI Prompt Detector
 
 Minimal scaffold per instructions. Features:
 

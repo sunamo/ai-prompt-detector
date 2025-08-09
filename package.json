@@ -1,9 +1,9 @@
 {
   "name": "ai-prompt-detector",
-  "displayName": "SpecStory AutoSave",
+  "displayName": "AI Prompt Detector",
   "publisher": "sunamocz",
   "description": "Minimal VS Code extension scaffold (logging + prompt history datastore).",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -20,7 +20,7 @@
   },
   "contributes": {
     "configuration": {
-      "title": "SpecStory AutoSave",
+      "title": "AI Prompt Detector",
       "properties": {
         "specstoryAutosave.debugLogging": {
           "type": "boolean",
