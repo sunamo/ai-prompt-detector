@@ -1,3 +1,4 @@
+```````````instructions
 ``````````instructions
 `````````instructions
 ````````instructions
@@ -335,4 +336,21 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - Never compress multiple independent statements, branches, or try/catch blocks onto one line to appear "short".
 - If a reviewer (or automated check) detects line count shrink without clearer naming / extra comments, treat it as regression and reformat immediately.
 - This addendum must NOT be removed; append further clarifications with dated notes only.
+
+## 📌 File Header Readability Comment Requirement (Appended Aug 10 2025)
+- Every TypeScript source file MUST begin with a standardized Czech comment block declaring permanent readability requirements.
+- Required header (exact text, may extend with dated addenda but not shrink):
+```
+/**
+ * ČITELNOST: Soubor musí zůstat vždy plně čitelný pro programátora.
+ * Žádné umělé zkracování řádků, slučování nesouvisejících příkazů na jeden řádek
+ * ani minifikace. Snížení počtu řádků bez jasného, zdokumentovaného zlepšení
+ * čitelnosti je REGRESE a musí být vráceno. Zachovávej logické bloky a vertikální strukturu.
+ */
+```
+- This header is mandatory for: extension.ts, activityBarProvider.ts, chatHelpers.ts, specstoryReader.ts, logger.ts, state.ts (and any future .ts files).
+- If a file is created without the header, the next edit MUST add it before any imports.
+- Never remove or shrink the header; only append clarifying lines with a date tag.
+- Commits adding the header should NOT be treated as noise; they enforce policy.
+- Automated scripts may re‑insert the header if missing; do not block them.
 ```````
