@@ -5,12 +5,14 @@ import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
 import { focusChatInput, forwardToChatAccept, getChatInputText } from './chatHelpers';
+import { captureChatInputSilently } from './chatHelpers';
 
 let statusBarItem: vscode.StatusBarItem;
 let providerRef: PromptsProvider | undefined;
 let lastSubmittedText = '';
 let aiPromptCounter = 0;
 let typingBuffer = '';
+let lastSnapshot = '';
 
 export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
@@ -34,9 +36,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		providerRef?.refresh();
 		updateStatusBar();
 		typingBuffer = '';
+		lastSnapshot = '';
 		const msg = vscode.workspace.getConfiguration('ai-prompt-detector').get<string>('customMessage', '') || 'We will verify quality & accuracy.';
 		vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${msg}`);
-		debug(`recordPrompt ok source=${source} chars=${text.length}`);
+		debug(`recordPrompt ok src=${source} len=${text.length}`);
 		return true;
 	};
 
@@ -45,6 +48,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	await loadExistingPrompts();
 	providerRef = new PromptsProvider();
 	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
+
+	// Periodicke tiche snimani obsahu (pro klik mysi na SEND kdy neprichazi type prikazy)
+	const poll = setInterval(async () => {
+		try {
+			const snap = await captureChatInputSilently();
+			if (snap && snap !== lastSnapshot) lastSnapshot = snap;
+		} catch {}
+	}, 600);
+	context.subscriptions.push({ dispose: () => clearInterval(poll) });
 
 	// 1) Chat API (myší SEND) – může nastat ještě před naším command listenerem
 	try {
@@ -97,9 +109,9 @@ export async function activate(context: vscode.ExtensionContext) {
 						if (!cmd) return;
 						// build buffer while typing
 						if (cmd === 'type') {
-							const txt = ev?.args?.[0]?.text as string | undefined;
-							if (txt && !txt.includes('\n')) {
-								typingBuffer += txt;
+							const t = ev?.args?.[0]?.text as string | undefined;
+							if (t && !t.includes('\n')) {
+								typingBuffer += t;
 								if (typingBuffer.length > 8000) typingBuffer = typingBuffer.slice(-8000);
 							}
 							return;
@@ -116,16 +128,17 @@ export async function activate(context: vscode.ExtensionContext) {
 							return;
 						}
 						if (sendCommands.has(cmd)) {
-							const before = typingBuffer.trim();
-							if (before) {
-								// Zachyť okamžitě před tím, než UI vymaže obsah
-								recordPrompt(before, 'cmd-buffer');
+							const immediate = typingBuffer.trim() || lastSnapshot;
+							if (immediate) {
+								recordPrompt(immediate, typingBuffer.trim() ? 'cmd-buffer' : 'snapshot');
 							} else {
 								// Fallback: po krátkém delay zkus clipboardovou extrakci
 								setTimeout(async () => {
 									try {
 										const snap = await getChatInputText();
-										recordPrompt(snap, 'cmd');
+										if (!recordPrompt(snap, 'cmd')) {
+											if (lastSnapshot) recordPrompt(lastSnapshot, 'snapshot-late');
+										}
 									} catch (e2) {
 										debug('post-send capture err ' + e2);
 									}
@@ -151,12 +164,14 @@ export async function activate(context: vscode.ExtensionContext) {
 					recordPrompt(text, 'enter');
 				} else if (typingBuffer.trim()) {
 					recordPrompt(typingBuffer, 'enter-buffer');
+				} else if (lastSnapshot) {
+					recordPrompt(lastSnapshot, 'enter-snapshot');
 				}
 
 				await focusChatInput();
 				let ok = await forwardToChatAccept();
 				if (!ok) {
-					const extra = [
+					for (const id of [
 						'github.copilot.chat.acceptInput',
 						'github.copilot.chat.send',
 						'github.copilot.chat.submit',
@@ -164,8 +179,7 @@ export async function activate(context: vscode.ExtensionContext) {
 						'workbench.action.chat.acceptInput',
 						'workbench.action.chat.submit',
 						'workbench.action.chatEditor.acceptInput',
-					];
-					for (const id of extra) {
+					]) {
 						try {
 							await vscode.commands.executeCommand(id);
 							ok = true;
@@ -173,7 +187,7 @@ export async function activate(context: vscode.ExtensionContext) {
 						} catch {}
 					}
 				}
-				if (ok && !text && !typingBuffer.trim()) {
+				if (ok && !text && !typingBuffer.trim() && !lastSnapshot) {
 					recordPrompt('(empty prompt)', 'enter-empty');
 				}
 			} catch (e) {
