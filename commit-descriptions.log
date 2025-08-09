@@ -14,3 +14,4 @@ v1.1.184 | Prune build: exclude legacy unused source files for minimal bundle
 v1.1.185 | UI tweak: restored improved activity view styling, replaced writeLog with debug/info
 v1.1.186 | UI layout: place number and prompt text on separate lines in list items
 v1.1.187 | Add command execution listener to show notification for mouse button Send variants
+v1.1.188 | Refactor: unify prompt recording + notify also on mouse Send and command variants

@@ -12,6 +12,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	initLogger(); info('Activation start');
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100); statusBarItem.show();
 	const updateStatusBar = () => { const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.x'; statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`; };
+	let pendingPreSend = '';
 	const recordPrompt = (text: string, source: string) => {
 		if (!text || text === lastSubmittedText) return false; lastSubmittedText = text;
 		state.recentPrompts.unshift(text); if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
@@ -26,23 +27,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 1) Chat API (kliknuti na SEND)
 	try { const chatNs: any = (vscode as any).chat; if (chatNs?.onDidSubmitRequest) context.subscriptions.push(chatNs.onDidSubmitRequest((e:any)=>{ try { recordPrompt(String(e?.request?.message||e?.request?.prompt||e?.prompt||'').trim(),'chatApi'); } catch(err){ debug('chat api err '+err); } })); } catch(e){ debug('chat api init err '+e); }
 
-	// 2) Command listener (vsechny varianty send/submit tlacitek nebo inline accept)
+	// 2) Command listener (vsechny varianty send/submit) + PRE-SEND capture
 	try { const cmdsAny = vscode.commands as any; if (cmdsAny?.onDidExecuteCommand) {
 		const sendCommands = new Set([
 			'github.copilot.chat.acceptInput','github.copilot.chat.send','github.copilot.chat.sendMessage','github.copilot.chat.submit','github.copilot.chat.executeSubmit','github.copilot.chat.inlineSubmit',
 			'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.submitWithCodebase','workbench.action.chat.submitWithoutDispatching','workbench.action.chat.send','workbench.action.chat.sendMessage','workbench.action.chat.sendToNewChat',
 			'inlineChat.accept','chat.acceptInput','interactive.acceptInput'
 		]);
-		context.subscriptions.push(cmdsAny.onDidExecuteCommand((ev:any)=>{ try { if(!sendCommands.has(ev?.command)) return; setTimeout(async()=>{ try { recordPrompt(await getChatInputText(),'cmd'); } catch(e2){ debug('cmd capture err '+e2); } },30); } catch(err){ debug('cmd hook err '+err); } })); }
+		// Zachytit vstup PRED vykonanim (nez se input smaze)
+		if (cmdsAny.onWillExecuteCommand) context.subscriptions.push(cmdsAny.onWillExecuteCommand((ev:any)=>{ try { if(!sendCommands.has(ev?.command)) return; getChatInputText().then(t=>{ if(t) { pendingPreSend = t; debug('preSend captured '+t.slice(0,60)); } }); } catch(e){ debug('preSend err '+e); } }));
+		// Po vykonani prikazu zkus prompt – nejprve Chat API mohl zachytit, fallback pouzij pendingPreSend
+		context.subscriptions.push(cmdsAny.onDidExecuteCommand((ev:any)=>{ try { if(!sendCommands.has(ev?.command)) return; setTimeout(async()=>{ try { const post = await getChatInputText(); if (post && recordPrompt(post,'cmd')) { pendingPreSend=''; return; } if (pendingPreSend && recordPrompt(pendingPreSend,'cmd-pre')) { pendingPreSend=''; return; } pendingPreSend=''; } catch(e2){ debug('cmd capture err '+e2); } },30); } catch(err){ debug('cmd hook err '+err); } })); }
 	} catch(e){ debug('cmd hook init err '+e); }
 
 	// 3) Enter / klavesove zkratky
 	context.subscriptions.push(vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', async () => { try {
 		const text = await getChatInputText(); if (text) recordPrompt(text,'enter');
 		await focusChatInput(); let ok = await forwardToChatAccept(); if(!ok){ for (const id of ['github.copilot.chat.acceptInput','github.copilot.chat.send','github.copilot.chat.submit','workbench.action.chat.acceptInput','workbench.action.chat.submit']) { try { await vscode.commands.executeCommand(id); ok=true; break; } catch{} } }
-		if (ok && !text) { // prazdny prompt ale odeslano -> eviduj pseudo zaznam
-			const synthetic = '(empty prompt)'; recordPrompt(synthetic,'enter-empty');
-		}
+		if (ok && !text) { const synthetic = '(empty prompt)'; recordPrompt(synthetic,'enter-empty'); }
 	} catch(e){ debug('forward err '+e); } }));
 
 	// 4) SpecStory watcher
