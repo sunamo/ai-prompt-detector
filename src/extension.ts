@@ -39,42 +39,19 @@ const INSTALL_DEBOUNCE_MS = 0; // no debounce (always run)
 function runInstall(root: string) {
     try {
         const script = path.join(root, 'install.ps1');
-        if (!fs.existsSync(script)) {
-            log('debug', 'install.ps1 not found, skipping');
-            return;
-        }
-        if (installing) {
-            pendingInstall = true; // queue another run
-            log('debug', 'install already running, queued');
-            return;
-        }
-        installing = true;
-        pendingInstall = false;
-        lastInstall = Date.now();
-        log('normal', 'running install.ps1 (auto)');
-        const ps = spawn('powershell', ['-ExecutionPolicy','Bypass','-File', script], { cwd: root, stdio: 'inherit' });
+        if (!fs.existsSync(script)) { log('debug', 'install.ps1 not found, skipping'); out('install.ps1 not found'); return; }
+        if (installing) { pendingInstall = true; log('debug', 'install already running, queued'); out('install already running, queued'); return; }
+        installing = true; pendingInstall = false; lastInstall = Date.now();
+        log('normal', 'running install.ps1 (auto)'); out('running install.ps1 (auto)');
+        const ps = spawn('powershell', ['-ExecutionPolicy','Bypass','-File', script], { cwd: root, stdio: 'ignore' }); // detach stdio for performance
         ps.on('exit', code => {
             installing = false;
-            if (code === 0) {
-                log('normal', 'install.ps1 completed', { code });
-            } else {
-                logError('install.ps1 failed', { code });
-                vscode.window.showWarningMessage(`install.ps1 failed (code ${code})`);
-            }
-            if (pendingInstall) {
-                log('debug', 'running queued install');
-                runInstall(root);
-            }
+            if (code === 0) { log('normal', 'install.ps1 completed', { code }); out('install.ps1 completed'); }
+            else { logError('install.ps1 failed', { code }); out('install.ps1 failed code='+code); vscode.window.showWarningMessage(`install.ps1 failed (code ${code})`); }
+            if (pendingInstall) { out('running queued install'); runInstall(root); }
         });
-        ps.on('error', err => {
-            installing = false;
-            logError('install.ps1 spawn failed', err);
-            if (pendingInstall) runInstall(root);
-        });
-    } catch (e) {
-        installing = false;
-        logError('runInstall failed', e);
-    }
+        ps.on('error', err => { installing = false; logError('install.ps1 spawn failed', err); out('install.ps1 spawn failed '+String(err)); if (pendingInstall) runInstall(root); });
+    } catch (e) { installing = false; logError('runInstall failed', e); out('runInstall failed '+String(e)); }
 }
 
 // Feature flag: disable legacy .md file detection per new requirement
@@ -90,18 +67,10 @@ function appendCopilotEvent(command: string) {
     } catch (e) { logError('appendCopilotEvent failed', e); }
 }
 
-// Prompt detection configuration
+// Prompt detection configuration (updated dedupe window to 0 for immediate every event)
 const PROMPT_COMMAND_PREFIXES = ['github.copilot', 'copilot.'];
-const PROMPT_COMMAND_EXACT = [
-    'workbench.action.chat.submit',
-    'workbench.action.chat.acceptChanges',
-    'workbench.action.chat.send',
-    'chat.submit',
-    'chat.send'
-];
-let lastPromptSig: string | undefined;
-let lastPromptTime = 0;
-const PROMPT_DEDUPE_WINDOW_MS = 150; // avoid ultra-fast duplicates from multiple hooks
+const PROMPT_COMMAND_EXACT = [ 'workbench.action.chat.submit', 'workbench.action.chat.acceptChanges', 'workbench.action.chat.send', 'chat.submit', 'chat.send' ];
+let lastPromptSig: string | undefined; let lastPromptTime = 0; const PROMPT_DEDUPE_WINDOW_MS = 0;
 
 function isPromptCommand(command: string): boolean {
     if (PROMPT_COMMAND_EXACT.includes(command)) return true;
@@ -111,26 +80,19 @@ function isPromptCommand(command: string): boolean {
 function recordPrompt(source: string, meta?: any) {
     const now = Date.now();
     const sig = source + ':' + (meta?.command || meta?.doc || '');
-    if (now - lastPromptTime < PROMPT_DEDUPE_WINDOW_MS && sig === lastPromptSig) {
-        log('debug', 'prompt dedup (multi-source)', { source, sig });
-        return;
+    if (PROMPT_DEDUPE_WINDOW_MS > 0 && (now - lastPromptTime < PROMPT_DEDUPE_WINDOW_MS) && sig === lastPromptSig) {
+        log('debug', 'prompt dedup (multi-source)', { source, sig }); out('dedup skip '+sig); return;
     }
-    lastPromptSig = sig;
-    lastPromptTime = now;
+    lastPromptSig = sig; lastPromptTime = now;
     incPrompt();
     const s = getSession();
     updateStatusBar();
-    vscode.window.showInformationMessage(`Prompt #${s.promptCount}`); // immediate popup
-    if (workspaceRoot) runInstall(workspaceRoot);
-    log('debug', 'prompt recorded (immediate)', { source, count: s.promptCount, meta });
+    vscode.window.showInformationMessage(`Prompt #${s.promptCount}`);
+    out('Prompt detected', { source, count: s.promptCount, meta });
+    if (workspaceRoot) setTimeout(() => runInstall(workspaceRoot!), 5); // slight defer
 }
 
-function handleCopilotCommand(command: string) {
-    try {
-        recordPrompt('command', { command });
-        appendCopilotEvent(command);
-    } catch (e) { logError('handleCopilotCommand failed', e); }
-}
+function handleCopilotCommand(command: string) { try { recordPrompt('command', { command }); appendCopilotEvent(command); } catch (e) { logError('handleCopilotCommand failed', e); out('handleCopilotCommand failed'); } }
 
 // Central prompt handling WITHOUT dedup (kept for potential fallback)
 function handlePrompt(file: string, source: string) {
@@ -156,23 +118,15 @@ function initStatusBar(context: vscode.ExtensionContext) {
             statusBar.command = 'specstoryAutosave.showStatus';
             statusBar.tooltip = 'AI Prompt Detector – Copilot events';
             context.subscriptions.push(statusBar);
-            log('debug', 'status bar item created (left)');
+            log('debug', 'status bar item created (left)'); out('status bar created');
         }
-        try {
-            const pkgVersion = context.extension.packageJSON?.version;
-            if (typeof pkgVersion === 'string') extensionVersion = pkgVersion;
-        } catch (e) { logError('version resolve failed', e); }
+        try { const pkgVersion = context.extension.packageJSON?.version; if (typeof pkgVersion === 'string') extensionVersion = pkgVersion; } catch (e) { logError('version resolve failed', e); }
         const s = getSession();
         statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
         statusBar.show();
-    } catch (e) { logError('initStatusBar failed', e); }
+    } catch (e) { logError('initStatusBar failed', e); out('initStatusBar failed'); }
 }
-function updateStatusBar() {
-    if (!statusBar) return;
-    const s = getSession();
-    statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`;
-    statusBar.show();
-}
+function updateStatusBar() { if (!statusBar) return; const s = getSession(); statusBar.text = `$(comment-discussion) AI Prompt: ${s.promptCount} | v${extensionVersion}`; statusBar.show(); out('status bar update', { count: s.promptCount }); }
 
 function registerPromptWatcher(context: vscode.ExtensionContext, root: string) {
     if (!USE_FILE_WATCHERS) return; // disabled
@@ -204,68 +158,36 @@ function hookCopilotCommands(context: vscode.ExtensionContext) {
     log('debug', 'copilot command hook installed (executeCommand patch)');
 }
 
+// Output channel for immediate visibility
+let outputChannel: vscode.OutputChannel | undefined;
+function ensureOutputChannel() {
+    if (!outputChannel) {
+        outputChannel = vscode.window.createOutputChannel('AI Prompt Detector');
+        outputChannel.appendLine('[startup] output channel initialized');
+        outputChannel.show(true);
+    }
+}
+function out(msg: string, data?: any) {
+    if (!outputChannel) return;
+    const line = `[${new Date().toISOString()}] ${msg}` + (data ? ' ' + safeJson(data) : '');
+    outputChannel.appendLine(line);
+}
+function safeJson(o: any) { try { return JSON.stringify(o); } catch { return String(o); } }
+
 export async function activate(context: vscode.ExtensionContext) {
+    ensureOutputChannel();
+    out('activate start');
     log('debug', 'activate start');
     initStatusBar(context);
-    setTimeout(() => { try { updateStatusBar(); } catch {/* ignore */} }, 1200);
-    try { validateRecentLogs(); } catch (e) { logError('log validation failed', e); }
+    try { validateRecentLogs(); } catch (e) { logError('log validation failed', e); out('log validation failed'); }
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (root) {
-        workspaceRoot = root;
-        ensureInstructions(root);
-        loadHistory(root); // historical md (optional)
-        if (USE_FILE_WATCHERS) {
-            for (const f of vscode.workspace.workspaceFolders || []) registerPromptWatcher(context, f.uri.fsPath);
-            // start polling only if enabled
-            const pollInterval = setInterval(pollPromptFiles, 1500);
-            context.subscriptions.push({ dispose: () => clearInterval(pollInterval) });
-        } else {
-            log('debug', 'file-based detection disabled (Copilot command mode active)');
-        }
-        updateStatusBar();
-        runInstall(root); // startup install
-    } else {
-        updateStatusBar();
-    }
-
-    // Copilot command hook
+    if (root) { workspaceRoot = root; ensureInstructions(root); loadHistory(root); updateStatusBar(); runInstall(root); }
     hookCopilotCommands(context);
+    context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => { try { const s = getSession(); vscode.window.showInformationMessage(`Copilot prompts this session: ${s.promptCount}. History loaded: ${s.prompts.length}`); out('showStatus', s); } catch (e) { logError('showStatus failed', e); out('showStatus failed'); } }));
+    // Chat heuristic (kept)
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => { try { if (USE_FILE_WATCHERS) return; const doc = ev.document; const scheme = doc.uri.scheme; if (scheme.includes('chat') || doc.fileName.includes('copilot') || doc.languageId.includes('chat')) { if (ev.contentChanges.some(c => c.text.includes('\n'))) { recordPrompt('chat-doc', { doc: doc.uri.toString() }); } } } catch (e) { logError('chat doc heuristic failed', e); out('chat heuristic failed'); } }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('specstoryAutosave.showStatus', () => {
-        try {
-            const s = getSession();
-            vscode.window.showInformationMessage(`Copilot prompts this session: ${s.promptCount}. History loaded: ${s.prompts.length}`);
-            log('normal', 'status requested', s);
-        } catch (e) { logError('showStatus failed', e); }
-    }));
-
-    // Remove noisy listeners when not using file watchers
-    if (USE_FILE_WATCHERS) {
-        context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-            try { if (ev.document.fileName.includes('.specstory')) handlePrompt(ev.document.fileName, 'text-change'); } catch (e) { logError('prompt tracking failed', e); }
-        }));
-        context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
-            try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'open'); } catch (e) { logError('open doc prompt tracking failed', e); }
-        }));
-        context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc => {
-            try { if (doc.fileName.includes('.specstory')) handlePrompt(doc.fileName, 'save'); } catch (e) { logError('save doc prompt tracking failed', e); }
-        }));
-    }
-
-    // Chat document heuristic: detect user pressing Enter in chat input (content changes with newline)
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-        try {
-            if (USE_FILE_WATCHERS) return; // skip in file watcher mode
-            const doc = ev.document;
-            const scheme = doc.uri.scheme;
-            if (scheme.includes('chat') || doc.fileName.includes('copilot') || doc.languageId.includes('chat')) {
-                if (ev.contentChanges.some(c => c.text.includes('\n'))) {
-                    recordPrompt('chat-doc', { doc: doc.uri.toString() });
-                }
-            }
-        } catch (e) { logError('chat doc heuristic failed', e); }
-    }));
-
+    out('activate complete');
     log('debug', 'activate complete');
 }
 
