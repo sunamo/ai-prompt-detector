@@ -136,32 +136,27 @@ export async function activate(context: vscode.ExtensionContext) {
 			try {
 				const cmd = ev?.command as string | undefined;
 				if (!cmd) return;
-				// Debug log for chat/copilot related commands
-				if (cmd.includes('copilot') || cmd.includes('chat')) {
-					outputChannel.appendLine(`🔎 CMD: ${cmd}`);
-				}
+				if (cmd.includes('copilot') || cmd.includes('chat')) { outputChannel.appendLine(`🔎 CMD: ${cmd}`); }
 				if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; return; }
 				if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => chatInputBuffer += txt); return; }
 				if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); return; }
 				if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; return; }
 
-				// Explicit + heuristic detection for button-based submits
 				const lower = cmd.toLowerCase();
 				const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
-				if (explicitSubmitCommands.has(cmd) || heuristicSubmit) {
-					const now = Date.now();
-					if (now - lastEnterSubmitAt <= 120) { return; } // Enter already handled very recently
+				const now = Date.now();
+				const handleSubmit = () => {
 					lastEnterSubmitAt = now;
 					(async () => {
 						let txt = chatInputBuffer.trim();
-						if (!txt) { txt = await getChatInputText(); }
+						if (!txt) txt = await getChatInputText();
 						if (txt) {
 							recentPrompts.unshift(txt);
 							if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-							provider.refresh();
 							chatInputBuffer = '';
+							provider.refresh();
 						} else {
-							outputChannel.appendLine('⚠️ Button submit detected but no prompt text captured');
+							outputChannel.appendLine('⚠️ Fallback submit detected but no prompt text');
 						}
 						aiPromptCounter++;
 						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
@@ -169,6 +164,19 @@ export async function activate(context: vscode.ExtensionContext) {
 						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
 						provider.refresh();
 					})();
+				};
+
+				if (explicitSubmitCommands.has(cmd) || heuristicSubmit) {
+					if (now - lastEnterSubmitAt > 120) handleSubmit();
+					return;
+				}
+
+				// Broad Copilot fallback: any other github.copilot.* command (excluding focus/copy/select) when buffer has content and no recent submit
+				if (cmd.startsWith('github.copilot.') && chatInputBuffer.trim() && now - lastEnterSubmitAt > 150) {
+					if (!/focus|copy|select|type|acceptinput|help|status/i.test(cmd)) {
+						outputChannel.appendLine(`⚡ Fallback Copilot submit via command: ${cmd}`);
+						handleSubmit();
+					}
 				}
 			} catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
