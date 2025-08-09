@@ -1,3 +1,5 @@
+``````````instructions
+`````````instructions
 ````````instructions
 ```````instructions
 ``````instructions
@@ -321,9 +323,16 @@ enter must work for both copilot and my extension without remapping. In another 
 ### 🔒 Permanent Marker (Do Not Remove)
 A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents this rule. Do NOT delete or alter it. Any reintroduction of logic like `if (text === lastSubmittedText) return` is a regression: it freezes the counter at 1 and breaks all Enter key variants (gives false impression keybindings failed). Preserve unlimited duplicate counting.
 
-### 🔒 Activity Bar Preservation (Appended)
+### 🔒 Activity Bar Preservation (Appended - RESTORED)
 - Never remove or empty the `contributes.viewsContainers.activitybar` entry with id `specstory-activity`.
 - Never remove or empty the `contributes.views['specstory-activity']` array; it must contain the webview view `ai-prompt-detector-view`.
 - Removing either hides the Activity Bar icon – treat as regression and restore immediately.
 - The JSON marker `_preserveActivityBarSections` in `package.json` MUST remain and documents this rule.
+
+### 📘 Readability Line Count Heuristic Reinforcement (Aug 10 2025 Addendum)
+- A reduction in total lines with zero functional change is a RED FLAG for readability loss unless explicit simplification (e.g. removal of duplication) is clearly documented.
+- Any PR/commit that lowers line count must state the concrete readability gain ("deduplicate helper", "remove unreachable code"), otherwise revert.
+- Never compress multiple independent statements, branches, or try/catch blocks onto one line to appear "short".
+- If a reviewer (or automated check) detects line count shrink without clearer naming / extra comments, treat it as regression and reformat immediately.
+- This addendum must NOT be removed; append further clarifications with dated notes only.
 ```````

@@ -50,3 +50,4 @@ v1.1.234 | Restore missing duplicate suppression + activity bar preservation ins
 v1.1.235 | Remove unused silent capture + lastSubmittedText and extra logs (minimal line cleanup)
 v1.1.236 | Add missing keybindings for ctrl+shift+enter and ctrl+alt+enter
 v1.1.237 | Remove unused lastTypingChangeAt variable and assignments
+v1.1.238 | Readable formatting applied to all TS sources
