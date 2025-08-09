@@ -7,6 +7,7 @@ import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
 import { initLogger, info, debug, error, writeLog } from './logger';
 import { setupChatResponseWatcher } from './chatResponseWatcher';
+import { registerChatApiHook } from './chatApiHook';
 
 let outputChannel: vscode.OutputChannel;
 let recentPrompts: string[] = state.recentPrompts;
@@ -84,6 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Setup heuristic watcher (additive)
 	setupChatResponseWatcher(context, doFinalize);
+	registerChatApiHook(context, doFinalize);
 
 	const focusChatInput = async () => { for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) { try { await vscode.commands.executeCommand(id); break; } catch {} } };
 	const forwardToChatAccept = async (): Promise<boolean> => {
