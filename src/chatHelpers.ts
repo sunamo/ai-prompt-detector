@@ -1,11 +1,19 @@
 import * as vscode from 'vscode';
 
+/**
+ * Zaměří vstupní pole Copilot/Chat (projede více možných ID příkazů).
+ * @returns Promise bez hodnoty – při úspěchu prostě skončí, chyby jsou ignorovány.
+ */
 export const focusChatInput = async () => {
 	for (const id of ['github.copilot.chat.focusInput','workbench.action.chat.focusInput','chat.focusInput']) {
 		try { await vscode.commands.executeCommand(id); return; } catch {}
 	}
 };
 
+/**
+ * Pokusí se odeslat aktuální obsah chatu přes řadu známých příkazů.
+ * @returns true pokud se podařilo spustit odeslací příkaz (nebo simulovaný enter), jinak false.
+ */
 export const forwardToChatAccept = async (): Promise<boolean> => {
 		try {
 			const all = await vscode.commands.getCommands(true);
@@ -26,6 +34,10 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 		} catch { return false; }
 };
 
+/**
+ * Získá text z chat inputu neinvazivně (kopírovacími příkazy) a ponechá původní schránku.
+ * @returns Trimovaný text vstupu nebo prázdný řetězec.
+ */
 export const getChatInputText = async (): Promise<string> => {
 	try {
 		await focusChatInput();
@@ -44,7 +56,10 @@ export const getChatInputText = async (): Promise<string> => {
 	} catch { return ''; }
 };
 
-// Tiché snímání obsahu vstupu (stejná metoda, ale lze upravit nezávisle pokud bude potřeba)
+/**
+ * Tiché (stejné) snímání obsahu vstupu – vyhrazené pro případy kdy nechceme sdílet případné budoucí úpravy.
+ * @returns Trimovaný text vstupu nebo prázdný řetězec.
+ */
 export const captureChatInputSilently = async (): Promise<string> => {
 	try {
 		await focusChatInput();

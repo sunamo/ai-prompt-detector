@@ -2,12 +2,22 @@ import * as vscode from 'vscode';
 import { debug, info } from './logger';
 import { state } from './state';
 
+/**
+ * Poskytuje webview s výpisem zachycených promptů ve vlastním panelu Activity Bar.
+ */
 export class PromptsProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'ai-prompt-detector-view';
 	private _view?: vscode.WebviewView;
 
+	/**
+	 * Konstruktor – pouze trace log vytvoření provideru.
+	 */
 	constructor() { debug('🎯 PROMPTS: Provider created'); }
 
+	/**
+	 * Inicializace webview – nastaví možnosti a naplní HTML.
+	 * @param webviewView Cílový webview container.
+	 */
 	public resolveWebviewView(webviewView: vscode.WebviewView): void {
 		debug('🎯 PROMPTS: resolveWebviewView called');
 		this._view = webviewView;
@@ -18,14 +28,24 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 		info(`🎯 PROMPTS: Number of prompts to display: ${state.recentPrompts.length}`);
 	}
 
+	/**
+	 * Veřejný refresh – přegeneruje HTML pokud je webview k dispozici.
+	 */
 	public refresh(): void { if (this._view) this.updateWebview(); }
 
+	/**
+	 * Interní aktualizace HTML obsahu webview.
+	 */
 	private updateWebview(): void {
 		if (!this._view) { debug('🎯 PROMPTS: Webview not ready yet'); return; }
 		this._view.webview.html = this.createPromptsHtml();
 		debug(`🎯 PROMPTS: HTML set, displaying ${state.recentPrompts.length} prompts`);
 	}
 
+	/**
+	 * Vytvoří HTML pro výpis promptů – bezpečně escapuje a limituje počet.
+	 * @returns Sestavený HTML řetězec.
+	 */
 	private createPromptsHtml(): string {
 		let promptsHtml = '';
 		const recentPrompts = state.recentPrompts;
@@ -35,7 +55,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 			promptsHtml = recentPrompts.slice(0, maxPrompts).map((prompt, index) => {
 				const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
 				const safePrompt = shortPrompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-				return `<div class=\"prompt-item\" data-index=\"${index}\">\n\t<div class=\"ln\">#${index+1}</div>\n\t<div class=\"txt\" title=\"${safePrompt}\">${safePrompt}</div>\n</div>`; }).join('');
+				return `<div class="prompt-item" data-index="${index}">\n\t<div class="ln">#${index+1}</div>\n\t<div class="txt" title="${safePrompt}">${safePrompt}</div>\n</div>`; }).join('');
 		} else {
 			promptsHtml = `<div class=\"empty\">\n\t<p>🔍 No SpecStory prompts found</p>\n\t<p>Create a SpecStory conversation to display prompts</p>\n</div>`;
 		}

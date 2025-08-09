@@ -18,11 +18,17 @@ let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
 let snapshotTimer: NodeJS.Timeout | undefined;
 
+/**
+ * Aktualizuje interní příznak zda jsou povoleny debug logy.
+ */
 function refreshDebugFlag() {
 	debugEnabled = vscode.workspace.getConfiguration('ai-prompt-detector').get<boolean>('enableDebugLogs', false) ?? false;
 }
 
-// Rekurzivní sken exportů Copilot Chat pro eventy submit (prohloubena heuristika)
+/**
+ * Rekurzivně prochází exporty Copilot Chat a pokouší se připojit k eventům submit.
+ * @param recordPrompt Callback k uložení promptu.
+ */
 async function hookCopilotExports(recordPrompt: (raw: string, src: string) => boolean) {
 	try {
 		const ext = vscode.extensions.getExtension('GitHub.copilot-chat') || vscode.extensions.getExtension('github.copilot-chat');
@@ -52,6 +58,9 @@ async function hookCopilotExports(recordPrompt: (raw: string, src: string) => bo
 	} catch (e) { debug('hookCopilotExports err ' + e); }
 }
 
+/**
+ * Aktivace rozšíření – registrace všech listenerů a inicializace UI.
+ */
 export async function activate(context: vscode.ExtensionContext) {
 	initLogger();
 	info('Activation start');
@@ -63,6 +72,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 	statusBarItem.show();
 
+	/** Aktualizuje text ve status baru. */
 	const updateStatusBar = () => {
 		const v =
 			vscode.extensions.getExtension('sunamocz.ai-prompt-detector')
@@ -70,6 +80,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
 	};
 
+	/** Uloží prompt do stavu, provede notifikaci a resetuje buffery. */
 	const recordPrompt = (raw: string, source: string): boolean => {
 		const text = (raw || '').trim();
 		if (!text) return false; // empty
@@ -84,13 +95,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		lastSnapshot = '';
 		const msg = vscode.workspace.getConfiguration('ai-prompt-detector').get<string>('customMessage', '') || 'We will verify quality & accuracy.';
 		const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${msg}`);
-		// Delay notification for non-enter sources to avoid Send dropdown auto-close side effect
+		// Enter varianta bez zpoždění, ostatní se zpožděním
 		if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
 		debug(`recordPrompt ok src=${source} len=${text.length}`);
 		return true;
 	};
 
-	// lightweight periodic snapshot of chat input so plain Enter (without preceding type event captured) still works
+	// Periodický snapshot pro případ kdy text není zachycen přes type eventy.
 	if (!snapshotTimer) {
 		snapshotTimer = setInterval(async () => {
 			try {
@@ -114,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	hookCopilotExports(recordPrompt);
 
-	// 1) Chat API (oficiální událost)
+	// Chat API listener
 	try {
 		const chatNs: any = (vscode as any).chat;
 		if (chatNs?.onDidSubmitRequest) {
@@ -138,7 +149,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		debug('chat api init err ' + e);
 	}
 
-	// 2) Command listener + heuristika + monkey patch
+	// Command listener + heuristika
 	try {
 		const cmdsAny = vscode.commands as any;
 		if (cmdsAny?.onDidExecuteCommand) {
@@ -268,7 +279,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		debug('cmd hook init err ' + e);
 	}
 
-	// 3) Enter / klávesové zkratky
+	/** Zpracování Enter (varianty) – pokusí se získat text a pak spustí jeden z akceptačních příkazů. */
 	const handleForwardEnter = async (variant: string) => {
 		try {
 			debug('Enter variant invoked: ' + variant);
@@ -298,13 +309,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	};
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', () => handleForwardEnter('ctrl')), // existing working variant
+		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterToChat', () => handleForwardEnter('ctrl')),
 		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterPlain', () => handleForwardEnter('plain')),
 		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterCtrlShift', () => handleForwardEnter('ctrl-shift')),
 		vscode.commands.registerCommand('ai-prompt-detector.forwardEnterCtrlAlt', () => handleForwardEnter('ctrl-alt'))
 	);
 
-	// 5) SpecStory watcher + config
+	// SpecStory watcher + konfigurace
 	const watcher = vscode.workspace.createFileSystemWatcher(
 		'**/.specstory/history/*.md'
 	);
@@ -330,6 +341,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	info('Activation done');
 }
 
+/**
+ * Načte existující prompty ze souborů (používá glob).
+ */
 async function loadExistingPrompts() {
 	const files = await vscode.workspace.findFiles(
 		'**/.specstory/history/*.md'
@@ -349,6 +363,9 @@ async function loadExistingPrompts() {
 			loadPromptsFromFile(f.fsPath, state.recentPrompts);
 }
 
+/**
+ * Deaktivace – pouze info log.
+ */
 export function deactivate() {
 	info('Deactivation');
 }

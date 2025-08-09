@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
 
-// Minimal shared state (only recent prompts needed)
+/**
+ * Sdílený stav – uchovává pouze pole recentPrompts s posledními detekovanými prompty.
+ */
 export const state = { recentPrompts: [] as string[] };
