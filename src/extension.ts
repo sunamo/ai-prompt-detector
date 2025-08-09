@@ -5,7 +5,7 @@ import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { startAutoSave, createAutoSaveDisposable } from './autoSave';
-import { initLogger, info, debug, error, writeLog } from './logger';
+import { initLogger, info } from './logger';
 import { setupChatResponseWatcher } from './chatResponseWatcher';
 import { registerChatApiHook } from './chatApiHook';
 import { runtime } from './runtime';
@@ -33,6 +33,8 @@ let lastFinalizeAt = 0;
 const chatDocState = new Map<string,string>();
 let lastEditorPollText = '';
 let lastBufferChangedAt = Date.now();
+// Use external finalize (shows prompt snippet)
+const finalize = externalFinalizePrompt;
 
 // Lightweight finalize wrapper also used by heuristic watcher
 function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
@@ -102,7 +104,25 @@ export async function activate(context: vscode.ExtensionContext) {
 	// helpers imported now (previous local implementations removed)
 
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
-		try { let text = await getChatInputText(); if (!text) text = chatInputBuffer.trim(); if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); providerRef?.refresh(); lastSubmittedText = text; } chatInputBuffer = ''; await focusChatInput(); lastEnterSubmitAt = Date.now(); const ok = await forwardToChatAccept(); if (ok) { aiPromptCounter++; updateStatusBar(); providerRef?.refresh(); } const cfg = vscode.workspace.getConfiguration('specstory-autosave'); const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.'; setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10); } catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
+		try {
+			outputChannel.appendLine('🧪 forwardEnterToChat start');
+			// Capture multiple sources BEFORE sending (chat will clear afterwards)
+			const rawDirect = await getChatInputText();
+			const rawSilent = await captureChatInputSilently();
+			const buf = runtime.chatInputBuffer;
+			const lastSnap = runtime.lastNonEmptySnapshot;
+			let snapshotCandidates = [rawDirect, rawSilent, buf, lastSnap].filter((v): v is string => !!v && v.trim().length > 0);
+			// Choose longest (most complete) snapshot
+			let text = snapshotCandidates.sort((a,b)=>b.length-a.length)[0] || '';
+			if (text) { runtime.chatInputBuffer = text; runtime.lastNonEmptySnapshot = text; }
+			outputChannel.appendLine(`🧪 snapshot pre-send len=${text.length}`);
+			await focusChatInput(); runtime.lastEnterSubmitAt = Date.now(); lastEnterSubmitAt = runtime.lastEnterSubmitAt;
+			await forwardToChatAccept();
+			// Immediate finalize with captured snapshot
+			setTimeout(() => { const finalSnap = text || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || ''; outputChannel.appendLine(`🧪 finalize enter-forward primary len=${finalSnap.length}`); externalFinalizePrompt('enter-forward', finalSnap); }, 12);
+			// Safety late finalize if first snapshot was empty but later snapshot appears
+			if (!text) { setTimeout(()=>{ const late = runtime.lastNonEmptySnapshot || runtime.chatInputBuffer || ''; if (late.trim()) { outputChannel.appendLine(`🧪 late snapshot finalize len=${late.length}`); externalFinalizePrompt('enter-forward-late', late); } }, 60); }
+		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
 
 	const commandsAny = vscode.commands as any;
