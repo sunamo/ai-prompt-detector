@@ -33,7 +33,6 @@ let lastFinalizeAt = 0;
 const chatDocState = new Map<string,string>();
 let lastEditorPollText = '';
 let lastBufferChangedAt = Date.now();
-// Use external finalize (shows prompt snippet)
 const finalize = externalFinalizePrompt;
 
 // Lightweight finalize wrapper also used by heuristic watcher
@@ -81,7 +80,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	statusBarItem.show();
 	const updateStatusBar = () => {
 		const v = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
-		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
+		statusBarItem.text = `🤖 AI Prompts: ${runtime.aiPromptCounter} | v${v}`;
 		statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
 	};
 	updateStatusBar();
@@ -119,9 +118,13 @@ export async function activate(context: vscode.ExtensionContext) {
 			await focusChatInput(); runtime.lastEnterSubmitAt = Date.now(); lastEnterSubmitAt = runtime.lastEnterSubmitAt;
 			await forwardToChatAccept();
 			// Immediate finalize with captured snapshot
-			setTimeout(() => { const finalSnap = text || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || ''; outputChannel.appendLine(`🧪 finalize enter-forward primary len=${finalSnap.length}`); externalFinalizePrompt('enter-forward', finalSnap); }, 12);
+			setTimeout(() => {
+				const finalSnap = text || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || '';
+				outputChannel.appendLine(`🧪 finalize enter-forward primary len=${finalSnap.length}`);
+				finalize('enter-forward', finalSnap);
+			}, 12);
 			// Safety late finalize if first snapshot was empty but later snapshot appears
-			if (!text) { setTimeout(()=>{ const late = runtime.lastNonEmptySnapshot || runtime.chatInputBuffer || ''; if (late.trim()) { outputChannel.appendLine(`🧪 late snapshot finalize len=${late.length}`); externalFinalizePrompt('enter-forward-late', late); } }, 60); }
+			if (!text) { setTimeout(()=>{ const late = runtime.lastNonEmptySnapshot || runtime.chatInputBuffer || ''; if (late.trim()) { outputChannel.appendLine(`🧪 late snapshot finalize len=${late.length}`); finalize('enter-forward-late', late); } }, 60); }
 		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
 
@@ -129,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
 		outputChannel.appendLine('🛰️ Command listener active');
 		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
-			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) { chatInputBuffer = chatInputBuffer.slice(0, -1); lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; } return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; lastBufferChangedAt = Date.now(); return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalizePrompt(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalizePrompt(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
+			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) { chatInputBuffer = chatInputBuffer.slice(0, -1); lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; } return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; lastBufferChangedAt = Date.now(); return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalize(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalize(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
 		}));
 	}
 
@@ -139,9 +142,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			const name = doc.fileName.toLowerCase();
 			if (/(copilot|chat)/.test(name)) {
 				outputChannel.appendLine(`📄 OPEN doc=${path.basename(doc.fileName)} len=${doc.getText().length} lang=${doc.languageId}`);
-				// If we have a buffered prompt not yet finalized, finalize now (button likely used)
 				if ((chatInputBuffer.trim() || lastNonEmptySnapshot) && Date.now() - lastFinalizeAt > 120) {
-					finalizePrompt('open-doc');
+					finalize('open-doc');
 				}
 			}
 		} catch {}
@@ -155,7 +157,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (curr.trim()) { chatDocState.set(id, curr); }
 			if (prev && !curr.trim()) {
 				outputChannel.appendLine(`🧹 CLEAR doc=${path.basename(doc.fileName)} prevLen=${prev.length}`);
-				if (Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalizePrompt('doc-clear2', prev); }
+				if (Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalize('doc-clear2', prev); }
 			}
 		} catch {}
 	}));
@@ -166,10 +168,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				// If internal buffer still holds text we likely had a button submission
 				if (chatInputBuffer.trim() && Date.now() - lastFinalizeAt > 140) {
 					outputChannel.appendLine('🧲 Heuristic: editor cleared while buffer still has text (button send?)');
-					await finalizePrompt('editor-clear-buffer');
+					await finalize('editor-clear-buffer');
 				}
 			}
-			if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); }
+			if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalize('poll-clear'); }
 			lastPollHadText = false; lastEditorPollText = current; } } catch {} }, 150);
 		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); if (forceSnapshotTimer) clearInterval(forceSnapshotTimer); } });
 		forceSnapshotTimer = setInterval(async () => { try { if (!lastNonEmptySnapshot && chatInputBuffer.trim().length > 2) { const txt = await getChatInputText(); if (txt) { lastNonEmptySnapshot = txt; outputChannel.appendLine('🧪 Forced snapshot captured'); } } } catch {} }, 800);
@@ -183,7 +185,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
 	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
 
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => { try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {} }));
+	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => { try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalize('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {} }));
 }
 
 async function loadExistingPrompts(): Promise<void> { outputChannel.appendLine('🔍 Searching for existing SpecStory files...'); const files = await vscode.workspace.findFiles('**/.specstory/history/*.md'); outputChannel.appendLine(`📊 Found ${files.length} SpecStory files`); if (files.length === 0) { recentPrompts.push('Welcome to SpecStory AutoSave + AI Copilot Prompt Detection', 'TEST: Dummy prompt for demonstration'); return; } const sorted = files.sort((a, b) => path.basename(b.fsPath).localeCompare(path.basename(a.fsPath))); sorted.forEach(f => { if (isValidSpecStoryFile(f.fsPath)) loadPromptsFromFile(f.fsPath, recentPrompts); }); outputChannel.appendLine(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`); }
