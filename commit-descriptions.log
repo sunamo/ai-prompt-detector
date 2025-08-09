@@ -45,3 +45,4 @@ v1.1.230 | Revert to minimal keybinding set (historic working pattern) for Enter
 v1.1.231 | restore keybinding full unbind variants
 v1.1.232 | Allow duplicate prompts via Ctrl+Enter and add Czech JSDoc
 v1.1.233 | Document permanent removal of duplicate prompt suppression in code & instructions
+v1.1.233 | Restore Activity Bar container and webview contribution

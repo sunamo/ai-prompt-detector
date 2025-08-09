@@ -1,6 +1,6 @@
+````````instructions
+```````instructions
 ``````instructions
-`````instructions
-````instructions
 # AI Assistant Instructions - AI Copilot Prompt Detector Extension
 
 ## ✅ Formatting Policy (Human Readable Output)
@@ -303,7 +303,7 @@ enter must work for both copilot and my extension without remapping. In another 
 - If the user request is ambiguous or paraphrased (not verbatim), refuse deletion and ask for the exact snippet.
 - Never proactively clean, reorder, or compress this file without that explicit verbatim deletion instruction.
 
-## ❌ Aug 9 2025 Update: Legacy File Handling Strengthened
+## ❌ Aug 9 2025 Update: Legacy File Handling Strengthened (RESTORED)
 - Do NOT recreate previously removed legacy files even as stub/comment-only placeholders.
 - If such a file reappears (e.g. chatApiHook.ts, commandListener.ts, promptDetector.ts, runtime.ts, finalize.ts, constants.ts, any hooks/ or utils/logging.ts), it must be PHYSICALLY DELETED, not converted to a stub.
 - Instruction extension: Stubs with only a comment are now forbidden for these legacy files. Presence itself is a violation.
@@ -311,11 +311,19 @@ enter must work for both copilot and my extension without remapping. In another 
 - Rationale: Prevent accidental reintroduction via tooling / merges and ensure minimal footprint.
 - Any keybinding regressions (loss of Enter / Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+Alt+Enter detection) must be fixed BEFORE any other change.
 
-## 🚫 Prompt Duplicate Suppression (Appended)
+## 🚫 Prompt Duplicate Suppression (Appended - RESTORED)
 - Never reintroduce any logic that skips counting a prompt because it is identical to the previous one.
 - Specifically FORBIDDEN: conditions like `if (text === lastSubmittedText) return false;` or any hash/equality guard blocking consecutive identical prompts.
 - Reason: This suppression previously froze the status bar counter at 1 and falsely appeared as if Enter variants (Enter / Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+Alt+Enter) were not working after the first submission.
 - Allowing duplicates is REQUIRED to verify rapid iterative prompting scenarios and guarantees all four key variants increment the counter every time.
 - If optimization of storage is needed, only trim array length (e.g. keep max N prompts) but NEVER skip insertion due to equality with the immediately prior prompt.
-````instructions
-`````
+
+### 🔒 Permanent Marker (Do Not Remove)
+A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents this rule. Do NOT delete or alter it. Any reintroduction of logic like `if (text === lastSubmittedText) return` is a regression: it freezes the counter at 1 and breaks all Enter key variants (gives false impression keybindings failed). Preserve unlimited duplicate counting.
+
+### 🔒 Activity Bar Preservation (Appended)
+- Never remove or empty the `contributes.viewsContainers.activitybar` entry with id `specstory-activity`.
+- Never remove or empty the `contributes.views['specstory-activity']` array; it must contain the webview view `ai-prompt-detector-view`.
+- Removing either hides the Activity Bar icon – treat as regression and restore immediately.
+- The JSON marker `_preserveActivityBarSections` in `package.json` MUST remain and documents this rule.
+```````
