@@ -20,6 +20,7 @@ let providerRef: PromptsProvider | undefined;
 let lastNonEmptySnapshot = '';
 let lastSubmittedText = '';
 let lastFinalizeAt = 0;
+const chatDocState = new Map<string,string>();
 
 async function finalizePrompt(source: string, directText?: string) {
 	try {
@@ -147,6 +148,23 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 	}
 
+	// NEW: detect chat input document clearing (button submit) via onDidChangeTextDocument
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
+		try {
+			const doc = ev.document;
+			const name = doc.fileName.toLowerCase();
+			if (!(name.includes('copilot') || name.includes('chat'))) return;
+			const id = doc.uri.toString();
+			const prev = chatDocState.get(id) || '';
+			const curr = doc.getText();
+			if (prev && !curr.trim() && Date.now() - lastEnterSubmitAt > 120 && Date.now() - lastFinalizeAt > 150) {
+				lastNonEmptySnapshot = prev; // preserve
+				finalizePrompt('doc-clear', prev);
+			}
+			if (curr.trim()) chatDocState.set(id, curr);
+		} catch {}
+	}));
+
 	let pollTimer: NodeJS.Timeout | undefined;
 	let lastPollHadText = false;
 	if (!pollTimer) {
@@ -174,13 +192,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
 
 	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => {
-		try {
-			if (!ed) return;
-			if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) {
-				if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim());
-				chatInputBuffer = '';
-			}
-		} catch {}
+		try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {}
 	}));
 }
 
