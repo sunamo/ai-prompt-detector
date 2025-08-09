@@ -3,8 +3,8 @@ param(
     [string]$CommitDescription
 )
 
-# AI Prompt Detector - Build, Release & Install Script
-Write-Host "AI Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
+# AI Copilot Prompt Detector - Build, Release & Install Script
+Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Commit description (not in commit message to preserve policy): $CommitDescription" -ForegroundColor Cyan
 

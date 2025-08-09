@@ -1,4 +1,4 @@
-# AI Prompt Detector
+# AI Copilot Prompt Detector
 
 
 IMPORTANT: This plugin requires [SpecStory](https://marketplace.visualstudio.com/items?itemName=SpecStory.specstory-vscode) to be installed separately.

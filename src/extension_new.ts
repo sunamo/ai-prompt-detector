@@ -296,7 +296,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const updateStatusBar = () => {
 		const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${extensionVersion}`;
-		statusBarItem.tooltip = 'AI Prompt Detector + AI Copilot Prompt Detection';
+		statusBarItem.tooltip = 'AI Copilot Prompt Detector ';
 	};
 	updateStatusBar();
 	
@@ -491,7 +491,7 @@ async function loadExistingPrompts(): Promise<void> {
 			writeLog(`✅ Total loaded ${recentPrompts.length} prompts from ${sortedFiles.length} files`, false);
 		} else {
 			writeLog('ℹ️ No SpecStory files found', false);
-			recentPrompts.push('Welcome to AI Prompt Detector + AI Copilot Prompt Detection');
+			recentPrompts.push('Welcome to AI Copilot Prompt Detector ');
 			recentPrompts.push('TEST: Dummy prompt for demonstration');
 			writeLog('🎯 Added test prompts for demonstration', false);
 		}

@@ -1,4 +1,4 @@
-# AI Assistant Instructions - AI Prompt Detector Extension
+# AI Assistant Instructions - AI Copilot Prompt Detector Extension
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
@@ -257,7 +257,7 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-For the app name, use AI Prompt Detector + AI Copilot Prompt Detection everywhere, no shorter or other versions
+For the app name, use AI Copilot Prompt Detector  everywhere, no shorter or other versions
 
 Create files as small as possible, no more than 200 lines each.
 

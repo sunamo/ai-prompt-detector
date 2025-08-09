@@ -43,7 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const updateStatusBar = () => {
 		const v = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
 		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
-		statusBarItem.tooltip = 'AI Prompt Detector + AI Copilot Prompt Detection';
+		statusBarItem.tooltip = 'AI Copilot Prompt Detector ';
 	};
 	updateStatusBar();
 
@@ -92,7 +92,7 @@ async function loadExistingPrompts(): Promise<void> {
 	outputChannel.appendLine('🔍 Searching for existing SpecStory files...');
 	const files = await vscode.workspace.findFiles('**/.specstory/history/*.md');
 	outputChannel.appendLine(`📊 Found ${files.length} SpecStory files`);
-	if (files.length === 0) { recentPrompts.push('Welcome to AI Prompt Detector + AI Copilot Prompt Detection', 'TEST: Dummy prompt for demonstration'); return; }
+	if (files.length === 0) { recentPrompts.push('Welcome to AI Copilot Prompt Detector ', 'TEST: Dummy prompt for demonstration'); return; }
 	const sorted = files.sort((a, b) => path.basename(b.fsPath).localeCompare(path.basename(a.fsPath)));
 	sorted.forEach(f => { if (isValidSpecStoryFile(f.fsPath)) loadPromptsFromFile(f.fsPath, recentPrompts); });
 	outputChannel.appendLine(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`);
