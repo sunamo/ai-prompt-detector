@@ -1,3 +1,4 @@
+`````````````````instructions
 ````````````````instructions
 ````````````````instructions
 ```````````````instructions
@@ -413,4 +414,50 @@ Persist forever. Append refinements only; never delete this section.
 
 ### 🔒 Marker
 - Presence of this section forbids silent reordering changes. Commits altering ordering logic MUST reference this policy.
+
+## 📊 Activity Bar Display Policy (Locked Aug 10 2025)
+- Source of truth ordering is produced BEFORE rendering; the webview MUST NOT reorder.
+- state.recentPrompts[0] is ALWAYS the newest captured prompt (runtime capture via unshift or newest SpecStory file processed first).
+- File discovery sorts SpecStory export files by descending filename (newest date/time first). Do not change comparator.
+- Per-file prompt extraction (specstoryReader.loadPromptsFromFile) pushes prompts in encounter order; no reverse here unless explicitly instructed in a future addendum.
+- Rendering (PromptsProvider.createPromptsHtml):
+  - Only apply slice(0, maxPrompts).
+  - NEVER call reverse(), sort(), filter(), or re-chunk.
+  - Index label `#n` must be (array index + 1) of the already ordered slice.
+  - HTML escaping (& < > ") mandatory; no additional mutation of text content.
+  - Adding pagination, grouping, or headers that shift sequential numbering is a REGRESSION.
+- Any deviation (extra reverse, sort, or changed numbering) = regression equal to keybinding failure; must be reverted immediately.
+- Rationale: Ensures deterministic verification that newest prompt appears at the top without UI-side heuristics.
+- Preservation Marker: Presence of this section freezes current behavior; future changes require explicit user directive referencing this section by name.
+
+### ✅ Activity Bar Enforcement Checklist
+1. No reverse/sort in webview provider? (Yes)
+2. slice(0, maxPrompts) only? (Yes)
+3. state.recentPrompts[0] visually renders as #1? (Yes)
+4. File order still descending (newest filename first)? (Verify before commit.)
+5. No extra wrappers altering order or numbering? (Yes)
+
+## 📘 JSDoc Readability Policy (Locked Aug 10 2025)
+- ALL JSDoc blocks MUST use multi-line format with opening `/**` on its own line and each subsequent line prefixed by ` *`.
+- FORBIDDEN single-line compressed form: `/** Short desc */` (unless referencing a trivial literal or enum value and explicitly approved).
+- REQUIRED multi-line example:
+```
+/**
+ * Inicializace webview – nastaví možnosti a naplní HTML.
+ * @param webviewView Cílový webview container.
+ */
+```
+- Each public function/class/method needs a concise Czech description (per language policy for code comments) plus @param / @returns tags where applicable.
+- Do NOT remove blank line separation between logical sections and their JSDoc – aids scanning.
+- Converting an existing multi-line JSDoc to single-line is a readability regression.
+- When adding parameters, update JSDoc in same commit; missing tag after parameter addition is a regression.
+- If a JSDoc becomes outdated, update text – never delete to “fix” mismatch.
+- Automated tooling (future) may re-expand single-line JSDoc into multi-line; such commits are valid maintenance.
+
+### ✅ JSDoc Enforcement Checklist
+1. Multi-line format? (Yes)
+2. Czech descriptive sentence present? (Yes)
+3. All parameters documented? (Yes)
+4. @returns provided when non-void? (Yes)
+5. No compressed one-line blocks? (Yes)
 ````````````````
