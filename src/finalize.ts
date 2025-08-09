@@ -6,7 +6,7 @@ export async function finalizePrompt(source: string, directText?: string) {
 	try {
 		let txt = (directText || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot).trim();
 		if (!txt) return;
-		if (txt === runtime.lastSubmittedText) { runtime.outputChannel?.appendLine(`ℹ️ Skipped duplicate finalize (${source})`); return; }
+		if (txt === runtime.lastSubmittedText && Date.now() - runtime.lastFinalizeAt < 300) { runtime.outputChannel?.appendLine(`ℹ️ Skip duplicate finalize (${source})`); return; }
 		runtime.lastSubmittedText = txt;
 		runtime.recentPrompts.unshift(txt);
 		if (runtime.recentPrompts.length > 1000) runtime.recentPrompts.splice(1000);
@@ -15,10 +15,10 @@ export async function finalizePrompt(source: string, directText?: string) {
 		runtime.lastFinalizeAt = Date.now();
 		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
 		const custom = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-		const short = txt.length > 180 ? txt.slice(0,180)+'…' : txt;
-		vscode.window.showInformationMessage(`AI Prompt sent (via ${source})\n${short}\n${custom}`);
+		const short = txt.length > 160 ? txt.slice(0,160)+'…' : txt;
+		vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${short}\n${custom}`);
 		runtime.providerRef?.refresh();
-		runtime.outputChannel?.appendLine(`🛎️ Detected submit via ${source} | chars=${txt.length}`);
+		runtime.outputChannel?.appendLine(`🛎️ finalize via ${source} chars=${txt.length}`);
 		runtime.outputChannel?.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`);
 	} catch (e) { runtime.outputChannel?.appendLine(`❌ finalizePrompt error: ${e}`); }
 }

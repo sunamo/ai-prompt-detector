@@ -105,25 +105,22 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
 		try {
 			outputChannel.appendLine('🧪 forwardEnterToChat start');
-			// Capture multiple sources BEFORE sending (chat will clear afterwards)
 			const rawDirect = await getChatInputText();
 			const rawSilent = await captureChatInputSilently();
 			const buf = runtime.chatInputBuffer;
 			const lastSnap = runtime.lastNonEmptySnapshot;
 			let snapshotCandidates = [rawDirect, rawSilent, buf, lastSnap].filter((v): v is string => !!v && v.trim().length > 0);
-			// Choose longest (most complete) snapshot
 			let text = snapshotCandidates.sort((a,b)=>b.length-a.length)[0] || '';
 			if (text) { runtime.chatInputBuffer = text; runtime.lastNonEmptySnapshot = text; }
 			outputChannel.appendLine(`🧪 snapshot pre-send len=${text.length}`);
-			await focusChatInput(); runtime.lastEnterSubmitAt = Date.now(); lastEnterSubmitAt = runtime.lastEnterSubmitAt;
+			runtime.lastEnterSubmitAt = Date.now(); lastEnterSubmitAt = runtime.lastEnterSubmitAt;
+			await focusChatInput();
 			await forwardToChatAccept();
-			// Immediate finalize with captured snapshot
 			setTimeout(() => {
 				const finalSnap = text || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot || '';
 				outputChannel.appendLine(`🧪 finalize enter-forward primary len=${finalSnap.length}`);
 				finalize('enter-forward', finalSnap);
 			}, 12);
-			// Safety late finalize if first snapshot was empty but later snapshot appears
 			if (!text) { setTimeout(()=>{ const late = runtime.lastNonEmptySnapshot || runtime.chatInputBuffer || ''; if (late.trim()) { outputChannel.appendLine(`🧪 late snapshot finalize len=${late.length}`); finalize('enter-forward-late', late); } }, 60); }
 		} catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
 	}));
