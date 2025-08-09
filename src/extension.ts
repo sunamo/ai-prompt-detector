@@ -62,14 +62,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			try { await vscode.commands.executeCommand(id); break; } catch { /* next */ }
 		}
 	};
+	let isInternalForward = false; // guard to prevent recursion when we internally invoke submit commands
 	const forwardToChatAccept = async (): Promise<boolean> => {
 		try {
+			isInternalForward = true;
 			const all = await vscode.commands.getCommands(true);
 			const ids = ['github.copilot.chat.acceptInput','workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage','inlineChat.accept','interactive.acceptInput','chat.acceptInput'].filter(i => all.includes(i));
-			for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); return true; } catch { /* next */ } }
+			for (const id of ids) { try { await vscode.commands.executeCommand(id); outputChannel.appendLine(`📨 Forwarded Enter using: ${id}`); isInternalForward = false; return true; } catch { /* next */ } }
 			try { await vscode.commands.executeCommand('type', { text: '\n' }); outputChannel.appendLine('↩️ Fallback: simulated Enter via type command'); return true; } catch {}
 			return false;
 		} catch { return false; }
+		finally { isInternalForward = false; }
 	};
 	const getChatInputText = async (): Promise<string> => {
 		try {
