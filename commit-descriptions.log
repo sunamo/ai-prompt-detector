@@ -2,3 +2,4 @@ v1.1.170 | Add commit description support
 v1.1.171 | remove heuristic detection and rely on chat API only
 v1.1.173 | Renamed extension
 v1.1.174 | further minimize extension.ts remove fs logging wrappers and auto-open
+v1.1.175 | restore enter forwarding fallback variants
