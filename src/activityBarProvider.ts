@@ -43,19 +43,18 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
   private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
   /**
-   * Vytvoří HTML pro výpis promptů – bezpečně escapuje a limituje počet.
-   * Nově: obrací pořadí tak, aby NEJNOVĚJŠÍ byl úplně nahoře (uživatel požadoval).
-   * @returns Sestavený HTML řetězec.
+   * Výpis promptů: pořadí nyní vychází přímo z naplnění state.recentPrompts.
+   * Per‑soubor jsou prompty při načtení otočeny (viz specstoryReader), takže
+   * zde již NESMÍME provádět reverse – jinak by se pořadí znovu převrátilo.
    */
   private createPromptsHtml(): string {
     let promptsHtml = '';
-    const recentPrompts = state.recentPrompts;
+    const recentPrompts = state.recentPrompts; // již v pořadí: nejnovější soubor + jeho poslední zpráva první
     const config = vscode.workspace.getConfiguration('ai-prompt-detector');
     const maxPrompts = config.get<number>('maxPrompts', 50);
 
     if (recentPrompts.length > 0) {
-      // Show newest as #1 (reverse the sliced array so last captured becomes first visually)
-      const renderList = recentPrompts.slice(0, maxPrompts).slice().reverse();
+      const renderList = recentPrompts.slice(0, maxPrompts); // žádné reverse!
       promptsHtml = renderList
         .map((prompt, index) => {
           const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
@@ -65,16 +64,16 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
           return (
-            `<div class=\"prompt-item\" data-index=\"${index}\">\n` +
-            `\t<div class=\"ln\">#${index + 1}</div>\n` +
-            `\t<div class=\"txt\" title=\"${safePrompt}\">${safePrompt}</div>\n` +
+            `<div class="prompt-item" data-index="${index}">\n` +
+            `\t<div class="ln">#${index + 1}</div>\n` +
+            `\t<div class="txt" title="${safePrompt}">${safePrompt}</div>\n` +
             `</div>`
           );
         })
         .join('');
     } else {
       promptsHtml = (
-        `<div class=\"empty\">\n` +
+        `<div class="empty">\n` +
         `\t<p>🔍 No SpecStory prompts found</p>\n` +
         `\t<p>Create a SpecStory conversation to display prompts</p>\n` +
         `</div>`

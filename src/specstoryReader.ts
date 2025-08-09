@@ -23,7 +23,9 @@ export function isValidSpecStoryFile(filePath: string): boolean {
 
 /**
  * Načte prompt(y) ze souboru SpecStory a přidá je do pole recent.
- * Jednoduché parsování: sekce oddělené markerem uživatele.
+ * Nově: prompty jednoho souboru se nejprve nasbírají do dočasného pole a poté
+ * OBRÁTÍ (reverse), aby poslední uživatelský vstup z daného souboru byl
+ * zobrazen jako první (#1) – uživatel požadoval nejnovější zprávy nahoře.
  * @param filePath Cesta k markdown souboru.
  * @param recent Pole do něhož se přidávají nalezené prompty.
  */
@@ -31,6 +33,7 @@ export function loadPromptsFromFile(filePath: string, recent: string[]): void {
   try {
     const c = fs.readFileSync(filePath, 'utf8');
     const sections = c.split(/(?=_\*\*User\*\*_)/);
+    const collected: string[] = [];
     for (const s of sections) {
       if (s.includes('_**User**_')) {
         const body = s
@@ -39,8 +42,10 @@ export function loadPromptsFromFile(filePath: string, recent: string[]): void {
           .join(' ')
           .split('---')[0]
           .trim();
-        if (body && body.length > 0) recent.push(body);
+        if (body && body.length > 0) collected.push(body);
       }
     }
+    // Obrácený pořadí v rámci souboru – nejnovější (poslední v souboru) jde první.
+    for (const p of collected.reverse()) recent.push(p);
   } catch {}
 }

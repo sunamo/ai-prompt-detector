@@ -59,3 +59,4 @@ v1.1.243 | Improve enter capture to avoid false (empty prompt) by focusing first
 v1.1.244 | Reverse prompt order in Activity Bar (newest first) as requested
 v1.1.245 | Prevent focus steal: snapshot uses getChatInputText(false) + param added
 v1.1.246 | Fix prompt ordering: newest already index 0 (remove reverse) so numbering matches expectation
+v1.1.247 | Adjust ordering so #1 is newest prompt in Activity Bar
