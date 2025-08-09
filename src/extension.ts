@@ -11,7 +11,7 @@ let recentPrompts: string[] = state.recentPrompts;
 let aiPromptCounter: number = 0;
 let statusBarItem: vscode.StatusBarItem;
 let chatInputBuffer: string = '';
-let lastEnterSubmitAt = 0; // timestamp of last Enter-based submission to avoid duplicate notifications
+let lastEnterSubmitAt = 0; // timestamp of last submission to avoid duplicate notifications
 
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
@@ -104,21 +104,30 @@ export async function activate(context: vscode.ExtensionContext) {
 				else if (cmd === 'deleteLeft') { if (chatInputBuffer) chatInputBuffer = chatInputBuffer.slice(0, -1); }
 				else if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; }
 
-				// Detect button-based submit (accept commands) and show notification if not already handled by Enter
-				const acceptCommands = new Set([
-					'github.copilot.chat.acceptInput',
-					'workbench.action.chat.acceptInput',
-					'chat.acceptInput',
-					'inlineChat.accept',
-					'workbench.action.chat.submit',
-					'workbench.action.chat.executeSubmit'
-				]);
-				if (cmd && acceptCommands.has(cmd)) {
-					const now = Date.now();
-					if (now - lastEnterSubmitAt > 150) { // not just handled by our Enter override
-						const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-						const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-						vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+				// Generic detection for button-based submit (send/dispatch/accept) not handled by our Enter override
+				if (cmd) {
+					const lower = cmd.toLowerCase();
+					const isSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch'));
+					if (isSubmit) {
+						const now = Date.now();
+						if (now - lastEnterSubmitAt > 250) { // avoid duplicates when multiple internal commands fire
+							lastEnterSubmitAt = now;
+							(async () => {
+								let txt = await getChatInputText();
+								if (!txt) txt = chatInputBuffer.trim();
+								if (txt) {
+									recentPrompts.unshift(txt);
+									if (recentPrompts.length > 1000) recentPrompts.splice(1000);
+									provider.refresh();
+									chatInputBuffer = '';
+								}
+								aiPromptCounter++;
+								updateStatusBar();
+								const cfg = vscode.workspace.getConfiguration('specstory-autosave');
+								const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
+								vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
+							})();
+						}
 					}
 				}
 			} catch {}
