@@ -1,104 +1,92 @@
 param(
-    # Nepovinný parametr – ručně zkontrolujeme a při chybě okamžitě skončíme
-    [Parameter(Mandatory=$false, Position=0)]
+    [Parameter(Mandatory = $false, Position = 0)]
     [string]$CommitDescription
 )
 
-# Rychlá kontrola zda byl předán popis commitu (žádné interaktivní dotazy)
-if ([string]::IsNullOrWhiteSpace($CommitDescription)) {
-    Write-Host "❌ Commit description is required. Usage: .\\install.ps1 \"your description\"" -ForegroundColor Red
+# =============================
+# AI Copilot Prompt Detector
+# install.ps1 – build → version patch → commit → push → package → install (code-insiders)
+# Forward slash path policy: use '/'
+# =============================
+
+# --- Helper: Fail fast ----------------------------------------------
+function Fail($msg) {
+    Write-Host "❌ $msg" -ForegroundColor Red
     exit 1
 }
 
-# AI Copilot Prompt Detector - Build, Release & Install Script
-Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
-Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Commit description (not in commit message to preserve policy): $CommitDescription" -ForegroundColor Cyan
-
-# Get current version from package.json and increment it
-$packageJson = Get-Content "package.json" | ConvertFrom-Json
-$currentVersion = $packageJson.version
-Write-Host "Current version: $currentVersion" -ForegroundColor Cyan
-
-# Parse version and increment patch number
-$versionParts = $currentVersion.Split('.')
-$major = [int]$versionParts[0]
-$minor = [int]$versionParts[1]
-$patch = [int]$versionParts[2]
-$patch++
-$newVersion = "$major.$minor.$patch"
-
-Write-Host "Incrementing version to: $newVersion" -ForegroundColor Yellow
-
-# Update package.json with new version
-$packageContent = Get-Content "package.json" -Raw
-$packageContent = $packageContent -replace "`"version`": `"$currentVersion`"", "`"version`": `"$newVersion`""
-Set-Content "package.json" $packageContent -NoNewline
-
-Write-Host "✅ Version updated in package.json" -ForegroundColor Green
-
-# Clean up old VSIX files first
-Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
-$vsixFiles = Get-ChildItem -Path "." -Filter "*.vsix" -ErrorAction SilentlyContinue
-if ($vsixFiles.Count -gt 0) {
-    Write-Host "   Found $($vsixFiles.Count) old VSIX files to remove:" -ForegroundColor Cyan
-    foreach ($file in $vsixFiles) {
-        Write-Host "   - Removing: $($file.Name)" -ForegroundColor Gray
-        Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
-    }
-    Write-Host "   ✅ Old VSIX files cleaned" -ForegroundColor Green
-} else {
-    Write-Host "   No old VSIX files found" -ForegroundColor Gray
+# --- Validate commit description (policy: always required, no prompt) ---
+if ([string]::IsNullOrWhiteSpace($CommitDescription)) {
+    Fail "Commit description is required. Usage: ./install.ps1 'your description'"
 }
 
-# Build the extension FIRST
-Write-Host "2. Building extension..." -ForegroundColor Yellow
+Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
+Write-Host "===================================================" -ForegroundColor Green
+Write-Host "Commit description (not stored in commit message body beyond second -m to preserve policy semantics): $CommitDescription" -ForegroundColor Cyan
+
+# --- Tool presence checks (non-fatal warning if missing vsce; we will fail when used) ---
+$required = @('pnpm','git','code-insiders')
+foreach ($t in $required) { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Fail "Required tool '$t' not found in PATH" } }
+if (-not (Get-Command vsce -ErrorAction SilentlyContinue)) { Fail "Required tool 'vsce' not found in PATH" }
+
+# --- Read & bump version (PATCH only) ---
+$packageJson = Get-Content './package.json' | ConvertFrom-Json
+$currentVersion = $packageJson.version
+if (-not $currentVersion) { Fail "Version field missing in package.json" }
+
+$parts = $currentVersion.Split('.')
+if ($parts.Length -ne 3) { Fail "Version '$currentVersion' not in MAJOR.MINOR.PATCH format" }
+$major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
+$patch++
+$newVersion = "$major.$minor.$patch"
+Write-Host "Incrementing version: $currentVersion → $newVersion" -ForegroundColor Yellow
+
+# Update package.json (string replace to avoid reformat drift)
+$raw = Get-Content './package.json' -Raw
+$raw = $raw -replace "`"version`"\s*:\s*`"$currentVersion`"", "`"version`": `"$newVersion`""
+Set-Content './package.json' $raw -NoNewline
+Write-Host "✅ package.json updated" -ForegroundColor Green
+
+# --- Remove old VSIX artifacts ---
+Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
+Get-ChildItem -Path '.' -Filter '*.vsix' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "   - Removing: $($_.Name)" -ForegroundColor Gray; Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+Write-Host "   ✅ Cleanup done" -ForegroundColor Green
+
+# --- Build (compile) ---
+Write-Host "2. Building (pnpm run compile)..." -ForegroundColor Yellow
 pnpm run compile
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ Build failed!" -ForegroundColor Red; exit 1 }
+if ($LASTEXITCODE -ne 0) { Fail "Build failed" }
 Write-Host "   ✅ Build successful" -ForegroundColor Green
 
-# Git commit and push AFTER successful build
-Write-Host "3. Git commit and push..." -ForegroundColor Yellow
-git add .
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ Git add failed!" -ForegroundColor Red; exit 1 }
-
-# After git add before commit we log description persistently
-$descLog = "commit-descriptions.log"
+# --- Git commit & push (after successful build only) ---
+Write-Host "3. Git commit & push..." -ForegroundColor Yellow
+git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
+# Persist description externally (audit trail) – additive
+$descLog = 'commit-descriptions.log'
 try { Add-Content -Path $descLog -Value "v$newVersion | $CommitDescription" -ErrorAction SilentlyContinue } catch {}
 
 git commit -m "v$newVersion" -m "$CommitDescription"
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ Git commit failed!" -ForegroundColor Red; exit 1 }
+if ($LASTEXITCODE -ne 0) { Fail "git commit failed" }
 
 git push origin master
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ Git push failed!" -ForegroundColor Red; exit 1 }
-Write-Host "   ✅ Git commit and push completed" -ForegroundColor Green
+if ($LASTEXITCODE -ne 0) { Fail "git push failed" }
+Write-Host "   ✅ Git push complete" -ForegroundColor Green
 
-# Create VSIX package with current version name
-Write-Host "4. Creating VSIX package..." -ForegroundColor Yellow
+# --- Package (vsce) ---
+Write-Host "4. Packaging VSIX..." -ForegroundColor Yellow
+$env:VSCE_INTERACTIVE = '0'
 $vsixName = "ai-prompt-detector-$newVersion.vsix"
-Write-Host "   Running: vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies" -ForegroundColor Gray
-$env:VSCE_INTERACTIVE = "0"
-$output = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ VSIX creation failed!" -ForegroundColor Red; Write-Host "Error output:" -ForegroundColor Red; Write-Host $output -ForegroundColor Red; exit 1 }
-Write-Host "   ✅ Created: $vsixName" -ForegroundColor Green
+$vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VSIX packaging failed" }
+Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
 
-# Clean old extensions (completely silent)
-Write-Host "5. Cleaning old extensions..." -ForegroundColor Yellow
-Start-Process -FilePath "code-insiders" -ArgumentList "--uninstall-extension", "sunamocz.ai-prompt-detector" -WindowStyle Hidden -Wait 2>$null
+# --- Uninstall previous & install new (silent) ---
+Write-Host "5. Reinstalling extension in code-insiders..." -ForegroundColor Yellow
+Start-Process -FilePath 'code-insiders' -ArgumentList '--uninstall-extension','sunamocz.ai-prompt-detector' -WindowStyle Hidden -Wait 2>$null | Out-Null
 Start-Sleep -Seconds 2
-
-# Install new extension (no new window)
-Write-Host "6. Installing new extension..." -ForegroundColor Yellow
-$result = Start-Process -FilePath "code-insiders" -ArgumentList "--install-extension", $vsixName, "--force" -WindowStyle Hidden -Wait -PassThru
-if ($result.ExitCode -eq 0) {
-    Write-Host "Extension installed successfully!" -ForegroundColor Green
-    Write-Host "Please restart VS Code Insiders to see the new version" -ForegroundColor Cyan
-    Write-Host "Status bar will show extension info" -ForegroundColor Cyan
-    Write-Host "Test with Ctrl+Shift+A or Enter in Copilot Chat" -ForegroundColor Cyan
-    Write-Host "Version: $newVersion" -ForegroundColor Cyan
-} else {
-    Write-Host "Installation failed!" -ForegroundColor Red
-}
+$result = Start-Process -FilePath 'code-insiders' -ArgumentList '--install-extension',$vsixName,'--force' -WindowStyle Hidden -Wait -PassThru
+if ($result.ExitCode -ne 0) { Fail "Extension installation failed (code-insiders)" }
+Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor Green
 
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Build, Release and Installation complete!" -ForegroundColor Green
+Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
