@@ -195,8 +195,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const pollTimer = setInterval(async () => {
     try {
       pollCounter++;
-      // Zkus zachytit aktuální obsah input boxu častěji - každých 0.5 sekundy místo 2.5s
-      if (pollCounter % 1 === 0) { // každých 0.5 sekundy (500ms * 1)
+      // Zkus zachytit aktuální obsah input boxu rychle - každých 0.1 sekundy pro okamžitou detekci
+      if (pollCounter % 1 === 0) { // každých 0.1 sekundy (100ms * 1)
         const currentInput = await getChatInputText(false);
         const now = Date.now(); // Používej stejný čas v celém polling cyklu
         
@@ -229,7 +229,7 @@ export async function activate(context: vscode.ExtensionContext) {
         lastChatContent = currentInput;
       }
     } catch {}
-  }, 500);
+  }, 100); // 100ms = 10x za sekundu = okamžitá detekce
   
   context.subscriptions.push({
     dispose: () => clearInterval(pollTimer),

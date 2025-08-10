@@ -99,3 +99,4 @@ v1.1.288 | Fix false positive notifications by filtering notification text patte
 v1.1.291 | Add Chat Participant detection and faster polling for Send button
 v1.1.293 | Add startup protection to prevent initial false positive notification
 v1.1.295 | Improve startup protection - prevent all input tracking during first 3 seconds
+v1.1.297 | Extend startup protection to 10 seconds and add spam text filtering
