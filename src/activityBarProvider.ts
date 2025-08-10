@@ -31,7 +31,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
   /**
    * Inicializace webview – nastaví možnosti a naplní HTML.
    * @param webviewView Cílový webview container (poskytuje webview).
-   * NESMĚNÍ přidávat reorder logiku – pouze deleguje na update.
+   * NESMÍ přidávat reorder logiku – pouze deleguje na update.
    */
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this._view = webviewView;
@@ -57,13 +57,20 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
    * Výpis promptů: pořadí vychází přímo z `state.recentPrompts`.
    * INVARIANT: Žádné reverse/sort/secondary slice od konce – pouze slice(0, maxPrompts).
    * ZMĚNA tohoto chování = REGRESE (viz Activity Bar Rendering Policy v instrukcích).
-   * @returns HTML string pro webview (statický, bez skriptů).
+   * @returns HTML string pro webview (statický, bez skriptů) nebo chybový HTML při neplatné konfiguraci.
    */
   private createPromptsHtml(): string {
     let promptsHtml = '';
     const recentPrompts = state.recentPrompts; // pořadí: newest file first + newest prompt first (index 0 = nejnovější)
     const config = vscode.workspace.getConfiguration('ai-prompt-detector');
-    const maxPrompts = config.get<number>('maxPrompts', 50);
+
+    // KONFIGURACE BEZ DEFAULTU: NESMÍME používat druhý parametr get(). Pokud není hodnota nastavena, zobrazíme chybu.
+    const rawMax = config.get<number>('maxPrompts');
+    if (typeof rawMax !== 'number' || !Number.isFinite(rawMax) || rawMax <= 0) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing/invalid setting "ai-prompt-detector.maxPrompts" – please set a positive number.');
+      return '<html><body><div style="padding:8px;font-size:11px;color:#f55">Config error: set ai-prompt-detector.maxPrompts</div></body></html>';
+    }
+    const maxPrompts = rawMax; // platná hodnota z nastavení
 
     if (recentPrompts.length > 0) {
       const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse / NE sort
@@ -92,7 +99,13 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
       );
     }
 
-    const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.x';
+    // VERZE: Žádné fallbacky typu || '1.1.x' – pokud chybí, notifikace + chybový HTML.
+    const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+    const extensionVersion: string | undefined = ext?.packageJSON?.version;
+    if (!extensionVersion) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing extension version in package.json');
+      return '<html><body><div style="padding:8px;font-size:11px;color:#f55">Missing extension version in package.json</div></body></html>';
+    }
 
     return (
       `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<meta name="viewport" content="width=device-width,initial-scale=1.0" />\n<title>AI Copilot Prompt Detector</title>\n<style>\n` +

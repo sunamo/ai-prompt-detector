@@ -1,3 +1,4 @@
+```````````````````instructions
 ``````````````````instructions
 `````````````````instructions
 ````````````````instructions
@@ -488,4 +489,17 @@ Persist forever. Append refinements only; never delete this section.
 5. No chained or nested ternaries replacing explanatory comments?
 
 Violation = immediate regression. Fix before proceeding.
+
+### ⚙️ Configuration Retrieval Policy (Aug 10 2025 Addendum)
+- NEVER supply a fallback / default literal in `get` calls for user settings (e.g. `config.get<number>('maxPrompts', 50)` is FORBIDDEN).
+- Always call: `const value = config.get<number>('maxPrompts');`
+- If the value is `undefined`, not a finite positive number, or otherwise invalid, immediately:
+  1. Show a single (non-spam) error notification explaining which setting is missing/invalid.
+  2. Render a minimal error HTML (for webview) or skip further logic gracefully.
+- Reason: Silent implicit defaults hide misconfiguration and mask user intent; explicit failure aids debugging.
+- Treat adding a second parameter default to any `get(...)` for monitored settings as a REGRESSION (same severity as keybinding break).
+- Checklist before commit:
+  * No occurrences of `, 50)` or other literal fallback arguments in config.get calls for extension settings.
+  * Error path tested (returns early with clear message) when setting absent.
+- Applies to all settings: `maxPrompts`, `enableDebugLogs`, `customMessage`, and any future settings unless explicitly exempted in a dated addendum.
 ````````````````

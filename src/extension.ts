@@ -116,8 +116,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     if (!text) return false;
-    // INVARIANT: Používáme unshift – nejnovější prompt musí být ALWAYS index 0.
-    // ZMĚNA na push() nebo přetřídění pole = REGRESE (poruší ordering policy).
+    // INVARIANT: Používáme unshift – nejnovější prompt MUSÍ být vždy index 0.
+    // Změna na push() nebo jakékoli třídění pole = REGRESE (porušení ordering policy).
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
@@ -315,21 +315,33 @@ export async function activate(context: vscode.ExtensionContext) {
     debug('cmd hook init err ' + e);
   }
 
+  /**
+   * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
+   * Postup zachování textu je konzervativní a NESMÍ se měnit bez úpravy instrukcí:
+   * 1. Nejprve se zaměří vstup (spolehlivější načtení obsahu)
+   * 2. Primární pokus o získání textu přes getChatInputText()
+   * 3. Fallback k bufferu (typingBuffer) nebo poslednímu snapshotu (lastSnapshot)
+   * 4. Krátké opožděné zopakování (focus mohl teprve proběhnout)
+   * 5. Záznam pouze pokud máme neprázdný text (nepřidávat falešné '(empty prompt)')
+   * 6. Přeposlání odesílací akce do Copilot/Chat (více známých cmd ID)
+   * 7. Pokud NIC nezachyceno a odeslání proběhlo, explicitně uloží '(empty prompt)'
+   * @param variant Identifikátor varianty (plain|ctrl|ctrl-shift|ctrl-alt)
+   */
   const handleForwardEnter = async (variant: string) => {
     try {
       debug('Enter variant invoked: ' + variant);
 
-      // 1) Always focus first for reliable capture
+      // 1) Fokus do vstupu – zvyšuje šanci na úspěšné čtení textu
       await focusChatInput();
 
-      // 2) Primary capture attempt
+      // 2) Primární pokus o zachycení textu
       let text = await getChatInputText();
 
-      // 3) Fallback to typing buffer / snapshot (buffer preferred – freshest)
+      // 3) Fallback na buffer nebo snapshot (buffer má přednost – je nejčerstvější)
       if (!text && typingBuffer.trim()) text = typingBuffer.trim();
       else if (!text && lastSnapshot) text = lastSnapshot;
 
-      // 4) If still nothing, short retry after a tiny delay (focus just applied)
+      // 4) Pokud stále nic, krátký retry po drobném zpoždění (focus se mohl aplikovat)
       if (!text) {
         await new Promise((r) => setTimeout(r, 35));
         const retry = await getChatInputText();
@@ -338,12 +350,12 @@ export async function activate(context: vscode.ExtensionContext) {
         else if (lastSnapshot) text = lastSnapshot;
       }
 
-      // 5) Record only if we have actual non‑empty text (avoid fake '(empty prompt)')
+      // 5) Logujeme pouze skutečný neprázdný text – neukládáme prázdné placeholdery
       if (text && text.trim()) {
         recordPrompt(text, 'enter-' + variant);
       }
 
-      // 6) Forward the Enter action to Copilot/Chat
+      // 6) Dopředné odeslání akce do Copilot / Chat
       let ok = await forwardToChatAccept();
       if (!ok) {
         for (const id of [
@@ -363,7 +375,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 7) If user truly sent an empty prompt (nothing captured anywhere) we still log it explicitly
+      // 7) Skutečně prázdný prompt – explicitně uložit informaci
       if (ok && !text) {
         recordPrompt('(empty prompt)', 'enter-empty-' + variant);
       }
