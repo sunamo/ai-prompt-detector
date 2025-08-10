@@ -197,6 +197,14 @@ export async function activate(context: vscode.ExtensionContext) {
       // Zkus zachytit aktuální obsah input boxu častěji - každých 0.5 sekundy místo 2.5s
       if (pollCounter % 1 === 0) { // každých 0.5 sekundy (500ms * 1)
         const currentInput = await getChatInputText(false);
+        const now = Date.now(); // Používej stejný čas v celém polling cyklu
+        
+        // Během startup protection období nesmíme trackovat content vůbec
+        if (now - extensionStartTime <= 3000) {
+          lastChatContent = '';
+          info(`Startup protection active: Not tracking input content (${now - extensionStartTime}ms since start)`);
+          return;
+        }
         
         // Filtruj notifikace - pokud je obsah notifikace, ignoruj
         if (isNotificationText(currentInput)) {
@@ -207,21 +215,16 @@ export async function activate(context: vscode.ExtensionContext) {
         
         // Pokud se input box vyprázdnil, možná se odeslal prompt
         if (lastChatContent && !currentInput.trim() && lastChatContent.trim() && !isNotificationText(lastChatContent)) {
-          const now = Date.now();
           // Ignoruj pokud byl Enter stisknut v posledních 5 sekundách (debouncing)
-          // NEBO pokud jsme ve startup protection období (prvních 3 sekundy po startu extension)
-          if (now - lastEnterTime > 5000 && now - extensionStartTime > 3000) {
+          if (now - lastEnterTime > 5000) {
             info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
             recordPrompt(lastChatContent.trim(), 'send-button-detected');
           } else {
-            if (now - lastEnterTime <= 5000) {
-              info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
-            } else {
-              info(`Send button detection: Input cleared but ignoring due to startup protection (${now - extensionStartTime}ms since extension start)`);
-            }
+            info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
           }
         }
         
+        // Normální tracking po startup protection období
         lastChatContent = currentInput;
       }
     } catch {}
