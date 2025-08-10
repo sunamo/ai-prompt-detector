@@ -132,12 +132,17 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
-    if (!text) return false;
+    debug(`recordPrompt called: raw="${raw.substring(0, 100)}", source=${source}, trimmed="${text}"`);
+    if (!text) {
+      debug('recordPrompt: empty text, returning false');
+      return false;
+    }
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
     providerRef?.refresh();
     updateStatusBar();
+    debug(`recordPrompt: clearing buffers, counter now=${aiPromptCounter}`);
     typingBuffer = '';
     lastSnapshot = '';
     const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
@@ -148,7 +153,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
     if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
-    debug(`recordPrompt ok src=${source} len=${text.length} (duplicates allowed)`);
+    debug(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
     return true;
   };
 
@@ -235,12 +240,13 @@ export async function activate(context: vscode.ExtensionContext) {
                 typingBuffer += t;
                 if (typingBuffer.length > 8000)
                   typingBuffer = typingBuffer.slice(-8000);
-                debug(`typing: buffer="${typingBuffer.substring(typingBuffer.length-50)}"`);
+                debug(`TYPE: added "${t}", buffer now="${typingBuffer}"`);
               }
               return;
             }
             if (cmd === 'deleteLeft') {
               typingBuffer = typingBuffer.slice(0, -1);
+              debug(`DELETE: buffer now="${typingBuffer}"`);
               return;
             }
             if (cmd === 'editor.action.clipboardPasteAction') {
@@ -340,37 +346,46 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const handleForwardEnter = async (variant: string) => {
     try {
-      debug(`Enter variant invoked: ${variant}, typingBuffer="${typingBuffer.substring(0, 100)}"`);
+      debug(`=== ENTER ${variant} START === typingBuffer="${typingBuffer}"`);
 
-      // 1) Zaměří vstupní pole
+      // 1) ZACHOVAT originální buffery PŘED jejich smazáním
+      const savedTypingBuffer = typingBuffer;
+      const savedSnapshot = lastSnapshot;
+
+      // 2) Zaměří vstupní pole
       await focusChatInput();
+      await new Promise((r) => setTimeout(r, 50));
 
-      // 2) Zkusí získat text různými způsoby - hlavně typing buffer
+      // 3) Zkusí získat text různými způsoby
       let text = '';
       
       // Nejvíce preferovaný - typing buffer (co uživatel napsal)
-      if (typingBuffer.trim()) {
-        text = typingBuffer.trim();
-        debug(`Using typingBuffer: "${text.substring(0, 100)}"`);
+      if (savedTypingBuffer.trim()) {
+        text = savedTypingBuffer.trim();
+        debug(`USING savedTypingBuffer: "${text}"`);
       } 
-      // Druhá možnost - pokus o zkopírování z input boxu
+      // Druhá možnost - pokus o zkopírování z input boxu PŘED odesláním
       else {
         text = await getChatInputText(true);
         debug(`getChatInputText returned: "${text}"`);
         
         // Fallback na snapshot
-        if (!text && lastSnapshot) {
-          text = lastSnapshot;
-          debug(`Using lastSnapshot: "${text.substring(0, 100)}"`);
+        if (!text && savedSnapshot) {
+          text = savedSnapshot;
+          debug(`USING savedSnapshot: "${text}"`);
         }
       }
 
-      // 3) VŽDY zaznamenat nějaký prompt - i kdyby byl prázdný pro debugging
-      const finalText = text || 'test prompt';
-      debug(`Recording prompt: "${finalText.substring(0, 100)}"`);
-      recordPrompt(finalText, 'enter-' + variant);
+      // 4) Zaznamenat prompt jen pokud máme skutečný text
+      if (text) {
+        debug(`RECORDING REAL PROMPT: "${text}"`);
+        recordPrompt(text, 'enter-' + variant);
+      } else {
+        debug('NO TEXT CAPTURED - recording test prompt');
+        recordPrompt('test prompt ' + variant, 'enter-' + variant);
+      }
 
-      // 4) Pošle příkaz do Copilotu
+      // 5) Pošle příkaz do Copilotu
       let ok = await forwardToChatAccept();
       if (!ok) {
         for (const id of [
@@ -390,6 +405,7 @@ export async function activate(context: vscode.ExtensionContext) {
           } catch {}
         }
       }
+      debug(`=== ENTER ${variant} END ===`);
     } catch (e) {
       debug('forward err ' + e);
       // I při chybě zaznamenat něco pro testování

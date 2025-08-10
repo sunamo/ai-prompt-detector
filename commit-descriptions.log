@@ -78,3 +78,4 @@ v1.1.265 | Restore working notifications and Activity Bar - remove all filtering
 v1.1.266 | Fix empty prompt issue - improve text capture from chat input
 v1.1.267 | Remove selectAll fallback to prevent text selection in Copilot UI
 v1.1.268 | Improve text capture - prioritize typing buffer and add better debugging
+v1.1.269 | Restore core functionality - ensure recordPrompt always called for debugging
