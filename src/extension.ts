@@ -408,13 +408,14 @@ export async function activate(context: vscode.ExtensionContext) {
         debug(`Final getChatInputText returned: "${text}"`);
       }
 
-      // 4) Zaznamenat prompt jen pokud máme skutečný text
+      // 4) Zaznamenat prompt - buď skutečný text nebo informaci o problému
       if (text) {
         debug(`RECORDING REAL PROMPT: "${text}"`);
         recordPrompt(text, 'enter-' + variant, false); // Nečistit buffery hned
       } else {
-        debug('NO TEXT CAPTURED - skipping recording');
-        // NEUKLÁDAT testovací prompt - jen logovať že se nepodařilo zachytit
+        debug('NO TEXT CAPTURED - recording fallback message');
+        // Pokud se nepodařilo zachytit text, zaznamenat to pro debugging
+        recordPrompt(`[No text captured for Enter ${variant}]`, 'enter-' + variant, false);
       }
 
       // 5) Pošle příkaz do Copilotu
