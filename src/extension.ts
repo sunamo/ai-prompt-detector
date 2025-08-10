@@ -108,6 +108,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initLogger();
   const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
   const version = ext?.packageJSON?.version || 'unknown';
+  info(`🚀 NEW VERSION LOADING - v${version} - EXTENSION ACTIVATED 🚀`);
   info(`Activation start - version ${version}`);
   refreshDebugFlag();
 

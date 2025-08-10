@@ -44,9 +44,11 @@ export function initLogger() {
 function append(m: string) {
   channel.appendLine(m);
   try {
+    const now = new Date();
+    const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().replace('T', ' ').slice(0, -5);
     fs.appendFileSync(
       dailyPath,
-      `[${new Date().toISOString()}] ${m}\n`
+      `[${localTime}] ${m}\n`
     );
   } catch {}
 }
@@ -68,9 +70,11 @@ export class Logger {
   private static append(m: string) {
     channel.appendLine(m);
     try {
+      const now = new Date();
+      const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().replace('T', ' ').slice(0, -5);
       fs.appendFileSync(
         dailyPath,
-        `[${new Date().toISOString()}] ${m}\n`
+        `[${localTime}] ${m}\n`
       );
     } catch {}
   }
