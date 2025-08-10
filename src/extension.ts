@@ -82,12 +82,17 @@ async function hookCopilotExports(
                     e?.prompt ||
                     e?.request?.message ||
                     e?.request?.prompt ||
+                    e?.command?.message ||
+                    e?.command?.prompt ||
+                    e?.text ||
                     '',
                 ).trim();
                 if (txt) {
-                  info(`Copilot exports captured: "${txt.substring(0, 100)}" via ${k}`);
-                  if (recordPrompt(txt, 'copilot-exports'))
-                    info('Copilot exports prompt recorded successfully');
+                  info(`Copilot exports captured mouse submission: "${txt.substring(0, 100)}" via ${k}`);
+                  if (recordPrompt(txt, 'mouse-copilot-exports'))
+                    info('Mouse submission via Copilot exports recorded successfully');
+                } else {
+                  info(`Copilot exports: no text found in event via ${k}`);
                 }
               } catch (err) {
                 info('exports event err ' + err);
@@ -226,10 +231,21 @@ export async function activate(context: vscode.ExtensionContext) {
         chatNs.onDidSubmitRequest((e: any) => {
           try {
             const txt = String(
-              e?.request?.message || e?.request?.prompt || e?.prompt || '',
+              e?.request?.message || 
+              e?.request?.prompt || 
+              e?.prompt || 
+              e?.message ||
+              e?.command?.message ||
+              e?.command?.prompt || '',
             ).trim();
-            info(`Chat API captured prompt: "${txt.substring(0, 100)}"`);
-            if (recordPrompt(txt, 'chatApi')) info('chatApi prompt recorded successfully');
+            if (txt) {
+              info(`Chat API captured mouse submission: "${txt.substring(0, 100)}"`);
+              if (recordPrompt(txt, 'mouse-chatapi')) {
+                info('Mouse submission via chatApi recorded successfully');
+              }
+            } else {
+              info('Chat API: no text found in submission event');
+            }
           } catch (err) {
             info('chat api err ' + err);
           }
@@ -250,13 +266,15 @@ export async function activate(context: vscode.ExtensionContext) {
     if (chatApi && chatApi.createChatParticipant) {
       const participant = chatApi.createChatParticipant('prompt-detector', (request: any, context: any, stream: any, token: any) => {
         try {
-          const text = request.prompt || request.message || '';
+          const text = request.prompt || request.message || String(request.command?.prompt || request.command?.message || '');
           if (text && text.trim()) {
-            info(`Chat Participant captured Send button: "${text.substring(0, 100)}"`);
-            recordPrompt(text.trim(), 'send-participant-detected');
+            info(`Chat Participant captured mouse/send: "${text.substring(0, 100)}"`);
+            recordPrompt(text.trim(), 'mouse-send-detected');
             
             // Aktualizuj lastEnterTime aby se předešlo duplicate notifikacím z polling
             lastEnterTime = Date.now();
+          } else {
+            info('Chat Participant: no text found in request object');
           }
         } catch (err) {
           info('Chat Participant error: ' + err);
