@@ -235,6 +235,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 typingBuffer += t;
                 if (typingBuffer.length > 8000)
                   typingBuffer = typingBuffer.slice(-8000);
+                debug(`typing: buffer="${typingBuffer.substring(typingBuffer.length-50)}"`);
               }
               return;
             }
@@ -339,45 +340,42 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const handleForwardEnter = async (variant: string) => {
     try {
-      debug('Enter variant invoked: ' + variant);
+      debug(`Enter variant invoked: ${variant}, typingBuffer="${typingBuffer.substring(0, 100)}"`);
 
-      // 1) Fokus do vstupu – zvyšuje šanci na úspěšné čtení textu
+      // 1) Pokus o zachycení textu z bufferů PŘED odesláním
+      let text = '';
+      if (typingBuffer.trim()) {
+        text = typingBuffer.trim();
+        debug(`Primary: using typingBuffer: "${text.substring(0, 100)}"`);
+      } else if (lastSnapshot) {
+        text = lastSnapshot;
+        debug(`Primary: using lastSnapshot: "${text.substring(0, 100)}"`);
+      }
+
+      // 2) Fokus do vstupu – zvyšuje šanci na úspěšné čtení textu
       await focusChatInput();
 
-      // 2) Primární pokus o zachycení textu
-      let text = await getChatInputText(true);
-      debug(`getChatInputText(true) returned: "${text}"`);
-
-      // 3) Fallback na buffer nebo snapshot (buffer má přednost – je nejčerstvější)
-      if (!text && typingBuffer.trim()) {
-        text = typingBuffer.trim();
-        debug(`Using typingBuffer: "${text}"`);
-      }
-      else if (!text && lastSnapshot) {
-        text = lastSnapshot;
-        debug(`Using lastSnapshot: "${text}"`);
-      }
-
-      // 4) Pokud stále nic, krátký retry po drobném zpoždění (focus se mohl aplikovat)
+      // 3) Pokus o kopírování z input boxu pokud nemáme text z bufferů
       if (!text) {
-        await new Promise((r) => setTimeout(r, 50));
+        const captured = await getChatInputText(true);
+        debug(`getChatInputText returned: "${captured}"`);
+        if (captured) text = captured;
+      }
+
+      // 4) Druhý pokus s delším časováním
+      if (!text) {
+        await new Promise((r) => setTimeout(r, 100));
         const retry = await getChatInputText(true);
         debug(`Retry getChatInputText returned: "${retry}"`);
         if (retry) text = retry;
-        else if (typingBuffer.trim()) {
-          text = typingBuffer.trim();
-          debug(`Retry using typingBuffer: "${text}"`);
-        }
-        else if (lastSnapshot) {
-          text = lastSnapshot;
-          debug(`Retry using lastSnapshot: "${text}"`);
-        }
       }
 
-      // 5) Logujeme pouze skutečný neprázdný text – neukládáme prázdné placeholdery
+      // 5) Uložení promptu PŘED odesláním - je důležité zachytit co uživatel napsal
       if (text && text.trim()) {
         debug(`Recording prompt: "${text.substring(0, 100)}..."`);
         recordPrompt(text, 'enter-' + variant);
+      } else {
+        debug(`No valid text captured for ${variant} - buffer len: ${typingBuffer.length}, snapshot len: ${lastSnapshot.length}`);
       }
 
       // 6) Dopředné odeslání akce do Copilot / Chat
@@ -399,11 +397,6 @@ export async function activate(context: vscode.ExtensionContext) {
             break;
           } catch {}
         }
-      }
-
-      // 7) Pokud není zachycen text, nevkládáme "(empty prompt)" - nelogujeme prázdné
-      if (!text) {
-        debug(`No text captured for ${variant} - skipping recordPrompt`);
       }
     } catch (e) {
       debug('forward err ' + e);

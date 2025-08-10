@@ -42,7 +42,7 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 };
 
 /**
- * Získá text z chat inputu pomocí copyInput příkazů a pokusí se i použít select+copy jako fallback.
+ * Získá text z chat inputu pomocí copyInput příkazů s rozšířeným seznamem variant.
  * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
  * @returns Trimovaný text uživatelského vstupu nebo prázdný řetězec.
  */
@@ -53,33 +53,41 @@ export const getChatInputText = async (
     const wantFocus = attemptFocus !== false;
     if (wantFocus) {
       await focusChatInput();
-      // Krátká pauza aby se fokus aplikoval
-      await new Promise(r => setTimeout(r, 80));
+      // Delší pauza aby se fokus aplikoval
+      await new Promise(r => setTimeout(r, 120));
     }
     
     const prev = await vscode.env.clipboard.readText();
     let captured = '';
     const all = await vscode.commands.getCommands(true);
     
-    // POUZE copyInput příkazy - zachytí jen obsah input boxu
+    // Rozšířený seznam copyInput příkazů - více variant pro lepší kompatibilitu
     const copyCommands = [
       'workbench.action.chat.copyInput',
       'github.copilot.chat.copyInput', 
       'chat.copyInput',
       'workbench.action.chatEditor.copyInput',
       'github.copilot.interactive.copyInput',
+      'workbench.action.chat.copyCurrentInput',
+      'github.copilot.chat.copyCurrentInput',
+      'copilot.chat.copyInput',
+      'interactive.copyInput',
+      'chatEditor.copyInput',
     ].filter((i) => all.includes(i));
     
+    // Pokus s každým příkazem, s delšími pauzami
     for (const id of copyCommands) {
       try {
         await vscode.commands.executeCommand(id);
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 80));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
           console.log(`getChatInputText: Success via ${id}`);
           break;
         }
-      } catch {}
+      } catch (err) {
+        console.log(`getChatInputText: Command ${id} failed: ${err}`);
+      }
     }
     
     // Žádný fallback s selectAll - může způsobit označení textu v UI
@@ -91,7 +99,11 @@ export const getChatInputText = async (
     } catch {}
     
     const result = captured.trim();
-    console.log(`getChatInputText result: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
+    if (result) {
+      console.log(`getChatInputText result: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
+    } else {
+      console.log('getChatInputText: No text captured via copyInput commands');
+    }
     return result;
   } catch (e) { 
     console.log(`getChatInputText error: ${e}`);
