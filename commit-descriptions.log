@@ -64,3 +64,4 @@ v1.1.248 | Adjust ordering: per-file reversed on load, removed reverse in view r
 v1.1.249 | Re-append missing duplicate suppression, activity bar, readability, header, ordering invariants sections
 v1.1.250 | Add Activity Bar rendering invariant comments
 v1.1.251 | Expand JSDoc to multi-line readable blocks in activityBarProvider (policy enforcement)
+v1.1.252 | Append Activity Bar Display Policy + JSDoc Readability Policy sections

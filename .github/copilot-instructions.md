@@ -1,3 +1,4 @@
+``````````````````instructions
 `````````````````instructions
 ````````````````instructions
 ````````````````instructions
@@ -460,4 +461,31 @@ Persist forever. Append refinements only; never delete this section.
 3. All parameters documented? (Yes)
 4. @returns provided when non-void? (Yes)
 5. No compressed one-line blocks? (Yes)
+
+## 📘 JSDoc Multi‑Line Formatting Enforcement (Aug 10 2025 Reasserted)
+- ALL JSDoc blocks MUST use multi‑line form. ABSOLUTELY FORBIDDEN: single line compressed style like `/** Inicializace webview – nastaví možnosti a naplní HTML. */`.
+- REQUIRED canonical form example:
+```
+/**
+ * Inicializace webview – nastaví možnosti a naplní HTML.
+ * @param webviewView Cílový webview container.
+ */
+```
+- Every public function / class / method: first line = concise Czech description (per language policy), following lines include @param / @returns as needed.
+- Private / internal helpers SHOULD also follow multi‑line form if they have parameters or non‑obvious behavior.
+- NEVER collapse back to one‑line even if description is short.
+- When adding a parameter, update its @param line in the SAME commit.
+- If a description becomes outdated, UPDATE it – do not delete the JSDoc to avoid maintenance.
+- Detect & treat any single‑line `/** ... */` JSDoc inside `.ts` sources as a READABILITY REGRESSION equal to keybinding failure; must be fixed immediately before any new feature.
+- Automated enforcement (future) may reformat single‑line forms into multi‑line; such mechanical commits are mandatory and must not be reverted.
+- This section is PERMANENT. Do not remove or weaken it; only append dated refinements.
+
+### ✅ JSDoc Compliance Quick Checklist
+1. No single‑line JSDoc blocks present? (search regex: `/\*\*[^\n]*\*/` and verify)
+2. Each public API item has Czech summary + appropriate tags?
+3. Added parameters reflected in @param tags same commit?
+4. Removed parameters cleaned from JSDoc?
+5. No chained or nested ternaries replacing explanatory comments?
+
+Violation = immediate regression. Fix before proceeding.
 ````````````````
