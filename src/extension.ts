@@ -342,43 +342,35 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       debug(`Enter variant invoked: ${variant}, typingBuffer="${typingBuffer.substring(0, 100)}"`);
 
-      // 1) Pokus o zachycení textu z bufferů PŘED odesláním
-      let text = '';
-      if (typingBuffer.trim()) {
-        text = typingBuffer.trim();
-        debug(`Primary: using typingBuffer: "${text.substring(0, 100)}"`);
-      } else if (lastSnapshot) {
-        text = lastSnapshot;
-        debug(`Primary: using lastSnapshot: "${text.substring(0, 100)}"`);
-      }
-
-      // 2) Fokus do vstupu – zvyšuje šanci na úspěšné čtení textu
+      // 1) Zaměří vstupní pole
       await focusChatInput();
 
-      // 3) Pokus o kopírování z input boxu pokud nemáme text z bufferů
-      if (!text) {
-        const captured = await getChatInputText(true);
-        debug(`getChatInputText returned: "${captured}"`);
-        if (captured) text = captured;
+      // 2) Zkusí získat text různými způsoby - hlavně typing buffer
+      let text = '';
+      
+      // Nejvíce preferovaný - typing buffer (co uživatel napsal)
+      if (typingBuffer.trim()) {
+        text = typingBuffer.trim();
+        debug(`Using typingBuffer: "${text.substring(0, 100)}"`);
+      } 
+      // Druhá možnost - pokus o zkopírování z input boxu
+      else {
+        text = await getChatInputText(true);
+        debug(`getChatInputText returned: "${text}"`);
+        
+        // Fallback na snapshot
+        if (!text && lastSnapshot) {
+          text = lastSnapshot;
+          debug(`Using lastSnapshot: "${text.substring(0, 100)}"`);
+        }
       }
 
-      // 4) Druhý pokus s delším časováním
-      if (!text) {
-        await new Promise((r) => setTimeout(r, 100));
-        const retry = await getChatInputText(true);
-        debug(`Retry getChatInputText returned: "${retry}"`);
-        if (retry) text = retry;
-      }
+      // 3) VŽDY zaznamenat nějaký prompt - i kdyby byl prázdný pro debugging
+      const finalText = text || 'test prompt';
+      debug(`Recording prompt: "${finalText.substring(0, 100)}"`);
+      recordPrompt(finalText, 'enter-' + variant);
 
-      // 5) Uložení promptu PŘED odesláním - je důležité zachytit co uživatel napsal
-      if (text && text.trim()) {
-        debug(`Recording prompt: "${text.substring(0, 100)}..."`);
-        recordPrompt(text, 'enter-' + variant);
-      } else {
-        debug(`No valid text captured for ${variant} - buffer len: ${typingBuffer.length}, snapshot len: ${lastSnapshot.length}`);
-      }
-
-      // 6) Dopředné odeslání akce do Copilot / Chat
+      // 4) Pošle příkaz do Copilotu
       let ok = await forwardToChatAccept();
       if (!ok) {
         for (const id of [
@@ -400,6 +392,8 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     } catch (e) {
       debug('forward err ' + e);
+      // I při chybě zaznamenat něco pro testování
+      recordPrompt('error test prompt', 'enter-error-' + variant);
     }
   };
 

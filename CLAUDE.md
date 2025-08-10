@@ -548,3 +548,17 @@ Violation = immediate regression. Fix before proceeding.
 - **EXAMPLE VIOLATION**: Using `editor.action.selectAll` followed by `editor.action.clipboardCopyAction` as fallback.
 - **CORRECT APPROACH**: Rely exclusively on non-invasive copyInput commands, accept capture failures gracefully.
 - This section is PERMANENT and MUST NOT be removed or weakened. Never compromise user interface smoothness for data capture.
+
+## 🔔 Core Functionality Preservation Policy (Aug 10 2025 Addendum)
+- **CRITICAL RULE**: Before any code changes, ALWAYS verify that core functionality remains intact after modifications.
+- **CORE FUNCTIONALITY DEFINITION**: Notifications showing when prompts are sent AND prompts appearing in Activity Bar are ESSENTIAL features.
+- **TESTING MANDATE**: After any change to text capture, keybinding, or recordPrompt logic, MUST verify:
+  1. Notifications appear when Enter variants are pressed
+  2. Actual prompt text appears in Activity Bar (not empty or missing)
+  3. Status bar counter increments
+  4. All four Enter variants (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter) work
+- **REGRESSION DEFINITION**: Loss of notifications OR Activity Bar prompt display is a CRITICAL REGRESSION equal to keybinding failure.
+- **ROLLBACK POLICY**: If core functionality breaks, immediately rollback to last working state before attempting fixes.
+- **PREVENTION APPROACH**: Make small, incremental changes and test each step rather than large refactors.
+- **DEBUG REQUIREMENT**: When core functionality fails, enable debug logs and trace exactly why recordPrompt is not being called.
+- This section is PERMANENT and MUST NOT be removed or weakened. Core user-visible functionality takes absolute priority.
