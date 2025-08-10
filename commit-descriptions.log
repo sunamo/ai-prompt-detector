@@ -104,3 +104,5 @@ v1.1.299 | Speed up Send button detection to 100ms polling for instant response
 v1.1.301 | Disable keyboard simulation during polling to prevent automatic select all in UI
 v1.1.302 | Debug logging for mouse Send button detection
 v1.1.303 | Auto-install after prompt #1
+v1.1.304 | Auto-install after prompt #5
+v1.1.305 | Auto-install after prompt #7
