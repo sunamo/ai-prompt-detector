@@ -127,12 +127,19 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
   };
 
+  /** Vyčistí typing buffer a snapshot - zavolá se jen z určitých zdrojů */
+  const clearBuffers = (reason: string) => {
+    debug(`clearBuffers called: ${reason}, typingBuffer was="${typingBuffer.substring(0, 50)}"`);
+    typingBuffer = '';
+    lastSnapshot = '';
+  };
+
   /** Uloží prompt do stavu, vždy započítá i opakovaný text.
    * INVARIANT: Žádný default parametr v get(); pokud customMessage chybí → notifikace.
    */
-  const recordPrompt = (raw: string, source: string): boolean => {
+  const recordPrompt = (raw: string, source: string, shouldClearBuffers = true): boolean => {
     const text = (raw || '').trim();
-    debug(`recordPrompt called: raw="${raw.substring(0, 100)}", source=${source}, trimmed="${text}"`);
+    debug(`recordPrompt called: raw="${raw.substring(0, 100)}", source=${source}, trimmed="${text}", clearBuffers=${shouldClearBuffers}"`);
     if (!text) {
       debug('recordPrompt: empty text, returning false');
       return false;
@@ -142,9 +149,9 @@ export async function activate(context: vscode.ExtensionContext) {
     aiPromptCounter++;
     providerRef?.refresh();
     updateStatusBar();
-    debug(`recordPrompt: clearing buffers, counter now=${aiPromptCounter}`);
-    typingBuffer = '';
-    lastSnapshot = '';
+    if (shouldClearBuffers) {
+      clearBuffers(`recordPrompt source: ${source}`);
+    }
     const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
     let customMsg = cfg.get<string>('customMessage');
     if (customMsg === undefined) {
@@ -373,42 +380,41 @@ export async function activate(context: vscode.ExtensionContext) {
       await focusChatInput();
       await new Promise((r) => setTimeout(r, 50));
 
-      // 3) Zkusí získat text různými způsoby
+      // 3) Zkusí získat text různými způsoby - vyzkoušej všechny metody
       let text = '';
       
-      // Nejvíce preferovaný - typing buffer (co uživatel napsal)
-      if (savedTypingBuffer.trim()) {
+      // První pokus: současný obsah input boxu PŘED odesláním  
+      debug('Trying getChatInputText BEFORE sending...');
+      text = await getChatInputText(true);
+      debug(`getChatInputText returned: "${text}"`);
+      
+      // Druhý pokus: typing buffer (co se napísalo)
+      if (!text && savedTypingBuffer.trim()) {
         text = savedTypingBuffer.trim();
         debug(`USING savedTypingBuffer: "${text}"`);
-      } 
-      // Druhá možnost - pokus o zkopírování z input boxu PŘED odesláním
-      else {
-        debug('Trying getChatInputText...');
+      }
+      
+      // Třetí pokus: snapshot (poslední zachycený obsah)
+      if (!text && savedSnapshot.trim()) {
+        text = savedSnapshot.trim();
+        debug(`USING savedSnapshot: "${text}"`);
+      }
+      
+      // Čtvrtý pokus: Ještě jeden pokus na getChatInputText s kratším čekáním
+      if (!text) {
+        debug('Final attempt at getChatInputText...');
+        await new Promise((r) => setTimeout(r, 50));
         text = await getChatInputText(true);
-        debug(`getChatInputText returned: "${text}"`);
-        
-        // Třetí pokus - s delším čekáním
-        if (!text) {
-          debug('Retrying getChatInputText with delay...');
-          await new Promise((r) => setTimeout(r, 100));
-          text = await getChatInputText(true);
-          debug(`Retry getChatInputText returned: "${text}"`);
-        }
-        
-        // Fallback na snapshot
-        if (!text && savedSnapshot) {
-          text = savedSnapshot;
-          debug(`USING savedSnapshot: "${text}"`);
-        }
+        debug(`Final getChatInputText returned: "${text}"`);
       }
 
       // 4) Zaznamenat prompt jen pokud máme skutečný text
       if (text) {
         debug(`RECORDING REAL PROMPT: "${text}"`);
-        recordPrompt(text, 'enter-' + variant);
+        recordPrompt(text, 'enter-' + variant, false); // Nečistit buffery hned
       } else {
-        debug('NO TEXT CAPTURED - recording test prompt');
-        recordPrompt('test prompt ' + variant, 'enter-' + variant);
+        debug('NO TEXT CAPTURED - skipping recording');
+        // NEUKLÁDAT testovací prompt - jen logovať že se nepodařilo zachytit
       }
 
       // 5) Pošle příkaz do Copilotu
@@ -431,11 +437,14 @@ export async function activate(context: vscode.ExtensionContext) {
           } catch {}
         }
       }
-      debug(`=== ENTER ${variant} END ===`);
+      
+      // 6) Vyčistit buffery až na konci po úspěšném odeslání
+      clearBuffers(`handleForwardEnter ${variant} completed`);
+      debug(`=== ENTER ${variant} END === buffers cleared`);
     } catch (e) {
       debug('forward err ' + e);
-      // I při chybě zaznamenat něco pro testování
-      recordPrompt('error test prompt', 'enter-error-' + variant);
+      // Při chybě neukládáme testovací prompt - jen logujeme chybu
+      // Buffery nečistíme při chybě
     }
   };
 
