@@ -173,10 +173,12 @@ export async function activate(context: vscode.ExtensionContext) {
         const txt = await getChatInputText(false);
         if (txt && txt !== lastSnapshot && txt.length > 0) {
           lastSnapshot = txt;
+          info(`Snapshot updated: "${txt.substring(0, 50)}"`);
           debug(`Snapshot updated: "${txt.substring(0, 50)}"`);
           // Také aktualizuj typing buffer pokud je prázdný
           if (!typingBuffer.trim() && txt.trim()) {
             typingBuffer = txt;
+            info(`TypingBuffer updated from snapshot: "${txt.substring(0, 50)}"`);
             debug(`TypingBuffer updated from snapshot: "${txt.substring(0, 50)}"`);
           }
         }
@@ -266,6 +268,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 typingBuffer += t;
                 if (typingBuffer.length > 8000)
                   typingBuffer = typingBuffer.slice(-8000);
+                info(`TYPE EVENT: added "${t.replace(/\n/g, '\\n')}", buffer now="${typingBuffer.substring(0, 100)}"`);
                 debug(`TYPE: added "${t.replace(/\n/g, '\\n')}", buffer now="${typingBuffer.substring(0, 100)}"`);
               }
               return;

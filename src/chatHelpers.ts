@@ -82,7 +82,7 @@ export const getChatInputText = async (
         await new Promise(r => setTimeout(r, 80));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          console.log(`getChatInputText: Success via ${id}`);
+          console.log(`getChatInputText: Success via ${id} - captured: "${captured.substring(0, 100)}"`);
           break;
         }
       } catch (err) {
