@@ -74,3 +74,4 @@ v1.1.261 | Fix empty prompt issue - remove saving (empty prompt) when text not c
 v1.1.262 | Fix text selection in Copilot chat - remove selectAll commands to prevent text highlighting
 v1.1.263 | Filter conversation text - capture only user prompts, not entire chat history
 v1.1.264 | Fix overly strict conversation filters - allow normal prompts to pass through
+v1.1.265 | Restore working notifications and Activity Bar - remove all filtering, restore empty prompt handling

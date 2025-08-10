@@ -294,19 +294,20 @@ export async function activate(context: vscode.ExtensionContext) {
               } else {
                 setTimeout(async () => {
                   try {
-                    const snap = await getChatInputText();
-                    if (
-                      !recordPrompt(
+                    const snap = await getChatInputText(true);
+                    if (snap && snap.trim()) {
+                      recordPrompt(
                         snap,
                         dynamicSendCommands.has(cmd)
                           ? 'dynamic-cmd'
                           : heuristicMatch
                             ? 'heuristic-cmd'
                             : 'cmd',
-                      )
-                    ) {
-                      if (lastSnapshot)
-                        recordPrompt(lastSnapshot, 'snapshot-late');
+                      );
+                    } else if (lastSnapshot && lastSnapshot.trim()) {
+                      recordPrompt(lastSnapshot, 'snapshot-late');
+                    } else {
+                      debug(`No valid text captured for command: ${cmd}`);
                     }
                   } catch (e2) {
                     debug('post-send capture err ' + e2);
@@ -400,9 +401,9 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 7) Skutečně prázdný prompt - explicitně uložit informaci  
-      if (ok && !text) {
-        recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+      // 7) Pokud není zachycen text, nevkládáme "(empty prompt)" - nelogujeme prázdné
+      if (!text) {
+        debug(`No text captured for ${variant} - skipping recordPrompt`);
       }
     } catch (e) {
       debug('forward err ' + e);

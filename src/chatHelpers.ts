@@ -42,8 +42,7 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 };
 
 /**
- * Získá text z chat inputu neinvazivně (pouze copyInput příkazy) a ponechá původní schránku.
- * Zaměřuje se výhradně na obsah input boxu, NIKDY nepoužívá copyAll nebo selectAll.
+ * Získá text z chat inputu pomocí copyInput příkazů a pokusí se i použít select+copy jako fallback.
  * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
  * @returns Trimovaný text uživatelského vstupu nebo prázdný řetězec.
  */
@@ -55,14 +54,14 @@ export const getChatInputText = async (
     if (wantFocus) {
       await focusChatInput();
       // Krátká pauza aby se fokus aplikoval
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 80));
     }
     
     const prev = await vscode.env.clipboard.readText();
     let captured = '';
     const all = await vscode.commands.getCommands(true);
     
-    // POUZE copyInput příkazy - zachytí jen obsah input boxu, ne celou konverzaci
+    // POUZE copyInput příkazy - zachytí jen obsah input boxu
     const copyCommands = [
       'workbench.action.chat.copyInput',
       'github.copilot.chat.copyInput', 
@@ -74,11 +73,26 @@ export const getChatInputText = async (
     for (const id of copyCommands) {
       try {
         await vscode.commands.executeCommand(id);
-        await new Promise(r => setTimeout(r, 30));
+        await new Promise(r => setTimeout(r, 50));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
           console.log(`getChatInputText: Success via ${id}`);
           break;
+        }
+      } catch {}
+    }
+    
+    // Fallback: pokus se vybrat vše v input boxu a zkopírovat
+    if (!captured.trim() || captured === prev) {
+      try {
+        await vscode.commands.executeCommand('editor.action.selectAll');
+        await new Promise(r => setTimeout(r, 30));
+        await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+        await new Promise(r => setTimeout(r, 30));
+        const fallbackText = await vscode.env.clipboard.readText();
+        if (fallbackText.trim() && fallbackText !== prev && fallbackText.length < 5000) {
+          captured = fallbackText;
+          console.log('getChatInputText: Success via selectAll+copy fallback');
         }
       } catch {}
     }
