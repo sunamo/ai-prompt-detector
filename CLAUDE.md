@@ -565,7 +565,7 @@ Violation = immediate regression. Fix before proceeding.
 - **DEBUG REQUIREMENT**: When core functionality fails, enable debug logs and trace exactly why recordPrompt is not being called.
 - This section is PERMANENT and MUST NOT be removed or weakened. Core user-visible functionality takes absolute priority.
 
-## 🚫 Clipboard Usage Policy (Aug 11 2025 Addendum)
+## 🚫 Clipboard Usage Policy (Aug 11 2025 Addendum)  
 - **ABSOLUTE PROHIBITION**: NEVER use clipboard (vscode.env.clipboard) for any purpose in this extension.
 - **FORBIDDEN OPERATIONS**: vscode.env.clipboard.readText(), vscode.env.clipboard.writeText(), any clipboard manipulation.
 - **FORBIDDEN COMMANDS**: editor.action.selectAll, editor.action.clipboardCopyAction, any selection-based text capture.
@@ -575,3 +575,30 @@ Violation = immediate regression. Fix before proceeding.
 - **REGRESSION DEFINITION**: Any clipboard usage is a CRITICAL REGRESSION that must be removed immediately.
 - **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
 - This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.
+
+## 🐛 Mouse Click Detection Problems Analysis (Aug 11 2025)
+**CRITICAL ISSUE**: Mouse clicks are completely invisible to all detection mechanisms.
+
+### Failed Approaches:
+1. **Chat API onDidSubmitRequest**: Not available in current VS Code version
+2. **Chat Participant Registration**: Creates participant but doesn't intercept existing submissions  
+3. **WebView Panel Monitoring**: Copilot doesn't use createWebviewPanel
+4. **DOM Monitoring**: `window is not defined` - extension runs in Node.js, not browser
+5. **Command Monitoring**: Only catches Enter key events, not mouse clicks
+6. **Workspace Document Changes**: Only detects file modifications, not UI interactions
+7. **Extension Module Hooks**: Chat modules don't load through require()
+
+### Root Problem:
+VS Code extensions run in **Extension Host (Node.js)** while chat UI runs in **Renderer Process (Electron)**. 
+Mouse clicks happen in renderer, but extension can't directly access renderer DOM or UI events.
+
+### Evidence from Logs:
+- Enter key works: generates command events that extension can intercept
+- Mouse clicks: generate NO events visible to extension host
+- All webview/DOM hooks fail: extension has no direct UI access
+
+### Next Approaches to Try:
+1. Study VS Code source code for internal chat event system
+2. Hook into actual chat service implementations from vscode-copilot-chat-main
+3. Monitor file system changes that might indicate chat activity
+4. Use VS Code's internal messaging between renderer and extension host

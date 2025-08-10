@@ -503,93 +503,108 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // DOM-based mouse detection for VS Code chat interface
+  // VS Code Internal Chat Service Hook (based on source code analysis)
   try {
-    // Monitor DOM changes in VS Code to detect chat submissions
-    let domObserverEnabled = true;
+    // Hook into the chat service via VS Code's internal service locator
+    const workbench = (vscode as any).workbench;
+    const services = (global as any).services || (vscode as any).services;
     
-    if (domObserverEnabled) {
-      // Create a polling mechanism to detect chat UI changes
-      let lastChatContent = '';
-      let chatInputValue = '';
+    if (services || workbench) {
+      info('Attempting to access VS Code internal chat service via service locator');
       
-      const checkChatInterface = () => {
+      // Try to access chat service through various paths
+      const chatServicePaths = [
+        'chatService',
+        'interactiveChatService', 
+        'chatAgentService',
+        'contrib.chat.chatService',
+        'workbench.contrib.chat.chatService'
+      ];
+      
+      let chatService: any = null;
+      
+      for (const path of chatServicePaths) {
         try {
-          // Access VS Code's DOM through electron renderer process
-          const document = (global as any).document || (window as any)?.document;
-          if (document) {
-            // Look for chat input elements by various selectors
-            const selectors = [
-              'textarea[placeholder*="chat"]',
-              'textarea[placeholder*="Ask"]', 
-              'input[placeholder*="chat"]',
-              '.chat-input textarea',
-              '.copilot-chat-input textarea',
-              '[data-testid="chat-input"]',
-              '.interactive-input textarea'
-            ];
-            
-            for (const selector of selectors) {
-              const chatInput = document.querySelector(selector);
-              if (chatInput && chatInput.value !== chatInputValue) {
-                const newValue = chatInput.value || '';
-                
-                // If value just became empty, it might have been submitted
-                if (chatInputValue && !newValue) {
-                  info(`DOM detected chat submission: "${chatInputValue.substring(0, 100)}"`);
-                  recordPrompt(chatInputValue.trim(), 'mouse-dom-detection');
-                  chatInputValue = '';
-                  return;
-                }
-                
-                chatInputValue = newValue;
-              }
-            }
-            
-            // Also look for chat messages being added
-            const messageSelectors = [
-              '.chat-message',
-              '.copilot-chat-message',
-              '.interactive-message'
-            ];
-            
-            for (const selector of messageSelectors) {
-              const messages = document.querySelectorAll(selector);
-              if (messages.length > 0) {
-                const lastMessage = messages[messages.length - 1];
-                const messageText = lastMessage?.textContent || '';
-                
-                if (messageText && messageText !== lastChatContent && messageText.length > 5) {
-                  // Check if this looks like a user message (not assistant response)
-                  if (!messageText.includes('I can help') && !messageText.includes('assistant')) {
-                    info(`DOM detected new chat message: "${messageText.substring(0, 100)}"`);
-                    recordPrompt(messageText.trim(), 'mouse-dom-message');
-                    lastChatContent = messageText;
-                  }
-                }
-              }
-            }
-          } else {
-            info('DOM not accessible for chat monitoring');
+          let current = services || workbench;
+          for (const segment of path.split('.')) {
+            current = current?.[segment];
+          }
+          if (current && typeof current === 'object') {
+            chatService = current;
+            info(`Found chat service at path: ${path}`);
+            break;
           }
         } catch (err) {
-          info(`DOM chat monitoring error: ${err}`);
+          info(`Failed to access ${path}: ${err}`);
         }
-      };
+      }
       
-      // Start polling every 500ms
-      const chatMonitorInterval = setInterval(checkChatInterface, 500);
-      
-      // Clean up after 5 minutes to avoid permanent polling
-      setTimeout(() => {
-        clearInterval(chatMonitorInterval);
-        info('DOM chat monitoring stopped after 5 minutes');
-      }, 300000);
-      
-      info('DOM-based chat monitoring started');
+      if (chatService) {
+        // Try to hook into sendRequest method
+        if (chatService.sendRequest && typeof chatService.sendRequest === 'function') {
+          const originalSendRequest = chatService.sendRequest;
+          chatService.sendRequest = function(...args: any[]) {
+            try {
+              // Extract request data from arguments
+              const [sessionId, request, options] = args;
+              if (request && request.message) {
+                const text = String(request.message).trim();
+                if (text) {
+                  info(`Chat service sendRequest captured: "${text.substring(0, 100)}"`);
+                  recordPrompt(text, 'mouse-chat-service');
+                }
+              }
+            } catch (err) {
+              info(`Chat service hook error: ${err}`);
+            }
+            
+            return originalSendRequest.apply(this, args);
+          };
+          
+          info('Hooked into chat service sendRequest method');
+        }
+        
+        // Try to hook into other potential methods
+        const methodsToHook = ['_sendRequest', 'handleRequest', 'processRequest', 'submitRequest'];
+        for (const methodName of methodsToHook) {
+          if (chatService[methodName] && typeof chatService[methodName] === 'function') {
+            const originalMethod = chatService[methodName];
+            chatService[methodName] = function(...args: any[]) {
+              try {
+                // Look for text in arguments
+                for (const arg of args) {
+                  if (typeof arg === 'string' && arg.trim().length > 3) {
+                    info(`Chat service ${methodName} captured: "${arg.substring(0, 100)}"`);
+                    recordPrompt(arg.trim(), `mouse-chat-${methodName}`);
+                    break;
+                  } else if (arg && typeof arg === 'object' && (arg.message || arg.prompt)) {
+                    const text = String(arg.message || arg.prompt).trim();
+                    if (text) {
+                      info(`Chat service ${methodName} object captured: "${text.substring(0, 100)}"`);
+                      recordPrompt(text, `mouse-chat-${methodName}-obj`);
+                      break;
+                    }
+                  }
+                }
+              } catch (err) {
+                info(`Chat service ${methodName} hook error: ${err}`);
+              }
+              
+              return originalMethod.apply(this, args);
+            };
+            
+            info(`Hooked into chat service ${methodName} method`);
+          }
+        }
+        
+      } else {
+        info('Could not locate VS Code chat service');
+      }
+    } else {
+      info('VS Code services not accessible');
     }
   } catch (err) {
-    info(`DOM monitoring setup failed: ${err}`);
+    info(`VS Code chat service hook failed: ${err}`);
   }
   
   // Additional mouse detection via workspace monitoring  
