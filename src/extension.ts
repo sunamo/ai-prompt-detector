@@ -162,11 +162,17 @@ export async function activate(context: vscode.ExtensionContext) {
       try {
         // Nepřetahovat fokus při pasivním snapshotu (attemptFocus=false)
         const txt = await getChatInputText(false);
-        if (txt && txt !== typingBuffer) {
+        if (txt && txt !== lastSnapshot && txt.length > 0) {
           lastSnapshot = txt;
+          debug(`Snapshot updated: "${txt.substring(0, 50)}"`);
+          // Také aktualizuj typing buffer pokud je prázdný
+          if (!typingBuffer.trim() && txt.trim()) {
+            typingBuffer = txt;
+            debug(`TypingBuffer updated from snapshot: "${txt.substring(0, 50)}"`);
+          }
         }
       } catch {}
-    }, 1200);
+    }, 800);
     context.subscriptions.push({
       dispose: () => snapshotTimer && clearInterval(snapshotTimer),
     });
@@ -180,6 +186,16 @@ export async function activate(context: vscode.ExtensionContext) {
     PromptsProvider.viewType,
     providerRef,
   );
+
+  // Auto-open activity bar after activation
+  setTimeout(async () => {
+    try {
+      await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
+      debug('Activity bar auto-opened');
+    } catch (e) {
+      debug('Failed to auto-open activity bar: ' + e);
+    }
+  }, 1000);
 
   hookCopilotExports(recordPrompt);
 
@@ -236,11 +252,12 @@ export async function activate(context: vscode.ExtensionContext) {
             if (debugEnabled) debug('CMD ' + cmd);
             if (cmd === 'type') {
               const t = ev?.args?.[0]?.text;
-              if (t && !String(t).includes('\n')) {
+              if (t) {
+                // Přijímáme i newlines - možná jsou součástí promptu
                 typingBuffer += t;
                 if (typingBuffer.length > 8000)
                   typingBuffer = typingBuffer.slice(-8000);
-                debug(`TYPE: added "${t}", buffer now="${typingBuffer}"`);
+                debug(`TYPE: added "${t.replace(/\n/g, '\\n')}", buffer now="${typingBuffer.substring(0, 100)}"`);
               }
               return;
             }
@@ -366,8 +383,17 @@ export async function activate(context: vscode.ExtensionContext) {
       } 
       // Druhá možnost - pokus o zkopírování z input boxu PŘED odesláním
       else {
+        debug('Trying getChatInputText...');
         text = await getChatInputText(true);
         debug(`getChatInputText returned: "${text}"`);
+        
+        // Třetí pokus - s delším čekáním
+        if (!text) {
+          debug('Retrying getChatInputText with delay...');
+          await new Promise((r) => setTimeout(r, 100));
+          text = await getChatInputText(true);
+          debug(`Retry getChatInputText returned: "${text}"`);
+        }
         
         // Fallback na snapshot
         if (!text && savedSnapshot) {
