@@ -129,22 +129,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   /** Uloží prompt do stavu, vždy započítá i opakovaný text.
    * INVARIANT: Žádný default parametr v get(); pokud customMessage chybí → notifikace.
-   * Filtruje texty konverzace aby se ukládaly jen uživatelské prompty.
    */
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     if (!text) return false;
-    
-    // Kontrola zda text neobsahuje celou konverzaci (pouze pokud má více označení rolí)
-    const lowerText = text.toLowerCase();
-    const hasMultipleRoles = (lowerText.includes('github copilot:') || lowerText.includes('assistant:')) 
-                           && (lowerText.includes('sunamo:') || lowerText.includes('user:'));
-    
-    if (hasMultipleRoles && text.length > 50) {
-      debug(`recordPrompt: Skipping conversation text from ${source}, length=${text.length}`);
-      return false;
-    }
-    
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
@@ -412,9 +400,9 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 7) Debug log pokud text nezachycen (NEUKLÁDÁME prázdný prompt)
+      // 7) Skutečně prázdný prompt - explicitně uložit informaci  
       if (ok && !text) {
-        debug(`Enter ${variant}: forwarded but no text captured. Buffer: "${typingBuffer.substring(0, 50)}", Snapshot: "${lastSnapshot.substring(0, 50)}"`);
+        recordPrompt('(empty prompt)', 'enter-empty-' + variant);
       }
     } catch (e) {
       debug('forward err ' + e);

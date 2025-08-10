@@ -73,3 +73,4 @@ v1.1.259 | post-restore auto build
 v1.1.261 | Fix empty prompt issue - remove saving (empty prompt) when text not captured, improve getChatInputText with multiple capture methods and better debug logging
 v1.1.262 | Fix text selection in Copilot chat - remove selectAll commands to prevent text highlighting
 v1.1.263 | Filter conversation text - capture only user prompts, not entire chat history
+v1.1.264 | Fix overly strict conversation filters - allow normal prompts to pass through

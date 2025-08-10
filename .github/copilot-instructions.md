@@ -526,3 +526,14 @@ Violation = immediate regression. Fix before proceeding.
 - Treat any unsolicited alteration to `copilot-instructions.md` justified solely by upstream changes in `vscode-copilot-chat` or `vscode-main` as a CONTENT CORRUPTION REGRESSION (severity equal to keybinding failure) requiring immediate revert.
 - This policy REASSERTS the existing Content Preservation & Full File Read sections: external references NEVER excuse partial reads or deletions.
 - Permanent marker: Do NOT remove this section without a verbatim user command quoting its exact title.
+
+## 🚫 Filtering Policy - NEVER Over-Filter (Aug 10 2025 Addendum)
+- **CRITICAL RULE**: When implementing text filtering or validation, NEVER create overly strict conditions that block legitimate user prompts.
+- **FORBIDDEN**: Blocking prompts based on single keywords, simple character presence (like ":"), or arbitrary length limits without context.
+- **REQUIRED APPROACH**: Only filter text that contains MULTIPLE conversation indicators (e.g., both "user:" AND "assistant:" patterns) combined with significant length.
+- **TESTING MANDATE**: Any new filtering logic MUST be tested to ensure basic prompts like "test", "do nothing", "help me" pass through successfully.
+- **REGRESSION DEFINITION**: Any filter that blocks normal user prompts (causing missing notifications or Activity Bar entries) is a CRITICAL REGRESSION equal to keybinding failure.
+- **ROLLBACK POLICY**: If filtering breaks basic functionality, immediately roll back to working state before fixing the filter logic.
+- **EXAMPLE VIOLATION**: Conditions like `text.includes(":")` or `text.includes("sunamo:")` or `text.length > 200` without additional context checks.
+- **CORRECT APPROACH**: `(text.includes("user:") && text.includes("assistant:") && text.length > 100)` - multiple indicators required.
+- This section is PERMANENT and MUST NOT be removed or weakened. Append refinements only with dated notes.

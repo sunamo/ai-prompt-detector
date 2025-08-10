@@ -77,15 +77,6 @@ export const getChatInputText = async (
         await new Promise(r => setTimeout(r, 30));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          // Kontrola zda zachycený text není celá konverzace (má více označení rolí)
-          const lowerCaptured = captured.toLowerCase();
-          const hasMultipleRoles = (lowerCaptured.includes('github copilot:') || lowerCaptured.includes('assistant:')) 
-                                 && (lowerCaptured.includes('sunamo:') || lowerCaptured.includes('user:'));
-          
-          if (hasMultipleRoles && captured.length > 100) {
-            console.log(`getChatInputText: Skipping conversation text via ${id}`);
-            continue;
-          }
           console.log(`getChatInputText: Success via ${id}`);
           break;
         }
