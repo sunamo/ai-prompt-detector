@@ -113,9 +113,9 @@ try {
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
     
-    # Spusť VS Code Insiders znovu v aktuálním adresáři
-    Write-Host "   - Starting VS Code Insiders..." -ForegroundColor Gray
-    Start-Process -FilePath 'code-insiders' -ArgumentList '.' -WindowStyle Hidden
+    # Spusť VS Code Insiders se složkou C:\Proj_Net\portal-ui
+    Write-Host "   - Starting VS Code Insiders with portal-ui..." -ForegroundColor Gray
+    Start-Process -FilePath 'code-insiders' -ArgumentList 'C:\Proj_Net\portal-ui' -WindowStyle Hidden
     
     Write-Host "   ✅ VS Code Insiders restarted" -ForegroundColor Green
 } catch {
