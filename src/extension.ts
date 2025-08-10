@@ -193,8 +193,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const pollTimer = setInterval(async () => {
     try {
       pollCounter++;
-      // Zkus zachytit aktuální obsah input boxu každé 2 sekundy
-      if (pollCounter % 5 === 0) { // každých 2.5 sekundy (500ms * 5)
+      // Zkus zachytit aktuální obsah input boxu častěji - každých 0.5 sekundy místo 2.5s
+      if (pollCounter % 1 === 0) { // každých 0.5 sekundy (500ms * 1)
         const currentInput = await getChatInputText(false);
         
         // Filtruj notifikace - pokud je obsah notifikace, ignoruj
@@ -271,8 +271,37 @@ export async function activate(context: vscode.ExtensionContext) {
     info('chat api init err ' + e);
   }
 
-  // Command listener API není dostupné v této verzi VS Code - přeskočit
-  info('Command listener API not available - using alternative text capture method');
+  // Pokus o registraci Chat Participant pro okamžitou detekci
+  try {
+    // Chat Participant approach - zachytává všechny chat requesty okamžitě
+    const chatApi = (vscode as any).chat;
+    if (chatApi && chatApi.createChatParticipant) {
+      const participant = chatApi.createChatParticipant('prompt-detector', (request: any, context: any, stream: any, token: any) => {
+        try {
+          const text = request.prompt || request.message || '';
+          if (text && text.trim()) {
+            info(`Chat Participant captured Send button: "${text.substring(0, 100)}"`);
+            recordPrompt(text.trim(), 'send-participant-detected');
+            
+            // Aktualizuj lastEnterTime aby se předešlo duplicate notifikacím z polling
+            lastEnterTime = Date.now();
+          }
+        } catch (err) {
+          info('Chat Participant error: ' + err);
+        }
+        
+        // Return empty result to not interfere
+        return {};
+      });
+      
+      context.subscriptions.push(participant);
+      info('Chat Participant registered for Send button detection');
+    } else {
+      info('Chat Participant API not available - keeping polling fallback');
+    }
+  } catch (e) {
+    info('Chat Participant registration failed - keeping polling fallback: ' + e);
+  }
 
   /**
    * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
