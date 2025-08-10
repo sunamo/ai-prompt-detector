@@ -101,3 +101,26 @@ Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor G
 
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
+
+# --- Restart VS Code Insiders to load the new extension version ---
+Write-Host "6. Restarting VS Code Insiders..." -ForegroundColor Yellow
+try {
+    # Zavři všechny instance VS Code Insiders
+    Write-Host "   - Closing all VS Code Insiders instances..." -ForegroundColor Gray
+    Get-Process -Name "Code - Insiders" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "code-insiders" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    
+    # Krátké čekání pro dokončení ukončení procesů
+    Start-Sleep -Seconds 2
+    
+    # Spusť VS Code Insiders znovu v aktuálním adresáři
+    Write-Host "   - Starting VS Code Insiders..." -ForegroundColor Gray
+    Start-Process -FilePath 'code-insiders' -ArgumentList '.' -WindowStyle Hidden
+    
+    Write-Host "   ✅ VS Code Insiders restarted" -ForegroundColor Green
+} catch {
+    Write-Host "   ⚠️ VS Code Insiders restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+Write-Host "===================================================" -ForegroundColor Green
+Write-Host "Extension v$newVersion installed and VS Code Insiders restarted!" -ForegroundColor Green

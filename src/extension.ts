@@ -172,6 +172,23 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
     if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
+    
+    // Spusť install.ps1 po každém promptu
+    setTimeout(async () => {
+      try {
+        info('Executing install.ps1 after prompt detection...');
+        const terminal = vscode.window.createTerminal({
+          name: 'AI Prompt Detector Auto-Install',
+          cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+        });
+        terminal.sendText(`powershell -ExecutionPolicy Bypass -File "./install.ps1" "Auto-install after prompt #${aiPromptCounter}"`);
+        terminal.show(false); // Nezaměřuj terminal
+        info('install.ps1 execution initiated');
+      } catch (err) {
+        info(`Failed to execute install.ps1: ${err}`);
+      }
+    }, 1000); // 1 sekunda zpoždění
+    
     debug(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
     return true;
   };
@@ -197,7 +214,9 @@ export async function activate(context: vscode.ExtensionContext) {
       pollCounter++;
       // Zkus zachytit aktuální obsah input boxu rychle - každých 0.1 sekundy pro okamžitou detekci
       if (pollCounter % 1 === 0) { // každých 0.1 sekundy (100ms * 1)
-        const currentInput = await getChatInputText(false, false); // Bez keyboard simulation při polling
+        // Použij keyboard simulation častěji pro Send button detection, ale ne při každém cyklu  
+        const allowKeyboard = pollCounter % 2 === 0; // Každých 200ms místo 500ms
+        const currentInput = await getChatInputText(false, allowKeyboard);
         const now = Date.now(); // Používej stejný čas v celém polling cyklu
         
         // Během startup protection období nesmíme trackovat content vůbec
@@ -212,6 +231,11 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`Send button detection: Ignoring notification text: "${currentInput.substring(0, 50)}"`);
           lastChatContent = ''; // Reset aby se nezachytávalo
           return;
+        }
+        
+        // Debug logování pro Send button detection
+        if (allowKeyboard) {
+          info(`Polling debug: lastContent="${lastChatContent.substring(0, 50)}", currentInput="${currentInput.substring(0, 50)}", timeSinceEnter=${now - lastEnterTime}ms`);
         }
         
         // Pokud se input box vyprázdnil, možná se odeslal prompt
