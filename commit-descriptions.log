@@ -102,3 +102,4 @@ v1.1.295 | Improve startup protection - prevent all input tracking during first 
 v1.1.297 | Extend startup protection to 10 seconds and add spam text filtering
 v1.1.299 | Speed up Send button detection to 100ms polling for instant response
 v1.1.301 | Disable keyboard simulation during polling to prevent automatic select all in UI
+v1.1.302 | Debug logging for mouse Send button detection
