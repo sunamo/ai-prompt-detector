@@ -42,42 +42,51 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 };
 
 /**
- * Získá text z chat inputu neinvazivně (pouze kopírovacími příkazy) a ponechá původní schránku.
- * NIKDY nepoužívá selectAll příkazy aby se zabránilo označování textu v copilotu.
- * @param attemptFocus Pokud true (vyžádáno volajícím), pokusí se přesměrovat fokus. Hodnota undefined => bere se jako true (explicitní rozhodnutí, bez default param syntaxe).
- * @returns Trimovaný text vstupu nebo prázdný řetězec.
+ * Získá text z chat inputu neinvazivně (pouze copyInput příkazy) a ponechá původní schránku.
+ * Zaměřuje se výhradně na obsah input boxu, NIKDY nepoužívá copyAll nebo selectAll.
+ * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
+ * @returns Trimovaný text uživatelského vstupu nebo prázdný řetězec.
  */
 export const getChatInputText = async (
 	attemptFocus?: boolean,
 ): Promise<string> => {
   try {
-    const wantFocus = attemptFocus !== false; // žádný default v signatuře, jen logická interpretace
-    if (wantFocus) await focusChatInput();
+    const wantFocus = attemptFocus !== false;
+    if (wantFocus) {
+      await focusChatInput();
+      // Krátká pauza aby se fokus aplikoval
+      await new Promise(r => setTimeout(r, 50));
+    }
     
     const prev = await vscode.env.clipboard.readText();
     let captured = '';
     const all = await vscode.commands.getCommands(true);
     
-    // POUZE kopírovací příkazy - žádné selectAll aby se neoznačoval text
+    // POUZE copyInput příkazy - zachytí jen obsah input boxu, ne celou konverzaci
     const copyCommands = [
       'workbench.action.chat.copyInput',
-      'github.copilot.chat.copyInput',
+      'github.copilot.chat.copyInput', 
       'chat.copyInput',
       'workbench.action.chatEditor.copyInput',
       'github.copilot.interactive.copyInput',
-      'workbench.action.chat.copyAll',
-      'github.copilot.chat.copyAll',
-      'chat.copyAll',
-      'workbench.action.chatEditor.copyAll',
     ].filter((i) => all.includes(i));
     
     for (const id of copyCommands) {
       try {
         await vscode.commands.executeCommand(id);
-        await new Promise(r => setTimeout(r, 25)); // krátká pauza pro async operace
+        await new Promise(r => setTimeout(r, 30));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          console.log(`getChatInputText success via: ${id}`);
+          // Kontrola zda zachycený text neobsahuje označení konverzace (user: assistant:)
+          const lowerCaptured = captured.toLowerCase();
+          if (lowerCaptured.includes('github copilot:') || 
+              lowerCaptured.includes('assistant:') ||
+              lowerCaptured.includes('sunamo:') ||
+              (lowerCaptured.includes(':') && captured.length > 200)) {
+            console.log(`getChatInputText: Skipping conversation text via ${id}`);
+            continue;
+          }
+          console.log(`getChatInputText: Success via ${id}`);
           break;
         }
       } catch {}

@@ -129,10 +129,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
   /** Uloží prompt do stavu, vždy započítá i opakovaný text.
    * INVARIANT: Žádný default parametr v get(); pokud customMessage chybí → notifikace.
+   * Filtruje texty konverzace aby se ukládaly jen uživatelské prompty.
    */
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     if (!text) return false;
+    
+    // Kontrola zda text neobsahuje celou konverzaci místo jen user promptu
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('github copilot:') || 
+        lowerText.includes('assistant:') ||
+        lowerText.includes('sunamo:') ||
+        (lowerText.includes(':') && text.length > 300)) {
+      debug(`recordPrompt: Skipping conversation text from ${source}, length=${text.length}`);
+      return false;
+    }
+    
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
