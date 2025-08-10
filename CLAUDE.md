@@ -537,3 +537,14 @@ Violation = immediate regression. Fix before proceeding.
 - **EXAMPLE VIOLATION**: Conditions like `text.includes(":")` or `text.includes("sunamo:")` or `text.length > 200` without additional context checks.
 - **CORRECT APPROACH**: `(text.includes("user:") && text.includes("assistant:") && text.length > 100)` - multiple indicators required.
 - This section is PERMANENT and MUST NOT be removed or weakened. Append refinements only with dated notes.
+
+## 🚫 Text Selection Policy - NEVER Interfere with User Interface (Aug 10 2025 Addendum)
+- **CRITICAL RULE**: Text capture mechanisms MUST NEVER visually interfere with the user's interaction in Copilot Chat.
+- **FORBIDDEN COMMANDS**: Never use `editor.action.selectAll` or any selection commands that cause visible text highlighting in the UI.
+- **ALLOWED APPROACH**: Only use dedicated copyInput commands (`workbench.action.chat.copyInput`, `github.copilot.chat.copyInput`, etc.).
+- **NO FALLBACK SELECTION**: If copyInput commands fail, do NOT fall back to selectAll+copy - accept that text cannot be captured.
+- **USER EXPERIENCE PRIORITY**: Preserving smooth user interaction is more important than capturing every prompt.
+- **REGRESSION DEFINITION**: Any code that causes visible text selection or highlighting in Copilot Chat is a CRITICAL UI REGRESSION.
+- **EXAMPLE VIOLATION**: Using `editor.action.selectAll` followed by `editor.action.clipboardCopyAction` as fallback.
+- **CORRECT APPROACH**: Rely exclusively on non-invasive copyInput commands, accept capture failures gracefully.
+- This section is PERMANENT and MUST NOT be removed or weakened. Never compromise user interface smoothness for data capture.

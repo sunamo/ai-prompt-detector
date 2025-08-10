@@ -82,20 +82,8 @@ export const getChatInputText = async (
       } catch {}
     }
     
-    // Fallback: pokus se vybrat vše v input boxu a zkopírovat
-    if (!captured.trim() || captured === prev) {
-      try {
-        await vscode.commands.executeCommand('editor.action.selectAll');
-        await new Promise(r => setTimeout(r, 30));
-        await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
-        await new Promise(r => setTimeout(r, 30));
-        const fallbackText = await vscode.env.clipboard.readText();
-        if (fallbackText.trim() && fallbackText !== prev && fallbackText.length < 5000) {
-          captured = fallbackText;
-          console.log('getChatInputText: Success via selectAll+copy fallback');
-        }
-      } catch {}
-    }
+    // Žádný fallback s selectAll - může způsobit označení textu v UI
+    // Pokud copyInput příkazy nefungují, raději neposkytujeme text
     
     // Obnoví původní obsah schránky
     try { 
