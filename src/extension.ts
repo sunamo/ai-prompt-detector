@@ -384,9 +384,22 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 7) Skutečně prázdný prompt – explicitně uložit informaci
+      // 7) Skutečně prázdný prompt – nyní přidán DODATEČNÝ late-capture pokus před uložením placeholderu
       if (ok && !text) {
-        recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+        try {
+          // Krátké zpoždění – po odeslání se model někdy naplní (race condition)
+          await new Promise((r) => setTimeout(r, 45));
+          let late = await getChatInputText();
+          if (!late && typingBuffer.trim()) late = typingBuffer.trim();
+          else if (!late && lastSnapshot) late = lastSnapshot;
+          if (late && late.trim()) {
+            recordPrompt(late, 'enter-late-' + variant);
+          } else {
+            recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+          }
+        } catch {
+          recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+        }
       }
     } catch (e) {
       debug('forward err ' + e);
