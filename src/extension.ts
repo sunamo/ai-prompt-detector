@@ -224,55 +224,94 @@ export async function activate(context: vscode.ExtensionContext) {
 
   hookCopilotExports(recordPrompt);
 
-  // Command monitoring for mouse click detection
-  if (commandMonitoringEnabled) {
-    const originalExecuteCommand = vscode.commands.executeCommand;
-    (vscode.commands as any).executeCommand = async function(command: string, ...args: any[]) {
-      try {
-        // Monitor chat-related commands that might be triggered by mouse
-        if (command.includes('chat') || command.includes('copilot')) {
-          info(`Command executed: ${command} with ${args.length} args`);
-          
-          // Skip if this is too soon after Enter key press (avoid duplicates)
-          const timeSinceEnter = Date.now() - lastEnterTime;
-          if (timeSinceEnter < 2000) {
-            info(`Skipping command monitoring - too soon after Enter (${timeSinceEnter}ms)`);
-            return originalExecuteCommand.call(this, command, ...args);
-          }
-          
-          // Check if this might be a send command triggered by mouse
-          if (command.includes('accept') || command.includes('send') || command.includes('submit')) {
-            // Try to extract text from arguments
-            let text = '';
-            for (const arg of args) {
-              if (typeof arg === 'string' && arg.trim().length > 0) {
-                text = arg.trim();
-                break;
-              } else if (arg && typeof arg === 'object') {
-                text = String(arg.message || arg.prompt || arg.text || '').trim();
-                if (text) break;
+  // WebView message interception for mouse detection
+  let webviewMessageInterceptionEnabled = true;
+  if (webviewMessageInterceptionEnabled) {
+    try {
+      // Hook into VS Code's webview message handling
+      const originalPostMessage = (global as any).postMessage;
+      if (originalPostMessage) {
+        (global as any).postMessage = function(message: any, origin?: string) {
+          try {
+            if (message && typeof message === 'object') {
+              // Look for chat submission messages
+              if ((message.type === 'submit' || message.command === 'submit' || 
+                   message.action === 'send' || message.type === 'sendMessage') &&
+                  (message.text || message.message || message.prompt)) {
+                
+                const text = String(message.text || message.message || message.prompt || '').trim();
+                if (text) {
+                  info(`WebView message captured mouse submission: "${text.substring(0, 100)}"`);
+                  recordPrompt(text, 'mouse-webview-message');
+                }
+              }
+              
+              // Also check nested data structures
+              if (message.data && typeof message.data === 'object') {
+                const data = message.data;
+                if ((data.type === 'submit' || data.command === 'submit') &&
+                    (data.text || data.message || data.prompt)) {
+                  const text = String(data.text || data.message || data.prompt || '').trim();
+                  if (text) {
+                    info(`WebView nested message captured: "${text.substring(0, 100)}"`);
+                    recordPrompt(text, 'mouse-webview-nested');
+                  }
+                }
               }
             }
-            
-            if (text) {
-              info(`Mouse command captured text: "${text.substring(0, 100)}"`);
-              recordPrompt(text, 'mouse-command-monitor');
-            } else {
-              info(`Mouse command detected but no text found: ${command}`);
-              // Record with fallback for tracking
-              recordPrompt(`[Mouse click detected via ${command}]`, 'mouse-command-monitor');
-            }
+          } catch (err) {
+            info(`WebView message interception error: ${err}`);
           }
-        }
-      } catch (err) {
-        info(`Command monitoring error: ${err}`);
+          
+          // Call original postMessage
+          if (originalPostMessage) {
+            return originalPostMessage.call(this, message, origin);
+          }
+        };
+        
+        info('WebView message interception enabled');
+      } else {
+        info('postMessage not available for interception');
       }
+    } catch (err) {
+      info(`WebView interception setup failed: ${err}`);
+    }
+  }
+  
+  // Alternative approach: Monitor VS Code internal message passing
+  try {
+    // Hook into acquireVsCodeApi communications 
+    const originalAcquireVsCodeApi = (global as any).acquireVsCodeApi;
+    if (originalAcquireVsCodeApi) {
+      (global as any).acquireVsCodeApi = function() {
+        const api = originalAcquireVsCodeApi.call(this);
+        if (api && api.postMessage) {
+          const originalApiPostMessage = api.postMessage;
+          api.postMessage = function(message: any) {
+            try {
+              if (message && typeof message === 'object' && 
+                  (message.command === 'submit' || message.type === 'submit') &&
+                  (message.text || message.message)) {
+                const text = String(message.text || message.message || '').trim();
+                if (text) {
+                  info(`VS Code API captured mouse submission: "${text.substring(0, 100)}"`);
+                  recordPrompt(text, 'mouse-vscode-api');
+                }
+              }
+            } catch (err) {
+              info(`VS Code API interception error: ${err}`);
+            }
+            
+            return originalApiPostMessage.call(this, message);
+          };
+        }
+        return api;
+      };
       
-      // Always call original command
-      return originalExecuteCommand.call(this, command, ...args);
-    };
-    
-    info('Command monitoring enabled for mouse detection');
+      info('VS Code API message interception enabled');
+    }
+  } catch (err) {
+    info(`VS Code API interception setup failed: ${err}`);
   }
 
   try {
@@ -462,7 +501,63 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // Additional mouse detection via workspace monitoring
+  // Extension Host Message Monitoring for mouse clicks
+  try {
+    // Monitor all extension host communications
+    const originalRequire = (global as any).require;
+    if (originalRequire) {
+      (global as any).require = function(id: string) {
+        const module = originalRequire.call(this, id);
+        
+        // Hook into any chat-related modules
+        if (id && typeof id === 'string' && (id.includes('chat') || id.includes('copilot'))) {
+          info(`Chat-related module loaded: ${id}`);
+          
+          // Try to hook into the module's functions
+          if (module && typeof module === 'object') {
+            for (const key in module) {
+              const fn = module[key];
+              if (typeof fn === 'function' && (key.includes('send') || key.includes('submit'))) {
+                const originalFn = fn;
+                module[key] = function(...args: any[]) {
+                  try {
+                    // Check arguments for text content
+                    for (const arg of args) {
+                      if (typeof arg === 'string' && arg.trim().length > 5) {
+                        info(`Extension module captured: "${arg.substring(0, 100)}" from ${key}`);
+                        recordPrompt(arg.trim(), 'mouse-extension-module');
+                        break;
+                      } else if (arg && typeof arg === 'object' && 
+                                (arg.message || arg.prompt || arg.text)) {
+                        const text = String(arg.message || arg.prompt || arg.text || '').trim();
+                        if (text) {
+                          info(`Extension module object captured: "${text.substring(0, 100)}"`);
+                          recordPrompt(text, 'mouse-extension-object');
+                          break;
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    info(`Extension module hook error: ${err}`);
+                  }
+                  
+                  return originalFn.apply(this, ...args);
+                };
+              }
+            }
+          }
+        }
+        
+        return module;
+      };
+      
+      info('Extension Host module monitoring enabled');
+    }
+  } catch (err) {
+    info(`Extension Host monitoring setup failed: ${err}`);
+  }
+  
+  // Additional mouse detection via workspace monitoring  
   let lastChatUpdate = 0;
   const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
     try {
