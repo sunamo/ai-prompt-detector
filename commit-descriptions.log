@@ -92,3 +92,4 @@ v1.1.280 | Fix local time logging and force extension reload detection
 v1.1.281 | Remove broken command listener, simplify to getChatInputText only
 v1.1.282 | Add detailed logging to getChatInputText for debugging copy commands
 v1.1.283 | Add keyboard simulation fallback when copyInput commands unavailable
+v1.1.284 | Add detailed logging for Chat API and Copilot exports to detect Send button clicks

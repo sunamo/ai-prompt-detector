@@ -176,7 +176,31 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  // Snapshot timer není potřeba - používáme přímé getChatInputText() při Enter
+  // Polling timer pro detekci Send button clicks
+  let lastChatContent = '';
+  let pollCounter = 0;
+  
+  const pollTimer = setInterval(async () => {
+    try {
+      pollCounter++;
+      // Zkus zachytit aktuální obsah input boxu každé 2 sekundy
+      if (pollCounter % 5 === 0) { // každých 2.5 sekundy (500ms * 5)
+        const currentInput = await getChatInputText(false);
+        
+        // Pokud se input box vyprázdnil, možná se odeslal prompt
+        if (lastChatContent && !currentInput.trim() && lastChatContent.trim()) {
+          info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
+          recordPrompt(lastChatContent.trim(), 'send-button-detected');
+        }
+        
+        lastChatContent = currentInput;
+      }
+    } catch {}
+  }, 500);
+  
+  context.subscriptions.push({
+    dispose: () => clearInterval(pollTimer),
+  });
 
   updateStatusBar();
 
