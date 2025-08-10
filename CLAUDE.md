@@ -54,10 +54,12 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - User always has the latest version of the extension
 
 ### 📊 VERSION MANAGEMENT - CRITICAL RULE!
-- **ALWAYS increment only PATCH version** (e.g. 1.1.2 → 1.1.3)
+- **NEVER manually change version in package.json** - install.ps1 handles version increments automatically
+- **install.ps1 always increments PATCH version** (e.g. 1.1.2 → 1.1.3) automatically
 - **NEVER increment MINOR** (1.1.x → 1.2.0) without explicit command
 - **Increment MINOR version ONLY when user says "compile for marketplace"**
 - **NEVER change MAJOR version** without explicit command
+- **Just run ./install.ps1** - it will increment version, build, commit, push, package and install automatically
 - Format: MAJOR.MINOR.PATCH (e.g. 1.1.15, 1.1.16, 1.1.17...)
 
 ## 🎯 TARGET FUNCTIONALITY - SPECSTORY INTEGRATION
