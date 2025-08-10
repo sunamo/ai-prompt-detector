@@ -106,7 +106,9 @@ async function hookCopilotExports(
  */
 export async function activate(context: vscode.ExtensionContext) {
   initLogger();
-  info('Activation start');
+  const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+  const version = ext?.packageJSON?.version || 'unknown';
+  info(`Activation start - version ${version}`);
   refreshDebugFlag();
 
   statusBarItem = vscode.window.createStatusBarItem(
