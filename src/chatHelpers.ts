@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import { info } from './logger';
 
 /**
  * Zaměří vstupní pole Copilot/Chat (projede více možných ID příkazů).
@@ -75,21 +76,24 @@ export const getChatInputText = async (
       'chatEditor.copyInput',
     ].filter((i) => all.includes(i));
     
-    console.log(`getChatInputText: Available copy commands: ${copyCommands.length} out of 10`);
-    console.log(`Available commands: ${copyCommands.join(', ')}`);
+    info(`getChatInputText: Available copy commands: ${copyCommands.length} out of 10`);
+    info(`Available commands: ${copyCommands.join(', ')}`);
     
     // Pokus s každým příkazem, s delšími pauzami
     for (const id of copyCommands) {
       try {
+        info(`Trying copy command: ${id}`);
         await vscode.commands.executeCommand(id);
         await new Promise(r => setTimeout(r, 80));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          console.log(`getChatInputText: Success via ${id} - captured: "${captured.substring(0, 100)}"`);
+          info(`getChatInputText: Success via ${id} - captured: "${captured.substring(0, 100)}"`);
           break;
+        } else {
+          info(`getChatInputText: Command ${id} executed but no new text in clipboard`);
         }
       } catch (err) {
-        console.log(`getChatInputText: Command ${id} failed: ${err}`);
+        info(`getChatInputText: Command ${id} failed: ${err}`);
       }
     }
     
@@ -103,13 +107,13 @@ export const getChatInputText = async (
     
     const result = captured.trim();
     if (result) {
-      console.log(`getChatInputText result: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
+      info(`getChatInputText result: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
     } else {
-      console.log('getChatInputText: No text captured via copyInput commands');
+      info('getChatInputText: No text captured via copyInput commands');
     }
     return result;
   } catch (e) { 
-    console.log(`getChatInputText error: ${e}`);
+    info(`getChatInputText error: ${e}`);
     return ''; 
   }
 };
