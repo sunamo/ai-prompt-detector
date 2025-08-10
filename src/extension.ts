@@ -179,6 +179,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Polling timer pro detekci Send button clicks
   let lastChatContent = '';
   let pollCounter = 0;
+  let lastEnterTime = 0; // Čas posledního Enter eventu
   
   const pollTimer = setInterval(async () => {
     try {
@@ -189,8 +190,14 @@ export async function activate(context: vscode.ExtensionContext) {
         
         // Pokud se input box vyprázdnil, možná se odeslal prompt
         if (lastChatContent && !currentInput.trim() && lastChatContent.trim()) {
-          info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
-          recordPrompt(lastChatContent.trim(), 'send-button-detected');
+          const now = Date.now();
+          // Ignoruj pokud byl Enter stisknut v posledních 5 sekundách (debouncing)
+          if (now - lastEnterTime > 5000) {
+            info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
+            recordPrompt(lastChatContent.trim(), 'send-button-detected');
+          } else {
+            info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
+          }
         }
         
         lastChatContent = currentInput;
@@ -266,6 +273,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const handleForwardEnter = async (variant: string) => {
     try {
       info(`=== ENTER ${variant} START ===`);
+      
+      // Zaznamenej čas Enter eventu pro debouncing
+      lastEnterTime = Date.now();
 
       // 1) Zaměří vstupní pole
       await focusChatInput();
