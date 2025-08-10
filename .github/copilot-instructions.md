@@ -1,3 +1,6 @@
+```````````````````````instructions
+``````````````````````instructions
+`````````````````````instructions
 ````````````````````instructions
 ```````````````````instructions
 ``````````````````instructions
@@ -403,7 +406,7 @@ Persist forever. Append refinements only; never delete this section.
 - Styling: header-bar, list, prompt-item, ln, txt, empty, footer class names are STABLE – do not rename without explicit instruction (automation or user CSS dependents may rely on them).
 - Accessibility: Keep text content selectable; avoid focus stealing (snapshot retrieval uses getChatInputText(false) for passive polling).
 - Script Policy: enableScripts remains false to reduce attack surface; do not enable unless a future feature explicitly requires it.
-- Regression Definition: Any deviation causing newest prompt not to appear at #1, or insertion of an extra reverse/sort, or loss of selectable text, is a REGRESSION equal to a keybinding failure.
+- Regression Definition: Any deviation causing newest prompt not to appear at #1, or insertion of an extra reverse/sort, or loss of selectable text, is a REGRESSION equal to keybinding failure.
 - Preservation: Treat this section plus existing Prompt Ordering Invariants as a unified contract. Append refinements only.
 
 ### ✅ Enforcement Checklist (Activity Bar)
@@ -504,17 +507,65 @@ Violation = immediate regression. Fix before proceeding.
   * Error path tested (returns early with clear message) when setting absent.
 - Applies to all settings: `maxPrompts`, `enableDebugLogs`, `customMessage`, and any future settings unless explicitly exempted in a dated addendum.
 
-## 🗣 Prompt Echo Understanding Policy (Aug 10 2025)
-- After each user prompt the assistant internally restates (mentally) its understanding BEFORE acting.
-- Only surface the restatement when user explicitly asks; do not spam normal flow.
-- Purpose: ensure precise alignment without clutter.
-- Regression: Acting on ambiguous instruction without clarification when feasible.
+## 🔄 SpecStory Runtime Integration Behavior (Appended Aug 10 2025)
+- WHEN SpecStory extension (SpecStory.specstory-vscode) IS installed & active:
+  - A filesystem watcher MUST observe all `**/.specstory/history/*.md` paths.
+  - On create/change of a valid SpecStory export filename: parse, apply per-file reverse, append (without reordering existing newer runtime prompt at index 0 if present), refresh Activity Bar immediately.
+- WHEN SpecStory extension is NOT installed:
+  - Runtime prompt capture still guarantees a non-empty Activity Bar by immediately inserting each sent prompt at index 0 (`state.recentPrompts.unshift`).
+  - No watcher errors or noisy logs are permitted; watcher can still run (gracefully no files) or be skipped silently.
+- Immediate Insertion Rationale:
+  - Prevents an initially blank Activity Bar while user prompts but before any SpecStory export occurs.
+  - Ensures verification of keybinding capture (Enter variants) even without SpecStory.
+- Later SpecStory export containing the same prompts MUST NOT deduplicate or suppress earlier runtime entries; duplicates are allowed (see Duplicate Suppression section) and appear after the live-captured prompt according to ordering invariants.
+- REGRESSION if: watcher removed, runtime insertion delayed until after export, or duplicates suppressed.
 
-## ⚙️ No Fallback Configuration Enforcement (Aug 10 2025)
-- All configuration retrieval via config.get MUST omit default parameter.
-- Missing/invalid values: single notification + graceful early return / minimal error HTML.
-- For settings: enableDebugLogs, maxPrompts, customMessage, (future settings likewise) and package version.
-- FORBIDDEN pattern: config.get('x', SOME_LITERAL)
-- Rationale: Explicit surfacing of misconfiguration.
-- Regression: Introducing any default parameter silently masking absence.
+### ✅ SpecStory Behavior Checklist
+1. Watcher active (or gracefully harmless) when SpecStory present? (Yes)
+2. Immediate unshift on every submit before any export? (Yes)
+3. No deduplication of exported duplicates? (Yes)
+4. Ordering invariant preserved (newest overall still index 0)? (Yes)
+
+## 🪄 Prompt Capture Hierarchy (Appended Aug 10 2025)
+- Capture priority (stop at first non-empty):
+  1. Official chat API submission events (`onDidSubmitRequest`).
+  2. Copilot internal export events discovered by traversal (exports event objects).
+  3. Command execution hooks (`onDidExecuteCommand`) using typing buffer + heuristics.
+  4. Passive snapshot polling of chat input model (no focus stealing).
+  5. Clipboard fallback (copy/selectAll) – LAST RESORT ONLY.
+- Clipboard MUST NOT run if any higher tier already yielded text for that submission.
+- REGRESSION if clipboard path is invoked when tiers 1–4 produced text.
+- Logging must note which tier produced the prompt (e.g. `copilot-exports`, `chatApi`, `cmd-buffer`, `snapshot`, `clipboard-fallback`).
+
+### ✅ Capture Hierarchy Checklist
+1. Higher-tier success prevents clipboard usage? (Yes)
+2. Tier label logged with source tag? (Yes)
+3. Typing buffer truncated safely (max length) without dropping fresh chars? (Yes)
+4. Snapshot polling does not steal focus? (Yes)
+
+## 📖 Full Instruction File Read Requirement (Appended Aug 10 2025)
+- BEFORE any decision, edit, or policy evaluation, the assistant MUST conceptually treat the entire `copilot-instructions.md` file as authoritative – partial reads (e.g. only first 120 lines) risk missing invariants.
+- NEVER assume earlier content; always operate as if a full read occurred (tooling may internally provide segments, but logic must behave as if full file is known).
+- REGRESSION if decisions contradict sections located beyond originally read range.
+- Rationale: Distributed invariants (ordering, duplicate handling, readability, no-fallback config) appear in multiple distant sections.
+
+### ✅ Full Read Checklist
+1. Any new policy conflicts? If yes, reconcile referencing both sections.
+2. Adding new sections appends – never overwrites prior content.
+3. No deletion without explicit verbatim removal instruction from user.
+
+## 🚫 Configuration & Version Fallback Prohibition (Reasserted Aug 10 2025)
+- Do NOT supply second-argument defaults in `configuration.get` for monitored settings (`maxPrompts`, `enableDebugLogs`, `customMessage`, or future additions) – already defined earlier; this section REASSERTS.
+- Do NOT use `|| '1.1.x'` or similar for extension version or any critical value. If missing → show notification + render minimal error HTML / abort logic.
+- Treat introduction of any silent fallback as a READABILITY + FUNCTIONAL regression; revert immediately.
+
+### ✅ No-Fallback Checklist
+1. Search for `config.get<` usages with a comma default – none? (Required)
+2. Search for `|| '1.` or `|| "We` style fallback to core settings – none (except allowed constant strings unrelated to config)?
+3. Version retrieval uses explicit error path, not fallback string? (Yes)
+
+## 🔐 Persistence Marker (Aug 10 2025)
+- All sections appended today (SpecStory Runtime Integration, Prompt Capture Hierarchy, Full Instruction File Read Requirement, No-Fallback Reassertion) are PERMANENT.
+- Future modifications MUST reference section titles verbatim.
+- Deletion without exact user command quoting the full block is forbidden by Content Preservation Policy.
 ````````````````

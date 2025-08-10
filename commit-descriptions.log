@@ -67,3 +67,4 @@ v1.1.251 | Expand JSDoc to multi-line readable blocks in activityBarProvider (po
 v1.1.252 | Append Activity Bar Display Policy + JSDoc Readability Policy sections
 v1.1.253 | Append strict JSDoc multi-line enforcement section to instructions
 v1.1.254 | Remove all fallback defaults (maxPrompts/version) and enforce error notifications
+v1.1.255 | JSDoc
