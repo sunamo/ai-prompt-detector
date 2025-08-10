@@ -47,6 +47,17 @@ $raw = $raw -replace "`"version`"\s*:\s*`"$currentVersion`"", "`"version`": `"$n
 Set-Content './package.json' $raw -NoNewline
 Write-Host "✅ package.json updated" -ForegroundColor Green
 
+# --- Ensure dependencies (auto-install only if tsc missing) ---
+$tscPath = Join-Path (Get-Location) 'node_modules/.bin/tsc'
+if (-not (Test-Path $tscPath)) {
+    Write-Host "Dependencies missing (tsc not found) – running pnpm install..." -ForegroundColor Yellow
+    pnpm install
+    if ($LASTEXITCODE -ne 0) { Fail "Dependency install failed" }
+    Write-Host "   ✅ Dependencies installed" -ForegroundColor Green
+} else {
+    Write-Host "Dependencies present (tsc found) – skipping install" -ForegroundColor Green
+}
+
 # --- Remove old VSIX artifacts ---
 Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
 Get-ChildItem -Path '.' -Filter '*.vsix' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "   - Removing: $($_.Name)" -ForegroundColor Gray; Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
