@@ -148,3 +148,4 @@ v1.1.342 | Fixed mouse submission notification detection v1.1.341
 v1.1.344 | Enhanced mouse detection with command and workspace monitoring v1.1.343
 v1.1.346 | Improved mouse detection using VS Code chat service session data v1.1.345
 v1.1.347 | Updated instructions - install.ps1 handles version automatically
+v1.1.349 | Fixed TypeScript errors in mouse detection hooks

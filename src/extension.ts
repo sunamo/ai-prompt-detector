@@ -224,94 +224,96 @@ export async function activate(context: vscode.ExtensionContext) {
 
   hookCopilotExports(recordPrompt);
 
-  // WebView message interception for mouse detection
-  let webviewMessageInterceptionEnabled = true;
-  if (webviewMessageInterceptionEnabled) {
+  // Direct Copilot Chat Webview Panel Monitoring
+  let directWebviewMonitoringEnabled = true;
+  if (directWebviewMonitoringEnabled) {
     try {
-      // Hook into VS Code's webview message handling
-      const originalPostMessage = (global as any).postMessage;
-      if (originalPostMessage) {
-        (global as any).postMessage = function(message: any, origin?: string) {
-          try {
-            if (message && typeof message === 'object') {
-              // Look for chat submission messages
-              if ((message.type === 'submit' || message.command === 'submit' || 
-                   message.action === 'send' || message.type === 'sendMessage') &&
+      // Monitor for webview panels being created
+      const originalCreateWebviewPanel = vscode.window.createWebviewPanel;
+      (vscode.window as any).createWebviewPanel = function(viewType: string, title: string, showOptions: any, options?: any) {
+        const panel = originalCreateWebviewPanel.call(this, viewType, title, showOptions, options);
+        
+        // Check if this is a chat-related webview
+        if (viewType.includes('chat') || viewType.includes('copilot') || title.includes('Chat') || title.includes('Copilot')) {
+          info(`Chat webview panel created: ${viewType} - ${title}`);
+          
+          // Register our own message listener
+          panel.webview.onDidReceiveMessage((message: any) => {
+            try {
+              if (message && typeof message === 'object' &&
+                  (message.command === 'submit' || message.type === 'submit' || message.action === 'send') &&
                   (message.text || message.message || message.prompt)) {
                 
                 const text = String(message.text || message.message || message.prompt || '').trim();
                 if (text) {
-                  info(`WebView message captured mouse submission: "${text.substring(0, 100)}"`);
-                  recordPrompt(text, 'mouse-webview-message');
-                }
-              }
-              
-              // Also check nested data structures
-              if (message.data && typeof message.data === 'object') {
-                const data = message.data;
-                if ((data.type === 'submit' || data.command === 'submit') &&
-                    (data.text || data.message || data.prompt)) {
-                  const text = String(data.text || data.message || data.prompt || '').trim();
-                  if (text) {
-                    info(`WebView nested message captured: "${text.substring(0, 100)}"`);
-                    recordPrompt(text, 'mouse-webview-nested');
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            info(`WebView message interception error: ${err}`);
-          }
-          
-          // Call original postMessage
-          if (originalPostMessage) {
-            return originalPostMessage.call(this, message, origin);
-          }
-        };
-        
-        info('WebView message interception enabled');
-      } else {
-        info('postMessage not available for interception');
-      }
-    } catch (err) {
-      info(`WebView interception setup failed: ${err}`);
-    }
-  }
-  
-  // Alternative approach: Monitor VS Code internal message passing
-  try {
-    // Hook into acquireVsCodeApi communications 
-    const originalAcquireVsCodeApi = (global as any).acquireVsCodeApi;
-    if (originalAcquireVsCodeApi) {
-      (global as any).acquireVsCodeApi = function() {
-        const api = originalAcquireVsCodeApi.call(this);
-        if (api && api.postMessage) {
-          const originalApiPostMessage = api.postMessage;
-          api.postMessage = function(message: any) {
-            try {
-              if (message && typeof message === 'object' && 
-                  (message.command === 'submit' || message.type === 'submit') &&
-                  (message.text || message.message)) {
-                const text = String(message.text || message.message || '').trim();
-                if (text) {
-                  info(`VS Code API captured mouse submission: "${text.substring(0, 100)}"`);
-                  recordPrompt(text, 'mouse-vscode-api');
+                  info(`Direct webview captured mouse submission: "${text.substring(0, 100)}"`);
+                  recordPrompt(text, 'mouse-direct-webview');
                 }
               }
             } catch (err) {
-              info(`VS Code API interception error: ${err}`);
+              info(`Direct webview message error: ${err}`);
             }
-            
-            return originalApiPostMessage.call(this, message);
-          };
+          });
+          
+          info(`Hooked into chat webview panel: ${viewType}`);
         }
-        return api;
+        
+        return panel;
       };
       
-      info('VS Code API message interception enabled');
+      info('Direct webview panel monitoring enabled');
+    } catch (err) {
+      info(`Direct webview monitoring setup failed: ${err}`);
+    }
+  }
+  
+  // Monitor existing webview views (for chat views that are already created)
+  try {
+    // Try to access the chat view directly through VS Code's internal APIs
+    const workbench = (vscode as any).workbench || (global as any).workbench;
+    if (workbench) {
+      // Monitor all view container changes
+      const intervalId = setInterval(() => {
+        try {
+          // Look for chat-related views in the workbench
+          const views = workbench.getViews ? workbench.getViews() : [];
+          for (const view of views) {
+            if (view && (view.id || '').includes('chat') || (view.id || '').includes('copilot')) {
+              info(`Found existing chat view: ${view.id}`);
+              
+              // Register message listener for existing views
+              if (view.webview && view.webview.onDidReceiveMessage) {
+                view.webview.onDidReceiveMessage((message: any) => {
+                  try {
+                    if (message && (message.command === 'submit' || message.type === 'submit') &&
+                        (message.text || message.message)) {
+                      const text = String(message.text || message.message || '').trim();
+                      if (text) {
+                        info(`Existing view captured: "${text.substring(0, 100)}"`);
+                        recordPrompt(text, 'mouse-existing-view');
+                      }
+                    }
+                  } catch (err) {
+                    info(`Existing view error: ${err}`);
+                  }
+                });
+                
+                info(`Registered listener for existing chat view: ${view.id}`);
+              }
+            }
+          }
+        } catch (err) {
+          info(`Existing view monitoring error: ${err}`);
+        }
+      }, 5000);
+      
+      // Clear interval after 30 seconds to avoid permanent polling
+      setTimeout(() => clearInterval(intervalId), 30000);
+      
+      info('Existing webview monitoring started');
     }
   } catch (err) {
-    info(`VS Code API interception setup failed: ${err}`);
+    info(`Existing webview monitoring failed: ${err}`);
   }
 
   try {
