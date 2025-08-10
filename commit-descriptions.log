@@ -94,3 +94,4 @@ v1.1.282 | Add detailed logging to getChatInputText for debugging copy commands
 v1.1.283 | Add keyboard simulation fallback when copyInput commands unavailable
 v1.1.284 | Add detailed logging for Chat API and Copilot exports to detect Send button clicks
 v1.1.285 | Add polling timer to detect Send button clicks by monitoring input box changes
+v1.1.286 | Add debouncing to prevent duplicate notifications when Enter pressed

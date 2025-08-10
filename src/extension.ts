@@ -181,6 +181,15 @@ export async function activate(context: vscode.ExtensionContext) {
   let pollCounter = 0;
   let lastEnterTime = 0; // Čas posledního Enter eventu
   
+  /** Kontroluje zda text vypadá jako notifikace z extension */
+  const isNotificationText = (text: string): boolean => {
+    const trimmed = text.trim();
+    return trimmed.includes('AI Prompt sent') || 
+           trimmed.includes('(send-button-detected)') ||
+           trimmed.includes('(enter-') ||
+           trimmed.startsWith('[No text captured');
+  };
+  
   const pollTimer = setInterval(async () => {
     try {
       pollCounter++;
@@ -188,8 +197,15 @@ export async function activate(context: vscode.ExtensionContext) {
       if (pollCounter % 5 === 0) { // každých 2.5 sekundy (500ms * 5)
         const currentInput = await getChatInputText(false);
         
+        // Filtruj notifikace - pokud je obsah notifikace, ignoruj
+        if (isNotificationText(currentInput)) {
+          info(`Send button detection: Ignoring notification text: "${currentInput.substring(0, 50)}"`);
+          lastChatContent = ''; // Reset aby se nezachytávalo
+          return;
+        }
+        
         // Pokud se input box vyprázdnil, možná se odeslal prompt
-        if (lastChatContent && !currentInput.trim() && lastChatContent.trim()) {
+        if (lastChatContent && !currentInput.trim() && lastChatContent.trim() && !isNotificationText(lastChatContent)) {
           const now = Date.now();
           // Ignoruj pokud byl Enter stisknut v posledních 5 sekundách (debouncing)
           if (now - lastEnterTime > 5000) {
