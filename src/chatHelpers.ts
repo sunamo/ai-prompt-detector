@@ -77,12 +77,12 @@ export const getChatInputText = async (
         await new Promise(r => setTimeout(r, 30));
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          // Kontrola zda zachycený text neobsahuje označení konverzace (user: assistant:)
+          // Kontrola zda zachycený text není celá konverzace (má více označení rolí)
           const lowerCaptured = captured.toLowerCase();
-          if (lowerCaptured.includes('github copilot:') || 
-              lowerCaptured.includes('assistant:') ||
-              lowerCaptured.includes('sunamo:') ||
-              (lowerCaptured.includes(':') && captured.length > 200)) {
+          const hasMultipleRoles = (lowerCaptured.includes('github copilot:') || lowerCaptured.includes('assistant:')) 
+                                 && (lowerCaptured.includes('sunamo:') || lowerCaptured.includes('user:'));
+          
+          if (hasMultipleRoles && captured.length > 100) {
             console.log(`getChatInputText: Skipping conversation text via ${id}`);
             continue;
           }

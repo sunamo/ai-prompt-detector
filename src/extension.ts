@@ -135,12 +135,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const text = (raw || '').trim();
     if (!text) return false;
     
-    // Kontrola zda text neobsahuje celou konverzaci místo jen user promptu
+    // Kontrola zda text neobsahuje celou konverzaci (pouze pokud má více označení rolí)
     const lowerText = text.toLowerCase();
-    if (lowerText.includes('github copilot:') || 
-        lowerText.includes('assistant:') ||
-        lowerText.includes('sunamo:') ||
-        (lowerText.includes(':') && text.length > 300)) {
+    const hasMultipleRoles = (lowerText.includes('github copilot:') || lowerText.includes('assistant:')) 
+                           && (lowerText.includes('sunamo:') || lowerText.includes('user:'));
+    
+    if (hasMultipleRoles && text.length > 50) {
       debug(`recordPrompt: Skipping conversation text from ${source}, length=${text.length}`);
       return false;
     }
