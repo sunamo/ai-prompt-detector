@@ -75,6 +75,9 @@ export const getChatInputText = async (
       'chatEditor.copyInput',
     ].filter((i) => all.includes(i));
     
+    console.log(`getChatInputText: Available copy commands: ${copyCommands.length} out of 10`);
+    console.log(`Available commands: ${copyCommands.join(', ')}`);
+    
     // Pokus s každým příkazem, s delšími pauzami
     for (const id of copyCommands) {
       try {

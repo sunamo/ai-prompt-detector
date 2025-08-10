@@ -169,28 +169,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  if (!snapshotTimer) {
-    snapshotTimer = setInterval(async () => {
-      try {
-        // Nepřetahovat fokus při pasivním snapshotu (attemptFocus=false)
-        const txt = await getChatInputText(false);
-        if (txt && txt !== lastSnapshot && txt.length > 0) {
-          lastSnapshot = txt;
-          info(`Snapshot updated: "${txt.substring(0, 50)}"`);
-          debug(`Snapshot updated: "${txt.substring(0, 50)}"`);
-          // Také aktualizuj typing buffer pokud je prázdný
-          if (!typingBuffer.trim() && txt.trim()) {
-            typingBuffer = txt;
-            info(`TypingBuffer updated from snapshot: "${txt.substring(0, 50)}"`);
-            debug(`TypingBuffer updated from snapshot: "${txt.substring(0, 50)}"`);
-          }
-        }
-      } catch {}
-    }, 800);
-    context.subscriptions.push({
-      dispose: () => snapshotTimer && clearInterval(snapshotTimer),
-    });
-  }
+  // Snapshot timer není potřeba - používáme přímé getChatInputText() při Enter
 
   updateStatusBar();
 
@@ -233,141 +212,8 @@ export async function activate(context: vscode.ExtensionContext) {
     debug('chat api init err ' + e);
   }
 
-  try {
-    const cmdsAny = vscode.commands as any;
-    info(`Command listener registration: onDidExecuteCommand available = ${!!cmdsAny?.onDidExecuteCommand}`);
-    if (cmdsAny?.onDidExecuteCommand) {
-      const sendCommands = new Set([
-        'github.copilot.chat.acceptInput',
-        'github.copilot.chat.send',
-        'github.copilot.chat.sendMessage',
-        'github.copilot.chat.submit',
-        'github.copilot.chat.executeSubmit',
-        'github.copilot.chat.inlineSubmit',
-        'github.copilot.interactive.submit',
-        'github.copilot.interactive.acceptInput',
-        'workbench.action.chat.acceptInput',
-        'workbench.action.chat.submit',
-        'workbench.action.chat.executeSubmit',
-        'workbench.action.chat.submitWithCodebase',
-        'workbench.action.chat.submitWithoutDispatching',
-        'workbench.action.chat.send',
-        'workbench.action.chat.sendMessage',
-        'workbench.action.chat.sendToNewChat',
-        'workbench.action.chatEditor.acceptInput',
-        'chat.acceptInput',
-        'inlineChat.accept',
-        'interactive.acceptInput',
-      ]);
-      context.subscriptions.push(
-        cmdsAny.onDidExecuteCommand(async (ev: any) => {
-          try {
-            const cmd = ev?.command as string;
-            if (!cmd) return;
-            // Log všechny příkazy pro debugging
-            if (cmd === 'type' || cmd.includes('chat') || cmd.includes('copilot')) {
-              info(`CMD CAPTURED: ${cmd}`);
-            }
-            if (debugEnabled) debug('CMD ' + cmd);
-            if (cmd === 'type') {
-              const t = ev?.args?.[0]?.text;
-              if (t) {
-                // Přijímáme i newlines - možná jsou součástí promptu
-                typingBuffer += t;
-                if (typingBuffer.length > 8000)
-                  typingBuffer = typingBuffer.slice(-8000);
-                info(`TYPE EVENT: added "${t.replace(/\n/g, '\\n')}", buffer now="${typingBuffer.substring(0, 100)}"`);
-                debug(`TYPE: added "${t.replace(/\n/g, '\\n')}", buffer now="${typingBuffer.substring(0, 100)}"`);
-              }
-              return;
-            }
-            if (cmd === 'deleteLeft') {
-              typingBuffer = typingBuffer.slice(0, -1);
-              debug(`DELETE: buffer now="${typingBuffer}"`);
-              return;
-            }
-            if (cmd === 'editor.action.clipboardPasteAction') {
-              try {
-                const clip = await vscode.env.clipboard.readText();
-                if (clip) {
-                  typingBuffer += clip;
-                }
-              } catch {}
-              return;
-            }
-            const lower = cmd.toLowerCase();
-            const heuristicMatch =
-              !sendCommands.has(cmd) &&
-              (lower.includes('copilot') || lower.includes('chat')) &&
-              (lower.includes('submit') ||
-                lower.includes('send') ||
-                lower.includes('accept'));
-            if (heuristicMatch) {
-              debug('Heuristic SEND command detected: ' + cmd);
-              sendCommands.add(cmd);
-            }
-            if (
-              !sendCommands.has(cmd) &&
-              !heuristicMatch &&
-              typingBuffer.trim().length > 0
-            ) {
-              setTimeout(() => {
-                if (!typingBuffer.trim()) {
-                  dynamicSendCommands.add(cmd);
-                  debug('Dynamic SEND detected & added: ' + cmd);
-                }
-              }, 40);
-            }
-            if (
-              sendCommands.has(cmd) ||
-              heuristicMatch ||
-              dynamicSendCommands.has(cmd)
-            ) {
-              const immediate = typingBuffer.trim() || lastSnapshot;
-              if (immediate) {
-                recordPrompt(
-                  immediate,
-                  typingBuffer.trim()
-                    ? heuristicMatch
-                      ? 'heuristic-buffer'
-                      : dynamicSendCommands.has(cmd)
-                        ? 'dynamic-buffer'
-                        : 'cmd-buffer'
-                    : 'snapshot',
-                );
-              } else {
-                setTimeout(async () => {
-                  try {
-                    const snap = await getChatInputText(true);
-                    if (snap && snap.trim()) {
-                      recordPrompt(
-                        snap,
-                        dynamicSendCommands.has(cmd)
-                          ? 'dynamic-cmd'
-                          : heuristicMatch
-                            ? 'heuristic-cmd'
-                            : 'cmd',
-                      );
-                    } else if (lastSnapshot && lastSnapshot.trim()) {
-                      recordPrompt(lastSnapshot, 'snapshot-late');
-                    } else {
-                      debug(`No valid text captured for command: ${cmd}`);
-                    }
-                  } catch (e2) {
-                    debug('post-send capture err ' + e2);
-                  }
-                }, 25);
-              }
-            }
-          } catch (err) {
-            debug('cmd hook err ' + err);
-          }
-        }),
-      );
-    }
-  } catch (e) {
-    debug('cmd hook init err ' + e);
-  }
+  // Command listener API není dostupné v této verzi VS Code - přeskočit
+  info('Command listener API not available - using alternative text capture method');
 
   /**
    * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
@@ -383,86 +229,56 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const handleForwardEnter = async (variant: string) => {
     try {
-      info(`=== ENTER ${variant} START === (always logged)`);
-      debug(`=== ENTER ${variant} START === typingBuffer="${typingBuffer}"`);
+      info(`=== ENTER ${variant} START ===`);
 
-      // 1) ZACHOVAT originální buffery PŘED jejich smazáním
-      const savedTypingBuffer = typingBuffer;
-      const savedSnapshot = lastSnapshot;
-      info(`Saved buffers - typing: "${savedTypingBuffer.substring(0, 50)}", snapshot: "${savedSnapshot.substring(0, 50)}"`);
-
-      // 2) Zaměří vstupní pole
+      // 1) Zaměří vstupní pole
       await focusChatInput();
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100));
 
-      // 3) Zkusí získat text různými způsoby - vyzkoušej všechny metody
-      let text = '';
+      // 2) Zkusí získat text z input boxu PŘED odesláním
+      let text = await getChatInputText(true);
+      info(`getChatInputText returned: "${text.substring(0, 100)}"`);
       
-      // První pokus: současný obsah input boxu PŘED odesláním  
-      debug('Trying getChatInputText BEFORE sending...');
-      text = await getChatInputText(true);
-      debug(`getChatInputText returned: "${text}"`);
-      
-      // Druhý pokus: typing buffer (co se napísalo)
-      if (!text && savedTypingBuffer.trim()) {
-        text = savedTypingBuffer.trim();
-        debug(`USING savedTypingBuffer: "${text}"`);
-      }
-      
-      // Třetí pokus: snapshot (poslední zachycený obsah)
-      if (!text && savedSnapshot.trim()) {
-        text = savedSnapshot.trim();
-        debug(`USING savedSnapshot: "${text}"`);
-      }
-      
-      // Čtvrtý pokus: Ještě jeden pokus na getChatInputText s kratším čekáním
+      // 3) Pokud se nepodařilo, zkusí znovu s delším čekáním
       if (!text) {
-        debug('Final attempt at getChatInputText...');
-        await new Promise((r) => setTimeout(r, 50));
+        info('First attempt failed, trying again...');
+        await new Promise((r) => setTimeout(r, 200));
         text = await getChatInputText(true);
-        debug(`Final getChatInputText returned: "${text}"`);
+        info(`Second attempt returned: "${text.substring(0, 100)}"`);
       }
 
-      // 4) Zaznamenat prompt - buď skutečný text nebo informaci o problému
+      // 4) Zaznamenat prompt - skutečný text nebo fallback zprávu
       if (text) {
-        debug(`RECORDING REAL PROMPT: "${text}"`);
-        recordPrompt(text, 'enter-' + variant, false); // Nečistit buffery hned
+        info(`RECORDING REAL PROMPT: "${text.substring(0, 100)}"`);
+        recordPrompt(text, 'enter-' + variant, false);
       } else {
-        debug('NO TEXT CAPTURED - recording fallback message');
-        // Pokud se nepodařilo zachytit text, zaznamenat to pro debugging
+        info('NO TEXT CAPTURED - recording fallback message');
         recordPrompt(`[No text captured for Enter ${variant}]`, 'enter-' + variant, false);
       }
 
       // 5) Pošle příkaz do Copilotu
       let ok = await forwardToChatAccept();
       if (!ok) {
-        for (const id of [
+        const fallbackCommands = [
           'github.copilot.chat.acceptInput',
           'github.copilot.chat.send',
           'github.copilot.chat.submit',
-          'github.copilot.interactive.submit',
           'workbench.action.chat.acceptInput',
           'workbench.action.chat.submit',
-          'workbench.action.chatEditor.acceptInput',
-        ]) {
+        ];
+        for (const id of fallbackCommands) {
           try {
             await vscode.commands.executeCommand(id);
             ok = true;
-            debug(`Forward successful via: ${id}`);
+            info(`Forward successful via: ${id}`);
             break;
           } catch {}
         }
       }
       
-      // 6) Vyčistit buffery až na konci po úspěšném odeslání
-      clearBuffers(`handleForwardEnter ${variant} completed`);
       info(`=== ENTER ${variant} END === SUCCESS`);
-      debug(`=== ENTER ${variant} END === buffers cleared`);
     } catch (e) {
       info(`=== ENTER ${variant} ERROR === ${e}`);
-      debug('forward err ' + e);
-      // Při chybě neukládáme testovací prompt - jen logujeme chybu
-      // Buffery nečistíme při chybě
     }
   };
 

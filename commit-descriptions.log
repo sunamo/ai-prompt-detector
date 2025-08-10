@@ -88,3 +88,4 @@ v1.1.276 | Change log directory to accessible path
 v1.1.277 | Add detailed logging for text capture debugging
 v1.1.278 | Debug command listener registration and text capture
 v1.1.279 | Add version logging to verify extension loading
+v1.1.280 | Fix local time logging and force extension reload detection
