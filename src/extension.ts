@@ -139,8 +139,10 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const recordPrompt = (raw: string, source: string, shouldClearBuffers = true): boolean => {
     const text = (raw || '').trim();
+    info(`recordPrompt called: source=${source}, text="${text.substring(0, 100)}", clearBuffers=${shouldClearBuffers}`);
     debug(`recordPrompt called: raw="${raw.substring(0, 100)}", source=${source}, trimmed="${text}", clearBuffers=${shouldClearBuffers}"`);
     if (!text) {
+      info('recordPrompt: empty text, returning false');
       debug('recordPrompt: empty text, returning false');
       return false;
     }
@@ -370,11 +372,13 @@ export async function activate(context: vscode.ExtensionContext) {
    */
   const handleForwardEnter = async (variant: string) => {
     try {
+      info(`=== ENTER ${variant} START === (always logged)`);
       debug(`=== ENTER ${variant} START === typingBuffer="${typingBuffer}"`);
 
       // 1) ZACHOVAT originální buffery PŘED jejich smazáním
       const savedTypingBuffer = typingBuffer;
       const savedSnapshot = lastSnapshot;
+      info(`Saved buffers - typing: "${savedTypingBuffer.substring(0, 50)}", snapshot: "${savedSnapshot.substring(0, 50)}"`);
 
       // 2) Zaměří vstupní pole
       await focusChatInput();
@@ -441,8 +445,10 @@ export async function activate(context: vscode.ExtensionContext) {
       
       // 6) Vyčistit buffery až na konci po úspěšném odeslání
       clearBuffers(`handleForwardEnter ${variant} completed`);
+      info(`=== ENTER ${variant} END === SUCCESS`);
       debug(`=== ENTER ${variant} END === buffers cleared`);
     } catch (e) {
+      info(`=== ENTER ${variant} ERROR === ${e}`);
       debug('forward err ' + e);
       // Při chybě neukládáme testovací prompt - jen logujeme chybu
       // Buffery nečistíme při chybě
