@@ -193,71 +193,9 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  // Polling timer pro detekci Send button clicks
-  let lastChatContent = '';
-  let pollCounter = 0;
-  let lastEnterTime = 0; // Čas posledního Enter eventu
-  let extensionStartTime = Date.now(); // Čas spuštění extension pro startup protection
-  
-  /** Kontroluje zda text vypadá jako notifikace z extension nebo spam */
-  const isNotificationText = (text: string): boolean => {
-    const trimmed = text.trim();
-    return trimmed.includes('AI Prompt sent') || 
-           trimmed.includes('(send-button-detected)') ||
-           trimmed.includes('(enter-') ||
-           trimmed.startsWith('[No text captured') ||
-           trimmed.includes('Umíš poslouchat v sexu na slovo'); // Filtruj spam text
-  };
-  
-  const pollTimer = setInterval(async () => {
-    try {
-      pollCounter++;
-      // Zkus zachytit aktuální obsah input boxu rychle - každých 0.1 sekundy pro okamžitou detekci
-      if (pollCounter % 1 === 0) { // každých 0.1 sekundy (100ms * 1)
-        // Použij keyboard simulation častěji pro Send button detection, ale ne při každém cyklu  
-        const allowKeyboard = pollCounter % 2 === 0; // Každých 200ms místo 500ms
-        const currentInput = await getChatInputText(false, allowKeyboard);
-        const now = Date.now(); // Používej stejný čas v celém polling cyklu
-        
-        // Během startup protection období nesmíme trackovat content vůbec
-        if (now - extensionStartTime <= 10000) {
-          lastChatContent = '';
-          info(`Startup protection active: Not tracking input content (${now - extensionStartTime}ms since start)`);
-          return;
-        }
-        
-        // Filtruj notifikace - pokud je obsah notifikace, ignoruj
-        if (isNotificationText(currentInput)) {
-          info(`Send button detection: Ignoring notification text: "${currentInput.substring(0, 50)}"`);
-          lastChatContent = ''; // Reset aby se nezachytávalo
-          return;
-        }
-        
-        // Debug logování pro Send button detection
-        if (allowKeyboard) {
-          info(`Polling debug: lastContent="${lastChatContent.substring(0, 50)}", currentInput="${currentInput.substring(0, 50)}", timeSinceEnter=${now - lastEnterTime}ms`);
-        }
-        
-        // Pokud se input box vyprázdnil, možná se odeslal prompt
-        if (lastChatContent && !currentInput.trim() && lastChatContent.trim() && !isNotificationText(lastChatContent)) {
-          // Ignoruj pokud byl Enter stisknut v posledních 5 sekundách (debouncing)
-          if (now - lastEnterTime > 5000) {
-            info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
-            recordPrompt(lastChatContent.trim(), 'send-button-detected');
-          } else {
-            info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
-          }
-        }
-        
-        // Normální tracking po startup protection období
-        lastChatContent = currentInput;
-      }
-    } catch {}
-  }, 100); // 100ms = 10x za sekundu = okamžitá detekce
-  
-  context.subscriptions.push({
-    dispose: () => clearInterval(pollTimer),
-  });
+  // Send button detection disabled - clipboard usage prohibited
+  let lastEnterTime = 0; // Čas posledního Enter eventu pro Chat Participant debouncing
+  info('Send button polling disabled - clipboard usage prohibited');
 
   updateStatusBar();
 

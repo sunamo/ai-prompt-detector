@@ -562,3 +562,12 @@ Violation = immediate regression. Fix before proceeding.
 - **PREVENTION APPROACH**: Make small, incremental changes and test each step rather than large refactors.
 - **DEBUG REQUIREMENT**: When core functionality fails, enable debug logs and trace exactly why recordPrompt is not being called.
 - This section is PERMANENT and MUST NOT be removed or weakened. Core user-visible functionality takes absolute priority.
+
+## 🚫 Clipboard Usage Policy (Aug 11 2025 Addendum)
+- **ABSOLUTE PROHIBITION**: NEVER use clipboard (vscode.env.clipboard) for any purpose in this extension.
+- **FORBIDDEN OPERATIONS**: vscode.env.clipboard.readText(), vscode.env.clipboard.writeText(), any clipboard manipulation.
+- **REASON**: Clipboard usage causes interference with user workflow and adds random clipboard content to Activity Bar.
+- **TEXT CAPTURE APPROACH**: Only rely on VS Code API commands that don't involve clipboard manipulation.
+- **REGRESSION DEFINITION**: Any clipboard usage is a CRITICAL REGRESSION that must be removed immediately.
+- **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
+- This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.
