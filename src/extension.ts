@@ -333,7 +333,7 @@ export async function activate(context: vscode.ExtensionContext) {
    * 4) krátký retry po 35ms
    * 5) recordPrompt jen pokud neprázdné
    * 6) forwardToChatAccept + fallback IDs
-   * 7) prázdný prompt log pouze pokud nic nezískáno ale odeslání proběhlo
+   * 7) debug log pokud text nezachycen (bez ukládání prázdného promptu)
    * @param variant Identifikátor varianty (plain|ctrl|ctrl-shift|ctrl-alt)
    */
   const handleForwardEnter = async (variant: string) => {
@@ -344,23 +344,38 @@ export async function activate(context: vscode.ExtensionContext) {
       await focusChatInput();
 
       // 2) Primární pokus o zachycení textu
-      let text = await getChatInputText();
+      let text = await getChatInputText(true);
+      debug(`getChatInputText(true) returned: "${text}"`);
 
       // 3) Fallback na buffer nebo snapshot (buffer má přednost – je nejčerstvější)
-      if (!text && typingBuffer.trim()) text = typingBuffer.trim();
-      else if (!text && lastSnapshot) text = lastSnapshot;
+      if (!text && typingBuffer.trim()) {
+        text = typingBuffer.trim();
+        debug(`Using typingBuffer: "${text}"`);
+      }
+      else if (!text && lastSnapshot) {
+        text = lastSnapshot;
+        debug(`Using lastSnapshot: "${text}"`);
+      }
 
       // 4) Pokud stále nic, krátký retry po drobném zpoždění (focus se mohl aplikovat)
       if (!text) {
-        await new Promise((r) => setTimeout(r, 35));
-        const retry = await getChatInputText();
+        await new Promise((r) => setTimeout(r, 50));
+        const retry = await getChatInputText(true);
+        debug(`Retry getChatInputText returned: "${retry}"`);
         if (retry) text = retry;
-        else if (typingBuffer.trim()) text = typingBuffer.trim();
-        else if (lastSnapshot) text = lastSnapshot;
+        else if (typingBuffer.trim()) {
+          text = typingBuffer.trim();
+          debug(`Retry using typingBuffer: "${text}"`);
+        }
+        else if (lastSnapshot) {
+          text = lastSnapshot;
+          debug(`Retry using lastSnapshot: "${text}"`);
+        }
       }
 
       // 5) Logujeme pouze skutečný neprázdný text – neukládáme prázdné placeholdery
       if (text && text.trim()) {
+        debug(`Recording prompt: "${text.substring(0, 100)}..."`);
         recordPrompt(text, 'enter-' + variant);
       }
 
@@ -379,14 +394,15 @@ export async function activate(context: vscode.ExtensionContext) {
           try {
             await vscode.commands.executeCommand(id);
             ok = true;
+            debug(`Forward successful via: ${id}`);
             break;
           } catch {}
         }
       }
 
-      // 7) Skutečně prázdný prompt – explicitně uložit informaci
+      // 7) Debug log pokud text nezachycen (NEUKLÁDÁME prázdný prompt)
       if (ok && !text) {
-        recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+        debug(`Enter ${variant}: forwarded but no text captured. Buffer: "${typingBuffer.substring(0, 50)}", Snapshot: "${lastSnapshot.substring(0, 50)}"`);
       }
     } catch (e) {
       debug('forward err ' + e);

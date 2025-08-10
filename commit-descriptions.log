@@ -69,3 +69,4 @@ v1.1.253 | Append strict JSDoc multi-line enforcement section to instructions
 v1.1.254 | Remove all fallback defaults (maxPrompts/version) and enforce error notifications
 v1.1.255 | JSDoc
 v1.1.256 | Přidány sekce: SpecStory runtime integrace, capture hierarchy, full read requirement, no-fallback reassertion
+v1.1.259 | post-restore auto build

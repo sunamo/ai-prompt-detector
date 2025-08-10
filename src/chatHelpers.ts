@@ -52,33 +52,78 @@ export const getChatInputText = async (
   try {
     const wantFocus = attemptFocus !== false; // žádný default v signatuře, jen logická interpretace
     if (wantFocus) await focusChatInput();
+    
     const prev = await vscode.env.clipboard.readText();
     let captured = '';
     const all = await vscode.commands.getCommands(true);
-    for (const id of [
+    
+    // Pokus 1: Příkazy pro kopírování obsahu chat inputu
+    const copyCommands = [
       'workbench.action.chat.copyInput',
-      'chat.copyInput',
       'github.copilot.chat.copyInput',
-    ].filter((i) => all.includes(i))) {
+      'chat.copyInput',
+      'workbench.action.chatEditor.copyInput',
+      'github.copilot.interactive.copyInput',
+    ].filter((i) => all.includes(i));
+    
+    for (const id of copyCommands) {
       try {
         await vscode.commands.executeCommand(id);
+        await new Promise(r => setTimeout(r, 20)); // krátká pauza pro async operace
         captured = await vscode.env.clipboard.readText();
-        if (captured.trim()) break;
+        if (captured.trim() && captured !== prev) {
+          break;
+        }
       } catch {}
     }
-    if (!captured.trim())
-      for (const sid of [
+    
+    // Pokus 2: Select All + Copy pokud copyInput nefunguje
+    if (!captured.trim() || captured === prev) {
+      const selectCommands = [
         'workbench.action.chat.selectAll',
+        'github.copilot.chat.selectAll',
         'chat.selectAll',
-      ].filter((i) => all.includes(i))) {
+        'workbench.action.chatEditor.selectAll',
+      ].filter((i) => all.includes(i));
+      
+      for (const sid of selectCommands) {
         try {
           await vscode.commands.executeCommand(sid);
-            await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+          await new Promise(r => setTimeout(r, 20));
+          await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+          await new Promise(r => setTimeout(r, 20));
           captured = await vscode.env.clipboard.readText();
-          if (captured.trim()) break;
+          if (captured.trim() && captured !== prev) {
+            break;
+          }
         } catch {}
       }
-    try { await vscode.env.clipboard.writeText(prev); } catch {}
-    return captured.trim();
-  } catch { return ''; }
+    }
+    
+    // Pokus 3: Standardní Ctrl+A + Ctrl+C jako fallback
+    if (!captured.trim() || captured === prev) {
+      try {
+        await vscode.commands.executeCommand('editor.action.selectAll');
+        await new Promise(r => setTimeout(r, 20));
+        await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+        await new Promise(r => setTimeout(r, 20));
+        const fallback = await vscode.env.clipboard.readText();
+        if (fallback.trim() && fallback !== prev) {
+          captured = fallback;
+        }
+      } catch {}
+    }
+    
+    // Obnoví původní obsah schránky
+    try { 
+      await vscode.env.clipboard.writeText(prev); 
+    } catch {}
+    
+    const result = captured.trim();
+    console.log(`getChatInputText result: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
+    return result;
+  } catch (e) { 
+    console.log(`getChatInputText error: ${e}`);
+    return ''; 
+  }
 };
