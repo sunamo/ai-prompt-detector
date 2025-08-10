@@ -77,23 +77,47 @@ export const getChatInputText = async (
     ].filter((i) => all.includes(i));
     
     info(`getChatInputText: Available copy commands: ${copyCommands.length} out of 10`);
-    info(`Available commands: ${copyCommands.join(', ')}`);
     
-    // Pokus s každým příkazem, s delšími pauzami
-    for (const id of copyCommands) {
+    if (copyCommands.length > 0) {
+      info(`Available commands: ${copyCommands.join(', ')}`);
+      
+      // Pokus s každým příkazem, s delšími pauzami
+      for (const id of copyCommands) {
+        try {
+          info(`Trying copy command: ${id}`);
+          await vscode.commands.executeCommand(id);
+          await new Promise(r => setTimeout(r, 80));
+          captured = await vscode.env.clipboard.readText();
+          if (captured.trim() && captured !== prev) {
+            info(`getChatInputText: Success via ${id} - captured: "${captured.substring(0, 100)}"`);
+            break;
+          } else {
+            info(`getChatInputText: Command ${id} executed but no new text in clipboard`);
+          }
+        } catch (err) {
+          info(`getChatInputText: Command ${id} failed: ${err}`);
+        }
+      }
+    } else {
+      // Fallback: použij keyboard shortcuts pro select all + copy
+      info('No copyInput commands available - trying keyboard simulation');
       try {
-        info(`Trying copy command: ${id}`);
-        await vscode.commands.executeCommand(id);
+        // Ctrl+A pro označení všeho v input boxu
+        await vscode.commands.executeCommand('editor.action.selectAll');
+        await new Promise(r => setTimeout(r, 50));
+        
+        // Ctrl+C pro kopírování
+        await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
         await new Promise(r => setTimeout(r, 80));
+        
         captured = await vscode.env.clipboard.readText();
         if (captured.trim() && captured !== prev) {
-          info(`getChatInputText: Success via ${id} - captured: "${captured.substring(0, 100)}"`);
-          break;
+          info(`getChatInputText: Keyboard simulation success - captured: "${captured.substring(0, 100)}"`);
         } else {
-          info(`getChatInputText: Command ${id} executed but no new text in clipboard`);
+          info('getChatInputText: Keyboard simulation failed - no new text in clipboard');
         }
       } catch (err) {
-        info(`getChatInputText: Command ${id} failed: ${err}`);
+        info(`getChatInputText: Keyboard simulation error: ${err}`);
       }
     }
     

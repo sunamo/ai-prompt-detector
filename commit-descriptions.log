@@ -90,3 +90,4 @@ v1.1.278 | Debug command listener registration and text capture
 v1.1.279 | Add version logging to verify extension loading
 v1.1.280 | Fix local time logging and force extension reload detection
 v1.1.281 | Remove broken command listener, simplify to getChatInputText only
+v1.1.282 | Add detailed logging to getChatInputText for debugging copy commands
