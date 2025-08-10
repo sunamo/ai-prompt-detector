@@ -21,20 +21,20 @@ function refreshDebug() {
     .get<boolean>('enableDebugLogs', false) || false;
 }
 
-/** Inicializuje logger: výstupní kanál + denní soubor v pevné složce. */
+/** Inicializuje logger: výstupní kanál + denní soubor v dostupné složce. */
 export function initLogger() {
   channel = vscode.window.createOutputChannel('SpecStory Prompts');
   refreshDebug();
-  const dir = 'C:/temp/ai-prompt-detector-logs';
+  const dir = 'E:/vs/TypeScript_Projects/_/logs';
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   } catch {}
   dailyPath = path.join(
     dir,
-    'extension-' + new Date().toISOString().slice(0, 10) + '.log'
+    'ai-prompt-detector-' + new Date().toISOString().slice(0, 10) + '.log'
   );
   try { fs.writeFileSync(dailyPath, ''); } catch {}
-  info('Log init');
+  info('Log init - logging to: ' + dailyPath);
   vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('ai-prompt-detector.enableDebugLogs')) refreshDebug();
   });
