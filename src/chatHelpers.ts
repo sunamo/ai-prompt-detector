@@ -45,10 +45,12 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 /**
  * Získá text z chat inputu pomocí copyInput příkazů s rozšířeným seznamem variant.
  * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
+ * @param allowKeyboardSimulation Pokud true, povolí keyboard simulation (Ctrl+A+C) jako fallback.
  * @returns Trimovaný text uživatelského vstupu nebo prázdný řetězec.
  */
 export const getChatInputText = async (
 	attemptFocus?: boolean,
+	allowKeyboardSimulation = false,
 ): Promise<string> => {
   try {
     const wantFocus = attemptFocus !== false;
@@ -98,7 +100,7 @@ export const getChatInputText = async (
           info(`getChatInputText: Command ${id} failed: ${err}`);
         }
       }
-    } else {
+    } else if (allowKeyboardSimulation) {
       // Fallback: použij keyboard shortcuts pro select all + copy
       info('No copyInput commands available - trying keyboard simulation');
       try {
@@ -119,6 +121,8 @@ export const getChatInputText = async (
       } catch (err) {
         info(`getChatInputText: Keyboard simulation error: ${err}`);
       }
+    } else {
+      info('No copyInput commands available - keyboard simulation disabled for polling');
     }
     
     // Žádný fallback s selectAll - může způsobit označení textu v UI

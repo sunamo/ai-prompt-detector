@@ -197,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
       pollCounter++;
       // Zkus zachytit aktuální obsah input boxu rychle - každých 0.1 sekundy pro okamžitou detekci
       if (pollCounter % 1 === 0) { // každých 0.1 sekundy (100ms * 1)
-        const currentInput = await getChatInputText(false);
+        const currentInput = await getChatInputText(false, false); // Bez keyboard simulation při polling
         const now = Date.now(); // Používej stejný čas v celém polling cyklu
         
         // Během startup protection období nesmíme trackovat content vůbec
@@ -336,15 +336,15 @@ export async function activate(context: vscode.ExtensionContext) {
       await focusChatInput();
       await new Promise((r) => setTimeout(r, 100));
 
-      // 2) Zkusí získat text z input boxu PŘED odesláním
-      let text = await getChatInputText(true);
+      // 2) Zkusí získat text z input boxu PŘED odesláním (s keyboard simulation pro Enter events)
+      let text = await getChatInputText(true, true);
       info(`getChatInputText returned: "${text.substring(0, 100)}"`);
       
       // 3) Pokud se nepodařilo, zkusí znovu s delším čekáním
       if (!text) {
         info('First attempt failed, trying again...');
         await new Promise((r) => setTimeout(r, 200));
-        text = await getChatInputText(true);
+        text = await getChatInputText(true, true);
         info(`Second attempt returned: "${text.substring(0, 100)}"`);
       }
 
