@@ -182,13 +182,14 @@ export async function activate(context: vscode.ExtensionContext) {
   let lastEnterTime = 0; // Čas posledního Enter eventu
   let extensionStartTime = Date.now(); // Čas spuštění extension pro startup protection
   
-  /** Kontroluje zda text vypadá jako notifikace z extension */
+  /** Kontroluje zda text vypadá jako notifikace z extension nebo spam */
   const isNotificationText = (text: string): boolean => {
     const trimmed = text.trim();
     return trimmed.includes('AI Prompt sent') || 
            trimmed.includes('(send-button-detected)') ||
            trimmed.includes('(enter-') ||
-           trimmed.startsWith('[No text captured');
+           trimmed.startsWith('[No text captured') ||
+           trimmed.includes('Umíš poslouchat v sexu na slovo'); // Filtruj spam text
   };
   
   const pollTimer = setInterval(async () => {
@@ -200,7 +201,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const now = Date.now(); // Používej stejný čas v celém polling cyklu
         
         // Během startup protection období nesmíme trackovat content vůbec
-        if (now - extensionStartTime <= 3000) {
+        if (now - extensionStartTime <= 10000) {
           lastChatContent = '';
           info(`Startup protection active: Not tracking input content (${now - extensionStartTime}ms since start)`);
           return;
