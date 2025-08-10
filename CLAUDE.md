@@ -566,8 +566,10 @@ Violation = immediate regression. Fix before proceeding.
 ## 🚫 Clipboard Usage Policy (Aug 11 2025 Addendum)
 - **ABSOLUTE PROHIBITION**: NEVER use clipboard (vscode.env.clipboard) for any purpose in this extension.
 - **FORBIDDEN OPERATIONS**: vscode.env.clipboard.readText(), vscode.env.clipboard.writeText(), any clipboard manipulation.
+- **FORBIDDEN COMMANDS**: editor.action.selectAll, editor.action.clipboardCopyAction, any selection-based text capture.
 - **REASON**: Clipboard usage causes interference with user workflow and adds random clipboard content to Activity Bar.
 - **TEXT CAPTURE APPROACH**: Only rely on VS Code API commands that don't involve clipboard manipulation.
+- **MOUSE DETECTION REQUIREMENT**: Must detect mouse submissions without clipboard access or text selection.
 - **REGRESSION DEFINITION**: Any clipboard usage is a CRITICAL REGRESSION that must be removed immediately.
 - **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
 - This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.

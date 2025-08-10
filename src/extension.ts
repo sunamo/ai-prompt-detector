@@ -200,6 +200,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Send button detection disabled - clipboard usage prohibited
   let lastEnterTime = 0; // Čas posledního Enter eventu pro Chat Participant debouncing
+  let commandMonitoringEnabled = true; // Command monitoring pro mouse detection
   info('Send button polling disabled - clipboard usage prohibited');
 
   updateStatusBar();
@@ -222,6 +223,50 @@ export async function activate(context: vscode.ExtensionContext) {
   }, 1000);
 
   hookCopilotExports(recordPrompt);
+
+  // Command monitoring for mouse click detection
+  if (commandMonitoringEnabled) {
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    (vscode.commands as any).executeCommand = async function(command: string, ...args: any[]) {
+      try {
+        // Monitor chat-related commands that might be triggered by mouse
+        if (command.includes('chat') || command.includes('copilot')) {
+          info(`Command executed: ${command} with ${args.length} args`);
+          
+          // Check if this might be a send command triggered by mouse
+          if (command.includes('accept') || command.includes('send') || command.includes('submit')) {
+            // Try to extract text from arguments
+            let text = '';
+            for (const arg of args) {
+              if (typeof arg === 'string' && arg.trim().length > 0) {
+                text = arg.trim();
+                break;
+              } else if (arg && typeof arg === 'object') {
+                text = String(arg.message || arg.prompt || arg.text || '').trim();
+                if (text) break;
+              }
+            }
+            
+            if (text) {
+              info(`Mouse command captured text: "${text.substring(0, 100)}"`);
+              recordPrompt(text, 'mouse-command-monitor');
+            } else {
+              info(`Mouse command detected but no text found: ${command}`);
+              // Record with fallback for tracking
+              recordPrompt(`[Mouse click detected via ${command}]`, 'mouse-command-monitor');
+            }
+          }
+        }
+      } catch (err) {
+        info(`Command monitoring error: ${err}`);
+      }
+      
+      // Always call original command
+      return originalExecuteCommand.call(this, command, ...args);
+    };
+    
+    info('Command monitoring enabled for mouse detection');
+  }
 
   try {
     const chatNs: any = (vscode as any).chat;
@@ -404,6 +449,36 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
+  // Additional mouse detection via workspace monitoring
+  let lastChatUpdate = 0;
+  const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
+    try {
+      // Skip if this is not a chat-related document or too frequent
+      if (Date.now() - lastChatUpdate < 1000) return;
+      
+      const uri = event.document.uri.toString();
+      if (uri.includes('copilot') || uri.includes('chat') || event.document.languageId === 'markdown') {
+        for (const change of event.contentChanges) {
+          const text = change.text.trim();
+          // Look for patterns that suggest a user prompt was added
+          if (text.length > 10 && 
+              (text.includes('user') || text.includes('User') || 
+               text.match(/^[A-Z].*[.?!]$/) || text.includes('help'))) {
+            info(`Workspace change detected possible prompt: "${text.substring(0, 100)}"`);
+            recordPrompt(text, 'mouse-workspace-monitor');
+            lastChatUpdate = Date.now();
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      info(`Workspace monitoring error: ${err}`);
+    }
+  });
+  
+  context.subscriptions.push(workspaceWatcher);
+  info('Workspace monitoring enabled for mouse detection');
+
   info('Activation done');
 }
 
