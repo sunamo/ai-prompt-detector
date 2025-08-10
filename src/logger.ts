@@ -59,3 +59,28 @@ export function debug(m: string) { if (debugEnabled) append(m); }
 
 /** Chybový log – vždy se vypíše (není zde separátní úroveň). */
 export function error(m: string) { append(m); }
+
+/**
+ * Inicializuje logger s možností přepínat debug výpisy.
+ */
+export class Logger {
+  /** Zapíše řádek do výstupního kanálu i souboru. */
+  private static append(m: string) {
+    channel.appendLine(m);
+    try {
+      fs.appendFileSync(
+        dailyPath,
+        `[${new Date().toISOString()}] ${m}\n`
+      );
+    } catch {}
+  }
+
+  /** Info log – vždy se vypíše. */
+  public static info(m: string) { Logger.append(m); }
+
+  /** Debug log – vypíše se jen když je zapnuta volba enableDebugLogs. */
+  public static debug(m: string) { if (debugEnabled) Logger.append(m); }
+
+  /** Chybový log – vždy se vypíše (není zde separátní úroveň). */
+  public static error(m: string) { Logger.append(m); }
+}

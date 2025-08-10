@@ -22,7 +22,8 @@ export function isValidSpecStoryFile(filePath: string): boolean {
 }
 
 /**
- * Načte prompt(y) ze souboru SpecStory a přidá je do pole recent.
+ * Načte prompty z jednoho souboru SpecStory – pořadí v souboru se převrací (collected.reverse())
+ * aby nejnovější prompty daného souboru byly dříve a zachovala se globální invariantní logika.
  * Invariant (NEPORUŠIT): Pořadí se připravuje takto:
  * 1. Nasbíráme prompty v pořadí výskytu v souboru (nejstarší -> nejnovější)
  * 2. Poté provedeme collected.reverse() aby nejNOVĚJŠÍ (poslední) byl jako první

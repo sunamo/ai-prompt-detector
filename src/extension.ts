@@ -19,17 +19,25 @@ let providerRef: PromptsProvider | undefined;
 let aiPromptCounter = 0;
 let typingBuffer = '';
 let lastSnapshot = '';
-let lastTypingChangeAt = Date.now();
+// odstraněno nepoužívané lastTypingChangeAt (REGRESE prevence: nesahat bez důvodu)
 let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
 let snapshotTimer: NodeJS.Timeout | undefined;
 
-/** Aktualizuje interní příznak zda jsou povoleny debug logy. */
+/** Aktualizuje interní příznak zda jsou povoleny debug logy.
+ * INVARIANT: Žádný druhý parametr u get() – pokud undefined => debugEnabled=false + notifikace (jen 1x).
+ */
 function refreshDebugFlag() {
-  debugEnabled =
-    vscode.workspace
-      .getConfiguration('ai-prompt-detector')
-      .get<boolean>('enableDebugLogs', false) ?? false;
+  const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+  const val = cfg.get<boolean>('enableDebugLogs');
+  if (typeof val !== 'boolean') {
+    if (!debugEnabled) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting enableDebugLogs (treating as disabled)');
+    }
+    debugEnabled = false;
+  } else {
+    debugEnabled = val;
+  }
 }
 
 /**
@@ -92,7 +100,10 @@ async function hookCopilotExports(
   }
 }
 
-/** Aktivace rozšíření – registrace všech listenerů a inicializace UI. */
+/**
+ * Aktivace extensionu – nastaví listener pro Enter varianty a inicializuje čtení exportů.
+ * @param context Kontext poskytovaný VS Code.
+ */
 export async function activate(context: vscode.ExtensionContext) {
   initLogger();
   info('Activation start');
@@ -104,20 +115,24 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   statusBarItem.show();
 
-  /** Aktualizuje text ve status baru. */
+  /** Aktualizuje text ve status baru. (NESMÍ používat fallback verze) */
   const updateStatusBar = () => {
-    const v =
-      vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.
-        packageJSON.version || '1.x';
+    const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+    const v: string | undefined = ext?.packageJSON?.version;
+    if (!v) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing package.json version');
+      statusBarItem.text = '🤖 AI Prompts: ' + aiPromptCounter + ' | v?';
+      return;
+    }
     statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
   };
 
-  /** Uloží prompt do stavu, vždy započítá i opakovaný (již poslaný) text. */
+  /** Uloží prompt do stavu, vždy započítá i opakovaný text.
+   * INVARIANT: Žádný default parametr v get(); pokud customMessage chybí → notifikace.
+   */
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     if (!text) return false;
-    // INVARIANT: Používáme unshift – nejnovější prompt MUSÍ být vždy index 0.
-    // Změna na push() nebo jakékoli třídění pole = REGRESE (porušení ordering policy).
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
@@ -125,17 +140,14 @@ export async function activate(context: vscode.ExtensionContext) {
     updateStatusBar();
     typingBuffer = '';
     lastSnapshot = '';
-    const msg =
-      vscode.workspace
-        .getConfiguration('ai-prompt-detector')
-        .get<string>('customMessage', '') ||
-      'We will verify quality & accuracy.';
-    const notify = () =>
-      vscode.window.showInformationMessage(
-        `AI Prompt sent (${source})\n${msg}`,
-      );
-    if (source.startsWith('enter')) notify();
-    else setTimeout(notify, 250);
+    const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+    let customMsg = cfg.get<string>('customMessage');
+    if (customMsg === undefined) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting customMessage');
+      customMsg = ''; // pokračujeme bez textu – politika: žádný druhý parametr fallback
+    }
+    const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
+    if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
     debug(`recordPrompt ok src=${source} len=${text.length} (duplicates allowed)`);
     return true;
   };
@@ -221,7 +233,6 @@ export async function activate(context: vscode.ExtensionContext) {
               const t = ev?.args?.[0]?.text;
               if (t && !String(t).includes('\n')) {
                 typingBuffer += t;
-                lastTypingChangeAt = Date.now();
                 if (typingBuffer.length > 8000)
                   typingBuffer = typingBuffer.slice(-8000);
               }
@@ -229,7 +240,6 @@ export async function activate(context: vscode.ExtensionContext) {
             }
             if (cmd === 'deleteLeft') {
               typingBuffer = typingBuffer.slice(0, -1);
-              lastTypingChangeAt = Date.now();
               return;
             }
             if (cmd === 'editor.action.clipboardPasteAction') {
@@ -237,7 +247,6 @@ export async function activate(context: vscode.ExtensionContext) {
                 const clip = await vscode.env.clipboard.readText();
                 if (clip) {
                   typingBuffer += clip;
-                  lastTypingChangeAt = Date.now();
                 }
               } catch {}
               return;
@@ -317,14 +326,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
   /**
    * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
-   * Postup zachování textu je konzervativní a NESMÍ se měnit bez úpravy instrukcí:
-   * 1. Nejprve se zaměří vstup (spolehlivější načtení obsahu)
-   * 2. Primární pokus o získání textu přes getChatInputText()
-   * 3. Fallback k bufferu (typingBuffer) nebo poslednímu snapshotu (lastSnapshot)
-   * 4. Krátké opožděné zopakování (focus mohl teprve proběhnout)
-   * 5. Záznam pouze pokud máme neprázdný text (nepřidávat falešné '(empty prompt)')
-   * 6. Přeposlání odesílací akce do Copilot/Chat (více známých cmd ID)
-   * 7. Pokud NIC nezachyceno a odeslání proběhlo, explicitně uloží '(empty prompt)'
+   * INVARIANT pořadí kroků (NEUPRAVOVAT bez změny instrukcí):
+   * 1) focusChatInput()
+   * 2) getChatInputText()
+   * 3) fallback typingBuffer / lastSnapshot
+   * 4) krátký retry po 35ms
+   * 5) recordPrompt jen pokud neprázdné
+   * 6) forwardToChatAccept + fallback IDs
+   * 7) prázdný prompt log pouze pokud nic nezískáno ale odeslání proběhlo
    * @param variant Identifikátor varianty (plain|ctrl|ctrl-shift|ctrl-alt)
    */
   const handleForwardEnter = async (variant: string) => {

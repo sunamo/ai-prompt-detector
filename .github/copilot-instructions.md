@@ -1,3 +1,4 @@
+````````````````````instructions
 ```````````````````instructions
 ``````````````````instructions
 `````````````````instructions
@@ -502,4 +503,18 @@ Violation = immediate regression. Fix before proceeding.
   * No occurrences of `, 50)` or other literal fallback arguments in config.get calls for extension settings.
   * Error path tested (returns early with clear message) when setting absent.
 - Applies to all settings: `maxPrompts`, `enableDebugLogs`, `customMessage`, and any future settings unless explicitly exempted in a dated addendum.
+
+## 🗣 Prompt Echo Understanding Policy (Aug 10 2025)
+- After each user prompt the assistant internally restates (mentally) its understanding BEFORE acting.
+- Only surface the restatement when user explicitly asks; do not spam normal flow.
+- Purpose: ensure precise alignment without clutter.
+- Regression: Acting on ambiguous instruction without clarification when feasible.
+
+## ⚙️ No Fallback Configuration Enforcement (Aug 10 2025)
+- All configuration retrieval via config.get MUST omit default parameter.
+- Missing/invalid values: single notification + graceful early return / minimal error HTML.
+- For settings: enableDebugLogs, maxPrompts, customMessage, (future settings likewise) and package version.
+- FORBIDDEN pattern: config.get('x', SOME_LITERAL)
+- Rationale: Explicit surfacing of misconfiguration.
+- Regression: Introducing any default parameter silently masking absence.
 ````````````````

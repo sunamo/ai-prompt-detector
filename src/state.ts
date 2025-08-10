@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 
 /**
- * Sdílený stav – uchovává pouze pole recentPrompts s posledními detekovanými prompty.
+ * Sdílený stav extensionu – drží recentPrompts s invariantem index 0 = nejnovější.
  */
 export const state = {
   recentPrompts: [] as string[],

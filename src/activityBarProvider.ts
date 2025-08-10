@@ -139,3 +139,51 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     );
   }
 }
+
+/**
+ * Vytvoří HTML reprezentaci seznamu promptů bez změny pořadí.
+ * @param prompts Seřazené prompty (index 0 = nejnovější globálně).
+ * @param max Maximální počet zobrazených.
+ */
+function renderPrompts(prompts: string[], max: number): string {
+  let promptsHtml = '';
+
+  if (prompts.length > 0) {
+    const renderList = prompts.slice(0, max); // NE reverse / NE sort
+    promptsHtml = renderList
+      .map((prompt, index) => {
+        const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
+        const safePrompt = shortPrompt
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+        return (
+          `<div class="prompt-item" data-index="${index}">\n` +
+          `\t<div class="ln">#${index + 1}</div>\n` +
+          `\t<div class="txt" title="${safePrompt}">${safePrompt}</div>\n` +
+          `</div>`
+        );
+      })
+      .join('');
+  } else {
+    promptsHtml = (
+      `<div class="empty">\n` +
+      `\t<p>🔍 No SpecStory prompts found</p>\n` +
+      `\t<p>Create a SpecStory conversation to display prompts</p>\n` +
+      `</div>`
+    );
+  }
+
+  return promptsHtml;
+}
+
+/**
+ * Bezpečně načte číslo maxPrompts z konfigurace bez fallbacku; chyby signalizuje null.
+ */
+function readMaxPrompts(): number | null {
+  const config = vscode.workspace.getConfiguration('aiCopilotPromptDetector');
+  const raw = config.get<number>('maxPrompts'); // žádný default dle politiky
+  if (raw === undefined || !Number.isFinite(raw) || raw <= 0) return null;
+  return raw;
+}
