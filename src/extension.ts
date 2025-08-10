@@ -52,12 +52,16 @@ async function hookCopilotExports(
       vscode.extensions.getExtension('GitHub.copilot-chat') ||
       vscode.extensions.getExtension('github.copilot-chat');
     if (!ext) {
-      debug('Copilot Chat extension not found');
+      info('Copilot Chat extension not found');
       return;
     }
+    info(`Copilot Chat extension found: ${ext.id}, active: ${ext.isActive}`);
     if (!ext.isActive) {
       await ext.activate();
+      info('Copilot Chat extension activated');
     }
+    
+    let hookCount = 0;
     const visited = new Set<any>();
     const scan = (obj: any, depth = 0) => {
       if (!obj || typeof obj !== 'object' || visited.has(obj) || depth > 6) return;
@@ -81,22 +85,25 @@ async function hookCopilotExports(
                     '',
                 ).trim();
                 if (txt) {
+                  info(`Copilot exports captured: "${txt.substring(0, 100)}" via ${k}`);
                   if (recordPrompt(txt, 'copilot-exports'))
-                    debug('Captured via Copilot exports: ' + k);
+                    info('Copilot exports prompt recorded successfully');
                 }
               } catch (err) {
-                debug('exports event err ' + err);
+                info('exports event err ' + err);
               }
             });
-            debug('Hooked export event: ' + k);
+            hookCount++;
+            info('Hooked export event: ' + k);
           }
         } catch {}
         if (typeof v === 'object') scan(v, depth + 1);
       }
     };
     scan(ext.exports);
+    info(`Copilot exports scan complete: ${hookCount} hooks registered`);
   } catch (e) {
-    debug('hookCopilotExports err ' + e);
+    info('hookCopilotExports err ' + e);
   }
 }
 
@@ -194,6 +201,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   try {
     const chatNs: any = (vscode as any).chat;
+    info(`Chat API available: ${!!chatNs}, onDidSubmitRequest: ${!!chatNs?.onDidSubmitRequest}`);
     if (chatNs?.onDidSubmitRequest) {
       context.subscriptions.push(
         chatNs.onDidSubmitRequest((e: any) => {
@@ -201,15 +209,19 @@ export async function activate(context: vscode.ExtensionContext) {
             const txt = String(
               e?.request?.message || e?.request?.prompt || e?.prompt || '',
             ).trim();
-            if (recordPrompt(txt, 'chatApi')) debug('chatApi captured');
+            info(`Chat API captured prompt: "${txt.substring(0, 100)}"`);
+            if (recordPrompt(txt, 'chatApi')) info('chatApi prompt recorded successfully');
           } catch (err) {
-            debug('chat api err ' + err);
+            info('chat api err ' + err);
           }
         }),
       );
+      info('Chat API listener registered successfully');
+    } else {
+      info('Chat API onDidSubmitRequest not available');
     }
   } catch (e) {
-    debug('chat api init err ' + e);
+    info('chat api init err ' + e);
   }
 
   // Command listener API není dostupné v této verzi VS Code - přeskočit
