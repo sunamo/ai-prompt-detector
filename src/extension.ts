@@ -232,6 +232,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   try {
     const cmdsAny = vscode.commands as any;
+    info(`Command listener registration: onDidExecuteCommand available = ${!!cmdsAny?.onDidExecuteCommand}`);
     if (cmdsAny?.onDidExecuteCommand) {
       const sendCommands = new Set([
         'github.copilot.chat.acceptInput',
@@ -260,6 +261,10 @@ export async function activate(context: vscode.ExtensionContext) {
           try {
             const cmd = ev?.command as string;
             if (!cmd) return;
+            // Log všechny příkazy pro debugging
+            if (cmd === 'type' || cmd.includes('chat') || cmd.includes('copilot')) {
+              info(`CMD CAPTURED: ${cmd}`);
+            }
             if (debugEnabled) debug('CMD ' + cmd);
             if (cmd === 'type') {
               const t = ev?.args?.[0]?.text;

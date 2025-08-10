@@ -85,3 +85,4 @@ v1.1.273 | Fix prompt recording - capture actual text instead of test prompts
 v1.1.274 | Add fallback message when no text captured
 v1.1.275 | Add extensive logging to debug Enter key regression
 v1.1.276 | Change log directory to accessible path
+v1.1.277 | Add detailed logging for text capture debugging
