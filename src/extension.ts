@@ -395,10 +395,26 @@ export async function activate(context: vscode.ExtensionContext) {
           if (late && late.trim()) {
             recordPrompt(late, 'enter-late-' + variant);
           } else {
-            recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+            // Žádný placeholder – zkusíme ještě jeden opožděný pokus a pokud stále nic, nic neukládáme.
+            setTimeout(async () => {
+              try {
+                let veryLate = await getChatInputText(false);
+                if (!veryLate && typingBuffer.trim()) veryLate = typingBuffer.trim();
+                else if (!veryLate && lastSnapshot) veryLate = lastSnapshot;
+                if (veryLate && veryLate.trim()) {
+                  recordPrompt(veryLate, 'enter-very-late-' + variant);
+                  debug('very-late capture succeeded');
+                } else {
+                  debug('late capture empty – skipped placeholder');
+                }
+              } catch {
+                debug('very-late capture err');
+              }
+            }, 120);
           }
         } catch {
-          recordPrompt('(empty prompt)', 'enter-empty-' + variant);
+          // Při chybě žádný placeholder, jen debug.
+          debug('late capture exception – skipped placeholder');
         }
       }
     } catch (e) {
