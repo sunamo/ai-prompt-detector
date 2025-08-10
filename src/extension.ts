@@ -503,60 +503,93 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // Extension Host Message Monitoring for mouse clicks
+  // DOM-based mouse detection for VS Code chat interface
   try {
-    // Monitor all extension host communications
-    const originalRequire = (global as any).require;
-    if (originalRequire) {
-      (global as any).require = function(id: string) {
-        const module = originalRequire.call(this, id);
-        
-        // Hook into any chat-related modules
-        if (id && typeof id === 'string' && (id.includes('chat') || id.includes('copilot'))) {
-          info(`Chat-related module loaded: ${id}`);
-          
-          // Try to hook into the module's functions
-          if (module && typeof module === 'object') {
-            for (const key in module) {
-              const fn = module[key];
-              if (typeof fn === 'function' && (key.includes('send') || key.includes('submit'))) {
-                const originalFn = fn;
-                module[key] = function(...args: any[]) {
-                  try {
-                    // Check arguments for text content
-                    for (const arg of args) {
-                      if (typeof arg === 'string' && arg.trim().length > 5) {
-                        info(`Extension module captured: "${arg.substring(0, 100)}" from ${key}`);
-                        recordPrompt(arg.trim(), 'mouse-extension-module');
-                        break;
-                      } else if (arg && typeof arg === 'object' && 
-                                (arg.message || arg.prompt || arg.text)) {
-                        const text = String(arg.message || arg.prompt || arg.text || '').trim();
-                        if (text) {
-                          info(`Extension module object captured: "${text.substring(0, 100)}"`);
-                          recordPrompt(text, 'mouse-extension-object');
-                          break;
-                        }
-                      }
-                    }
-                  } catch (err) {
-                    info(`Extension module hook error: ${err}`);
-                  }
-                  
-                  return originalFn.apply(this, ...args);
-                };
+    // Monitor DOM changes in VS Code to detect chat submissions
+    let domObserverEnabled = true;
+    
+    if (domObserverEnabled) {
+      // Create a polling mechanism to detect chat UI changes
+      let lastChatContent = '';
+      let chatInputValue = '';
+      
+      const checkChatInterface = () => {
+        try {
+          // Access VS Code's DOM through electron renderer process
+          const document = (global as any).document || (window as any)?.document;
+          if (document) {
+            // Look for chat input elements by various selectors
+            const selectors = [
+              'textarea[placeholder*="chat"]',
+              'textarea[placeholder*="Ask"]', 
+              'input[placeholder*="chat"]',
+              '.chat-input textarea',
+              '.copilot-chat-input textarea',
+              '[data-testid="chat-input"]',
+              '.interactive-input textarea'
+            ];
+            
+            for (const selector of selectors) {
+              const chatInput = document.querySelector(selector);
+              if (chatInput && chatInput.value !== chatInputValue) {
+                const newValue = chatInput.value || '';
+                
+                // If value just became empty, it might have been submitted
+                if (chatInputValue && !newValue) {
+                  info(`DOM detected chat submission: "${chatInputValue.substring(0, 100)}"`);
+                  recordPrompt(chatInputValue.trim(), 'mouse-dom-detection');
+                  chatInputValue = '';
+                  return;
+                }
+                
+                chatInputValue = newValue;
               }
             }
+            
+            // Also look for chat messages being added
+            const messageSelectors = [
+              '.chat-message',
+              '.copilot-chat-message',
+              '.interactive-message'
+            ];
+            
+            for (const selector of messageSelectors) {
+              const messages = document.querySelectorAll(selector);
+              if (messages.length > 0) {
+                const lastMessage = messages[messages.length - 1];
+                const messageText = lastMessage?.textContent || '';
+                
+                if (messageText && messageText !== lastChatContent && messageText.length > 5) {
+                  // Check if this looks like a user message (not assistant response)
+                  if (!messageText.includes('I can help') && !messageText.includes('assistant')) {
+                    info(`DOM detected new chat message: "${messageText.substring(0, 100)}"`);
+                    recordPrompt(messageText.trim(), 'mouse-dom-message');
+                    lastChatContent = messageText;
+                  }
+                }
+              }
+            }
+          } else {
+            info('DOM not accessible for chat monitoring');
           }
+        } catch (err) {
+          info(`DOM chat monitoring error: ${err}`);
         }
-        
-        return module;
       };
       
-      info('Extension Host module monitoring enabled');
+      // Start polling every 500ms
+      const chatMonitorInterval = setInterval(checkChatInterface, 500);
+      
+      // Clean up after 5 minutes to avoid permanent polling
+      setTimeout(() => {
+        clearInterval(chatMonitorInterval);
+        info('DOM chat monitoring stopped after 5 minutes');
+      }, 300000);
+      
+      info('DOM-based chat monitoring started');
     }
   } catch (err) {
-    info(`Extension Host monitoring setup failed: ${err}`);
+    info(`DOM monitoring setup failed: ${err}`);
   }
   
   // Additional mouse detection via workspace monitoring  
