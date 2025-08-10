@@ -180,6 +180,7 @@ export async function activate(context: vscode.ExtensionContext) {
   let lastChatContent = '';
   let pollCounter = 0;
   let lastEnterTime = 0; // Čas posledního Enter eventu
+  let extensionStartTime = Date.now(); // Čas spuštění extension pro startup protection
   
   /** Kontroluje zda text vypadá jako notifikace z extension */
   const isNotificationText = (text: string): boolean => {
@@ -208,11 +209,16 @@ export async function activate(context: vscode.ExtensionContext) {
         if (lastChatContent && !currentInput.trim() && lastChatContent.trim() && !isNotificationText(lastChatContent)) {
           const now = Date.now();
           // Ignoruj pokud byl Enter stisknut v posledních 5 sekundách (debouncing)
-          if (now - lastEnterTime > 5000) {
+          // NEBO pokud jsme ve startup protection období (prvních 3 sekundy po startu extension)
+          if (now - lastEnterTime > 5000 && now - extensionStartTime > 3000) {
             info(`Send button detection: Input cleared, likely sent: "${lastChatContent.substring(0, 100)}"`);
             recordPrompt(lastChatContent.trim(), 'send-button-detected');
           } else {
-            info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
+            if (now - lastEnterTime <= 5000) {
+              info(`Send button detection: Input cleared but ignoring due to recent Enter (${now - lastEnterTime}ms ago)`);
+            } else {
+              info(`Send button detection: Input cleared but ignoring due to startup protection (${now - extensionStartTime}ms since extension start)`);
+            }
           }
         }
         

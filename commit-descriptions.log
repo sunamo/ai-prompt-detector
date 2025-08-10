@@ -96,3 +96,4 @@ v1.1.284 | Add detailed logging for Chat API and Copilot exports to detect Send 
 v1.1.285 | Add polling timer to detect Send button clicks by monitoring input box changes
 v1.1.286 | Add debouncing to prevent duplicate notifications when Enter pressed
 v1.1.288 | Fix false positive notifications by filtering notification text patterns
+v1.1.291 | Add Chat Participant detection and faster polling for Send button
