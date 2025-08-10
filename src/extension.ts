@@ -233,6 +233,13 @@ export async function activate(context: vscode.ExtensionContext) {
         if (command.includes('chat') || command.includes('copilot')) {
           info(`Command executed: ${command} with ${args.length} args`);
           
+          // Skip if this is too soon after Enter key press (avoid duplicates)
+          const timeSinceEnter = Date.now() - lastEnterTime;
+          if (timeSinceEnter < 2000) {
+            info(`Skipping command monitoring - too soon after Enter (${timeSinceEnter}ms)`);
+            return originalExecuteCommand.call(this, command, ...args);
+          }
+          
           // Check if this might be a send command triggered by mouse
           if (command.includes('accept') || command.includes('send') || command.includes('submit')) {
             // Try to extract text from arguments
@@ -304,38 +311,44 @@ export async function activate(context: vscode.ExtensionContext) {
     info('chat api init err ' + e);
   }
 
-  // Pokus o registraci Chat Participant pro okamžitou detekci
+  // Improved onDidSubmitRequest hook with session data retrieval
   try {
-    // Chat Participant approach - zachytává všechny chat requesty okamžitě
-    const chatApi = (vscode as any).chat;
-    if (chatApi && chatApi.createChatParticipant) {
-      const participant = chatApi.createChatParticipant('prompt-detector', (request: any, context: any, stream: any, token: any) => {
-        try {
-          const text = request.prompt || request.message || String(request.command?.prompt || request.command?.message || '');
-          if (text && text.trim()) {
-            info(`Chat Participant captured mouse/send: "${text.substring(0, 100)}"`);
-            recordPrompt(text.trim(), 'mouse-send-detected');
+    const chatNs: any = (vscode as any).chat;
+    if (chatNs?.onDidSubmitRequest) {
+      context.subscriptions.push(
+        chatNs.onDidSubmitRequest(async (e: any) => {
+          try {
+            info(`Chat submit event received with sessionId: ${e.chatSessionId}`);
             
-            // Aktualizuj lastEnterTime aby se předešlo duplicate notifikacím z polling
-            lastEnterTime = Date.now();
-          } else {
-            info('Chat Participant: no text found in request object');
+            // Try to get the session data to extract the message text
+            if (chatNs.getChatSession) {
+              const session = await chatNs.getChatSession(e.chatSessionId);
+              if (session && session.requests && session.requests.length > 0) {
+                const lastRequest = session.requests[session.requests.length - 1];
+                const text = String(lastRequest.message || lastRequest.prompt || '').trim();
+                if (text) {
+                  info(`Mouse submission extracted from session: "${text.substring(0, 100)}"`);
+                  recordPrompt(text, 'mouse-session-data');
+                  return;
+                }
+              }
+            }
+            
+            // Fallback: record that a mouse click was detected
+            info('Mouse submission detected but could not extract text');
+            recordPrompt('[Mouse click detected - text extraction failed]', 'mouse-click-detected');
+            
+          } catch (err) {
+            info(`Chat submit event error: ${err}`);
           }
-        } catch (err) {
-          info('Chat Participant error: ' + err);
-        }
-        
-        // Return empty result to not interfere
-        return {};
-      });
-      
-      context.subscriptions.push(participant);
-      info('Chat Participant registered for Send button detection');
+        }),
+      );
+      info('Enhanced onDidSubmitRequest listener registered');
     } else {
-      info('Chat Participant API not available - keeping polling fallback');
+      info('onDidSubmitRequest not available');
     }
   } catch (e) {
-    info('Chat Participant registration failed - keeping polling fallback: ' + e);
+    info('Enhanced submit request hook failed: ' + e);
   }
 
   /**
