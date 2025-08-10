@@ -144,10 +144,10 @@ export async function activate(context: vscode.ExtensionContext) {
     let customMsg = cfg.get<string>('customMessage');
     if (customMsg === undefined) {
       vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting customMessage');
-      customMsg = ''; // pokračujeme bez textu – politika: žádný druhý parametr fallback
+      customMsg = '';
     }
-    const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
-    if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
+    // Immediate notification for ALL sources (Immediate Notification Policy)
+    vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
     debug(`recordPrompt ok src=${source} len=${text.length} (duplicates allowed)`);
     return true;
   };
@@ -339,16 +339,19 @@ export async function activate(context: vscode.ExtensionContext) {
   const handleForwardEnter = async (variant: string) => {
     try {
       debug('Enter variant invoked: ' + variant);
+      let captured = false; // sleduje zda jsme již něco uložili
 
       // 1) Fokus do vstupu – zvyšuje šanci na úspěšné čtení textu
       await focusChatInput();
 
       // 2) Primární pokus o zachycení textu
       let text = await getChatInputText();
+      debug(`primary capture variant=${variant} len=${text ? text.length : 0}`);
 
       // 3) Fallback na buffer nebo snapshot (buffer má přednost – je nejčerstvější)
       if (!text && typingBuffer.trim()) text = typingBuffer.trim();
       else if (!text && lastSnapshot) text = lastSnapshot;
+      if (!text) debug('fallback1 empty');
 
       // 4) Pokud stále nic, krátký retry po drobném zpoždění (focus se mohl aplikovat)
       if (!text) {
@@ -357,11 +360,13 @@ export async function activate(context: vscode.ExtensionContext) {
         if (retry) text = retry;
         else if (typingBuffer.trim()) text = typingBuffer.trim();
         else if (lastSnapshot) text = lastSnapshot;
+        debug(`retry capture len=${text ? text.length : 0}`);
       }
 
       // 5) Logujeme pouze skutečný neprázdný text – neukládáme prázdné placeholdery
       if (text && text.trim()) {
-        recordPrompt(text, 'enter-' + variant);
+        captured = !!recordPrompt(text, 'enter-' + variant);
+        debug('recorded primary/ retry path captured=' + captured);
       }
 
       // 6) Dopředné odeslání akce do Copilot / Chat
@@ -379,21 +384,24 @@ export async function activate(context: vscode.ExtensionContext) {
           try {
             await vscode.commands.executeCommand(id);
             ok = true;
+            debug('forward fallback command used: ' + id);
             break;
           } catch {}
         }
       }
 
-      // 7) Skutečně prázdný prompt – nyní přidán DODATEČNÝ late-capture pokus před uložením placeholderu
-      if (ok && !text) {
+      // 7) Skutečně prázdný prompt – nyní přidány opožděné pokusy, bez placeholderu
+      if (ok && !captured) {
         try {
           // Krátké zpoždění – po odeslání se model někdy naplní (race condition)
           await new Promise((r) => setTimeout(r, 45));
           let late = await getChatInputText();
           if (!late && typingBuffer.trim()) late = typingBuffer.trim();
           else if (!late && lastSnapshot) late = lastSnapshot;
+          debug(`late capture len=${late ? late.length : 0}`);
           if (late && late.trim()) {
-            recordPrompt(late, 'enter-late-' + variant);
+            captured = !!recordPrompt(late, 'enter-late-' + variant);
+            debug('late capture stored');
           } else {
             // Žádný placeholder – zkusíme ještě jeden opožděný pokus a pokud stále nic, nic neukládáme.
             setTimeout(async () => {
@@ -401,11 +409,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 let veryLate = await getChatInputText(false);
                 if (!veryLate && typingBuffer.trim()) veryLate = typingBuffer.trim();
                 else if (!veryLate && lastSnapshot) veryLate = lastSnapshot;
-                if (veryLate && veryLate.trim()) {
-                  recordPrompt(veryLate, 'enter-very-late-' + variant);
+                debug(`veryLate capture len=${veryLate ? veryLate.length : 0}`);
+                if (!captured && veryLate && veryLate.trim()) {
+                  captured = !!recordPrompt(veryLate, 'enter-very-late-' + variant);
                   debug('very-late capture succeeded');
-                } else {
-                  debug('late capture empty – skipped placeholder');
+                } else if (!veryLate) {
+                  debug('very-late capture empty – skipped');
                 }
               } catch {
                 debug('very-late capture err');
@@ -414,9 +423,28 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         } catch {
           // Při chybě žádný placeholder, jen debug.
-          debug('late capture exception – skipped placeholder');
+          debug('late capture exception – skipped');
         }
       }
+
+      // 8) Finální nouzový fallback po ~180ms pokud stále nic nebylo zachyceno
+      setTimeout(async () => {
+        if (captured) return;
+        try {
+          let finalTxt = await getChatInputText();
+          if (!finalTxt && typingBuffer.trim()) finalTxt = typingBuffer.trim();
+          else if (!finalTxt && lastSnapshot) finalTxt = lastSnapshot;
+          debug(`final fallback capture len=${finalTxt ? finalTxt.length : 0}`);
+          if (finalTxt && finalTxt.trim()) {
+            recordPrompt(finalTxt, 'enter-final-' + variant);
+            debug('final fallback stored');
+          } else {
+            debug('final fallback empty – no record');
+          }
+        } catch (e) {
+          debug('final fallback err ' + e);
+        }
+      }, 180);
     } catch (e) {
       debug('forward err ' + e);
     }

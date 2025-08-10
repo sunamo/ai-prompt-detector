@@ -526,3 +526,12 @@ Violation = immediate regression. Fix before proceeding.
 - Treat any unsolicited alteration to `copilot-instructions.md` justified solely by upstream changes in `vscode-copilot-chat` or `vscode-main` as a CONTENT CORRUPTION REGRESSION (severity equal to keybinding failure) requiring immediate revert.
 - This policy REASSERTS the existing Content Preservation & Full File Read sections: external references NEVER excuse partial reads or deletions.
 - Permanent marker: Do NOT remove this section without a verbatim user command quoting its exact title.
+
+## 🔔 Immediate Notification Policy (Aug 10 2025 Addendum)
+- A user notification MUST appear immediately after every prompt submission (no artificial delay), regardless of submission source (Enter variants, chatApi, copilot-exports, cmd-buffer, heuristic-buffer, snapshot, dynamic-cmd, etc.).
+- FORBIDDEN: setTimeout-based postponement of the primary notification for non-Enter sources.
+- RATIONALE: Immediate feedback confirms successful capture & ordering invariant (#1 newest) without user uncertainty.
+- Any future introduction of delayed notification logic is a REGRESSION equal in severity to keybinding failure and duplicate suppression violations.
+- Allowed: A secondary follow-up notification ONLY if explicitly requested by user settings (not currently implemented). Absent such a setting, exactly one immediate notification.
+- Logging MUST still include the capture source tag.
+- Persist permanently; modifications must reference this section title verbatim.

@@ -71,3 +71,4 @@ v1.1.255 | JSDoc
 v1.1.256 | Přidány sekce: SpecStory runtime integrace, capture hierarchy, full read requirement, no-fallback reassertion
 v1.1.257 | refactor install script formatting & safeguards
 v1.1.258 | late-capture empty prompt fix
+v1.1.259 | Remove empty prompt placeholder and add multi-stage late capture
