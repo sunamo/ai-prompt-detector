@@ -706,3 +706,12 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 - **Insight**: Copilot has many enabled API proposals: `chatParticipantPrivate`, `chatProvider`, `chatEditing`
 - **Approach**: Temporarily enable same API proposals for our extension
 - **Implementation**: Modify package.json enabledApiProposals to match Copilot's permissions
+
+#### K. ❌ Direct Chat Widget API Access (v1.1.361)
+- **Approach**: Based on VS Code source code analysis, tried to access `IChatWidget.onDidAcceptInput` event
+- **Implementation**: Attempted to use `_getChatWidgets` command and workbench services to get chat widgets
+- **Result**: VS Code internal services not accessible from extension context
+- **Evidence**: "Chat Widget Service not accessible - mouse detection will be limited"
+- **Root Cause**: Internal VS Code APIs (`_getChatWidgets`, workbench services) are not exposed to extensions
+- **Source Code Insight**: Found that `chatWidget.ts:1779` fires `this._onDidAcceptInput.fire()` for all submissions (keyboard+mouse)
+- **Limitation**: Extension sandbox prevents direct access to internal widget services

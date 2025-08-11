@@ -41,110 +41,146 @@ function refreshDebugFlag() {
 }
 
 /**
- * Implementuje detekci mouse kliků pomocí VS Code Chat Widget API.
- * Využívá onDidAcceptInput event z IChatWidgetService pro zachycení všech submit událostí.
+ * Implementuje pokročilou detekci submit událostí pomocí všech dostupných VS Code API.
+ * Kombinuje command interception, event monitoring a aktivní polling pro maximální pokrytí.
  * @param recordPrompt Callback k uložení promptu.
  */
-async function setupChatWidgetMonitoring(
+async function setupAdvancedSubmissionDetection(
   recordPrompt: (raw: string, src: string) => boolean,
 ): Promise<void> {
   try {
-    info('🔧 Setting up Chat Widget monitoring for mouse detection');
+    info('🔧 Setting up Advanced Submission Detection for mouse clicks');
     
-    // Try to access chat widget service through various VS Code internal APIs
-    const extensionContext = (global as any).__vscodeExtensionContext;
+    // Method 1: Comprehensive Command Interception
+    // Monitor ALL possible submit-related commands, not just the main ones
+    const submitCommands = [
+      'workbench.action.chat.submit',
+      'workbench.action.chat.acceptInput',
+      'workbench.action.chat.send',
+      'workbench.action.chat.sendMessage',
+      'github.copilot.chat.submit',
+      'github.copilot.chat.acceptInput',
+      'github.copilot.chat.send',
+      'github.copilot.chat.sendMessage',
+      'interactive.acceptInput',
+      'chat.acceptInput',
+      'inlineChat.accept'
+    ];
     
-    // Method 1: Try to get chat widget service via command execution
-    try {
-      const chatWidgets = await vscode.commands.executeCommand('_getChatWidgets') as any[];
-      
-      if (chatWidgets && chatWidgets.length > 0) {
-        info(`✅ Found ${chatWidgets.length} chat widgets - setting up monitoring`);
-        
-        for (const widget of chatWidgets) {
-          if (widget && widget.onDidAcceptInput) {
-            info('🔧 Attaching onDidAcceptInput listener to chat widget');
-            
-            const acceptListener = widget.onDidAcceptInput(async () => {
-              info('🎯 onDidAcceptInput event fired - capturing submission');
-              
-              try {
-                // Try to get input text from widget
-                let inputText = '';
-                if (widget.getInput && typeof widget.getInput === 'function') {
-                  inputText = widget.getInput();
-                } else if (widget.input && widget.input.getValue) {
-                  inputText = widget.input.getValue();
-                } else {
-                  // Fallback to our existing text capture method
-                  inputText = await getChatInputText(false);
-                }
-                
-                if (inputText && inputText.trim()) {
-                  info(`✅ Mouse/Keyboard submission captured: "${inputText.substring(0, 100)}"`);
-                  recordPrompt(inputText, 'widget-accept-input');
-                } else {
-                  // If no text available, record the event anyway
-                  info('⚠️ Submission detected but no text captured');
-                  recordPrompt('[Submission detected - no text captured]', 'widget-accept-input-empty');
-                }
-              } catch (error) {
-                info(`❌ Error capturing widget input: ${error}`);
-                recordPrompt('[Submission detected - capture error]', 'widget-accept-input-error');
-              }
-            });
-          }
-        }
-        
-        info('✅ Chat Widget monitoring setup complete');
-        return;
-      }
-    } catch (error) {
-      debug(`Method 1 failed: ${error}`);
-    }
+    let commandInterceptCount = 0;
     
-    // Method 2: Try to access through workbench services
-    try {
-      const workbench = (global as any).__vscode_workbench;
-      if (workbench) {
-        const chatWidgetService = workbench.chatWidgetService || workbench._chatWidgetService;
-        if (chatWidgetService && chatWidgetService.lastFocusedWidget) {
-          info('🔧 Found chat widget service through workbench');
+    for (const commandId of submitCommands) {
+      try {
+        // Try to register a pre-execution handler
+        const disposable = vscode.commands.registerCommand(commandId, async (...args) => {
+          info(`🎯 Command intercepted: ${commandId}`);
           
-          const widget = chatWidgetService.lastFocusedWidget;
-          if (widget && widget.onDidAcceptInput) {
-            info('🔧 Attaching onDidAcceptInput listener to focused widget');
-            
-            widget.onDidAcceptInput(async () => {
-              info('🎯 onDidAcceptInput event fired on focused widget');
-              
-              try {
-                const inputText = widget.getInput?.() || await getChatInputText(false);
-                if (inputText && inputText.trim()) {
-                  info(`✅ Submission captured: "${inputText.substring(0, 100)}"`);
-                  recordPrompt(inputText, 'widget-focused-accept');
-                } else {
-                  recordPrompt('[Submission detected - no text captured]', 'widget-focused-accept-empty');
-                }
-              } catch (error) {
-                info(`❌ Error capturing focused widget input: ${error}`);
-                recordPrompt('[Submission detected - capture error]', 'widget-focused-accept-error');
-              }
-            });
-            
-            info('✅ Chat Widget monitoring setup complete via workbench');
-            return;
+          try {
+            const inputText = await getChatInputText(false);
+            if (inputText && inputText.trim()) {
+              info(`✅ Command-based submission: "${inputText.substring(0, 100)}"`);
+              recordPrompt(inputText, `command-${commandId}`);
+            } else {
+              recordPrompt('[Command submission - no text captured]', `command-${commandId}-empty`);
+            }
+          } catch (error) {
+            info(`❌ Error in command handler: ${error}`);
+            recordPrompt('[Command submission - capture error]', `command-${commandId}-error`);
+          }
+          
+          // Execute the original command
+          return vscode.commands.executeCommand(`${commandId}.original`, ...args);
+        });
+        
+        commandInterceptCount++;
+      } catch (error) {
+        debug(`Failed to intercept command ${commandId}: ${error}`);
+      }
+    }
+    
+    info(`✅ Command interception setup: ${commandInterceptCount} commands monitored`);
+    
+    // Method 2: Active UI State Polling
+    // Continuously monitor chat input state for changes that indicate submission
+    let lastInputState = '';
+    let lastInputLength = 0;
+    
+    const pollChatState = async () => {
+      try {
+        const currentInput = await getChatInputText(false);
+        const currentLength = currentInput.length;
+        
+        // Detect sudden input clearing (indicates submission)
+        if (lastInputLength > 0 && currentLength === 0 && lastInputState.trim()) {
+          info(`🎯 Input clearing detected - likely submission: "${lastInputState.substring(0, 100)}"`);
+          recordPrompt(lastInputState, 'input-clearing-detection');
+        }
+        
+        lastInputState = currentInput;
+        lastInputLength = currentLength;
+        
+      } catch (error) {
+        debug(`Polling error: ${error}`);
+      }
+    };
+    
+    // Poll every 200ms for fast response
+    setInterval(pollChatState, 200);
+    info('✅ Active UI state polling enabled (200ms interval)');
+    
+    // Method 3: Document Change Detection
+    // Monitor workspace for any changes that might indicate chat activity
+    const documentWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
+      // Check if this might be a chat-related document change
+      if (event.document.uri.scheme === 'untitled' || 
+          event.document.uri.path.includes('chat') ||
+          event.document.uri.path.includes('copilot')) {
+        
+        const changes = event.contentChanges;
+        if (changes.length > 0) {
+          const changeText = changes.map(c => c.text).join(' ').trim();
+          if (changeText) {
+            info(`🎯 Document change detected: "${changeText.substring(0, 100)}"`);
+            recordPrompt(changeText, 'document-change-detection');
           }
         }
       }
-    } catch (error) {
-      debug(`Method 2 failed: ${error}`);
-    }
+    });
     
-    info('⚠️ Chat Widget Service not accessible - mouse detection will be limited');
+    info('✅ Document change monitoring enabled');
+    
+    // Method 4: Window Focus State Monitoring
+    // Detect when VS Code window loses/gains focus (might indicate submission processing)
+    let focusLostTime = 0;
+    let lastChatContent = '';
+    
+    vscode.window.onDidChangeWindowState(async (state) => {
+      if (!state.focused) {
+        focusLostTime = Date.now();
+        lastChatContent = await getChatInputText(false);
+      } else if (focusLostTime > 0) {
+        const focusRegainTime = Date.now();
+        const focusDuration = focusRegainTime - focusLostTime;
+        
+        // If focus was lost briefly and chat content changed, might be submission
+        if (focusDuration < 5000) { // Less than 5 seconds
+          const currentContent = await getChatInputText(false);
+          if (lastChatContent && lastChatContent !== currentContent) {
+            info(`🎯 Focus change + content change detected: "${lastChatContent.substring(0, 100)}"`);
+            recordPrompt(lastChatContent, 'focus-change-detection');
+          }
+        }
+        
+        focusLostTime = 0;
+      }
+    });
+    
+    info('✅ Window focus state monitoring enabled');
+    
+    info('🚀 Advanced Submission Detection setup complete - all methods active');
     
   } catch (error) {
-    info(`❌ Failed to setup Chat Widget monitoring: ${error}`);
+    info(`❌ Failed to setup Advanced Submission Detection: ${error}`);
   }
 }
 
@@ -258,7 +294,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }, 1000);
 
-  setupChatWidgetMonitoring(recordPrompt);
+  setupAdvancedSubmissionDetection(recordPrompt);
 
   // Direct Copilot Chat Webview Panel Monitoring
   let directWebviewMonitoringEnabled = true;
