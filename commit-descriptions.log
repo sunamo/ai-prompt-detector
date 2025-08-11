@@ -158,3 +158,4 @@ v1.1.357 | Add Chat Session Provider and system-level monitoring
 v1.1.358 | Add Electron DevTools Protocol mouse detection
 v1.1.359 | Enable API proposals and add Extension Host monitoring
 v1.1.361 | Fix TypeScript async callback issues for Chat Widget API
+v1.1.362 | Implement advanced submission detection with comprehensive command monitoring and UI polling

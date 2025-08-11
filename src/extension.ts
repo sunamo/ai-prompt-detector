@@ -7,11 +7,129 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as http from 'http';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
 import { focusChatInput, forwardToChatAccept, getChatInputText } from './chatHelpers';
+
+/**
+ * Interface pro webview panel s možností message handling.
+ */
+interface ExtendedWebviewPanel extends vscode.WebviewPanel {
+  webview: vscode.Webview & {
+    onDidReceiveMessage: (listener: (message: WebviewMessage) => void) => vscode.Disposable;
+  };
+}
+
+/**
+ * Interface pro zprávy z webview.
+ */
+interface WebviewMessage {
+  type?: string;
+  text?: string;
+  command?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Interface pro chat události.
+ */
+interface ChatEvent {
+  message?: string;
+  prompt?: string;
+  chatSessionId?: string;
+  request?: {
+    message?: string;
+    prompt?: string;
+  };
+  command?: {
+    message?: string;
+    prompt?: string;
+  };
+  text?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Interface pro VS Code globální objekty.
+ */
+interface VSCodeGlobal {
+  workbench?: {
+    getViews?: () => Array<{ id: string; webview?: { onDidReceiveMessage: Function } }>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Interface pro VS Code chat namespace rozšíření.
+ */
+interface ChatNamespace {
+  onDidSubmitRequest?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
+  onDidDisposeChatSession?: (listener: (sessionId: string) => void) => vscode.Disposable;
+  getChatSession?: (sessionId: string) => Promise<{
+    requests?: Array<{ message?: string; prompt?: string }>;
+    [key: string]: unknown;
+  }>;
+  [key: string]: Function | unknown;
+}
+
+/**
+ * Interface pro VS Code rozšířené o chat.
+ */
+interface ExtendedVSCode {
+  chat?: ChatNamespace;
+  workbench?: {
+    getViews?: () => Array<{ id: string; webview?: { onDidReceiveMessage: Function } }>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Interface pro network target z DevTools.
+ */
+interface DevToolsTarget {
+  id: string;
+  type: string;
+  title: string;
+  url: string;
+  webSocketDebuggerUrl?: string;
+}
+
+/**
+ * Interface pro WebSocket zprávy z DevTools.
+ */
+interface DevToolsMessage {
+  id?: number;
+  method?: string;
+  params?: {
+    args?: Array<{ value: unknown }>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Interface pro Node.js ChildProcess error.
+ */
+interface ProcessError extends Error {
+  code?: string | number;
+}
+
+/**
+ * Interface pro VS Code události s dokumentem.
+ */
+interface DocumentEvent {
+  document?: {
+    uri: {
+      toString(): string;
+    };
+  };
+  [key: string]: unknown;
+}
 
 // --- Stav ---
 let statusBarItem: vscode.StatusBarItem;
@@ -72,7 +190,7 @@ async function setupAdvancedSubmissionDetection(
     for (const commandId of submitCommands) {
       try {
         // Try to register a pre-execution handler
-        const disposable = vscode.commands.registerCommand(commandId, async (...args) => {
+        const disposable = vscode.commands.registerCommand(commandId, async (...args: unknown[]) => {
           info(`🎯 Command intercepted: ${commandId}`);
           
           try {
@@ -302,7 +420,12 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       // Monitor for webview panels being created
       const originalCreateWebviewPanel = vscode.window.createWebviewPanel;
-      (vscode.window as any).createWebviewPanel = function(viewType: string, title: string, showOptions: any, options?: any) {
+      (vscode.window as unknown as { createWebviewPanel: Function }).createWebviewPanel = function(
+        viewType: string, 
+        title: string, 
+        showOptions: vscode.ViewColumn | { viewColumn: vscode.ViewColumn, preserveFocus?: boolean }, 
+        options?: vscode.WebviewPanelOptions & vscode.WebviewOptions
+      ): ExtendedWebviewPanel {
         const panel = originalCreateWebviewPanel.call(this, viewType, title, showOptions, options);
         
         // Check if this is a chat-related webview
@@ -310,7 +433,7 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`Chat webview panel created: ${viewType} - ${title}`);
           
           // Register our own message listener
-          panel.webview.onDidReceiveMessage((message: any) => {
+          panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
             try {
               if (message && typeof message === 'object' &&
                   (message.command === 'submit' || message.type === 'submit' || message.action === 'send') &&
@@ -330,7 +453,7 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`Hooked into chat webview panel: ${viewType}`);
         }
         
-        return panel;
+        return panel as ExtendedWebviewPanel;
       };
       
       info('Direct webview panel monitoring enabled');
@@ -342,7 +465,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Monitor existing webview views (for chat views that are already created)
   try {
     // Try to access the chat view directly through VS Code's internal APIs
-    const workbench = (vscode as any).workbench || (global as any).workbench;
+    const workbench = (vscode as ExtendedVSCode).workbench || (global as VSCodeGlobal).workbench;
     if (workbench) {
       // Monitor all view container changes
       const intervalId = setInterval(() => {
@@ -355,7 +478,7 @@ export async function activate(context: vscode.ExtensionContext) {
               
               // Register message listener for existing views
               if (view.webview && view.webview.onDidReceiveMessage) {
-                view.webview.onDidReceiveMessage((message: any) => {
+                view.webview.onDidReceiveMessage((message: WebviewMessage) => {
                   try {
                     if (message && (message.command === 'submit' || message.type === 'submit') &&
                         (message.text || message.message)) {
@@ -389,11 +512,11 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   try {
-    const chatNs: any = (vscode as any).chat;
+    const chatNs = (vscode as ExtendedVSCode).chat;
     info(`Chat API available: ${!!chatNs}, onDidSubmitRequest: ${!!chatNs?.onDidSubmitRequest}`);
     if (chatNs?.onDidSubmitRequest) {
       context.subscriptions.push(
-        chatNs.onDidSubmitRequest((e: any) => {
+        chatNs.onDidSubmitRequest((e: ChatEvent) => {
           try {
             const txt = String(
               e?.request?.message || 
@@ -426,15 +549,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Improved onDidSubmitRequest hook with session data retrieval
   try {
-    const chatNs: any = (vscode as any).chat;
+    const chatNs = (vscode as ExtendedVSCode).chat;
     if (chatNs?.onDidSubmitRequest) {
       context.subscriptions.push(
-        chatNs.onDidSubmitRequest(async (e: any) => {
+        chatNs.onDidSubmitRequest(async (e: ChatEvent) => {
           try {
             info(`Chat submit event received with sessionId: ${e.chatSessionId}`);
             
             // Try to get the session data to extract the message text
-            if (chatNs.getChatSession) {
+            if (chatNs.getChatSession && e.chatSessionId) {
               const session = await chatNs.getChatSession(e.chatSessionId);
               if (session && session.requests && session.requests.length > 0) {
                 const lastRequest = session.requests[session.requests.length - 1];
@@ -580,10 +703,16 @@ export async function activate(context: vscode.ExtensionContext) {
     info('🔍 Starting deep VS Code API reflection analysis');
     
     // Recursive function to explore object properties
-    const exploreObject = (obj: any, path: string, maxDepth: number) => {
+    // Type guard for objects with string keys
+    const isObjectWithStringKeys = (obj: unknown): obj is Record<string, unknown> => {
+      return obj !== null && typeof obj === 'object';
+    };
+
+    const exploreObject = (obj: unknown, path: string, maxDepth: number): void => {
       if (maxDepth <= 0 || !obj || typeof obj !== 'object') return;
       
       try {
+        if (!isObjectWithStringKeys(obj)) return;
         const keys = Object.getOwnPropertyNames(obj);
         for (const key of keys) {
           if (key.toLowerCase().includes('chat') || key.toLowerCase().includes('copilot')) {
@@ -619,7 +748,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const globalObjects = ['global', 'process', 'require', 'module'];
     for (const globalName of globalObjects) {
       try {
-        const globalObj = (global as any)[globalName];
+        const globalObj = (global as VSCodeGlobal & Record<string, unknown>)[globalName];
         if (globalObj) {
           exploreObject(globalObj, globalName, 2);
         }
@@ -702,7 +831,10 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Method 1: Command execution monitoring
     const originalExecuteCommand = vscode.commands.executeCommand;
-    (vscode.commands as any).executeCommand = async function(commandId: string, ...args: any[]) {
+    (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(
+      commandId: string, 
+      ...args: unknown[]
+    ): Promise<unknown> {
       try {
         if (commandId === 'workbench.action.chat.submit' || 
             commandId === 'github.copilot.chat.acceptInput' ||
@@ -772,7 +904,7 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         });
         
-        netstat.on('error', (err: any) => {
+        netstat.on('error', (err: ProcessError) => {
           info(`🔧 Network monitoring error: ${err}`);
         });
         
@@ -843,9 +975,9 @@ export async function activate(context: vscode.ExtensionContext) {
         
         for (const eventName of events) {
           try {
-            const eventEmitter = (vscode.window as any)[eventName];
+            const eventEmitter = (vscode.window as unknown as Record<string, Function>)[eventName];
             if (eventEmitter && typeof eventEmitter === 'function') {
-              eventEmitter((event: any) => {
+              eventEmitter((event: DocumentEvent) => {
                 const now = Date.now();
                 const timeSinceLastEnter = now - lastEnterTime;
                 
@@ -891,7 +1023,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     for (const providerName of chatSessionProviders) {
       try {
-        const providerFunction = (vscode.chat as any)[providerName];
+        const providerFunction = (vscode.chat as unknown as Record<string, Function>)[providerName];
         if (typeof providerFunction === 'function') {
           
           const provider = {
@@ -936,7 +1068,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Also try onDidDisposeChatSession event
     try {
-      const disposalEvent = (vscode.chat as any).onDidDisposeChatSession;
+      const disposalEvent = (vscode.chat as unknown as ChatNamespace).onDidDisposeChatSession;
       if (typeof disposalEvent === 'function') {
         context.subscriptions.push(
           disposalEvent((sessionId: string) => {
@@ -1030,7 +1162,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
           });
           
-          psProcess.on('error', (err: any) => {
+          psProcess.on('error', (err: ProcessError) => {
             info(`🖱️ PowerShell mouse monitoring error: ${err}`);
           });
           
@@ -1108,7 +1240,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 port: port,
                 path: '/json',
                 method: 'GET'
-              }, (res: any) => {
+              }, (res: http.IncomingMessage) => {
                 let data = '';
                 res.on('data', (chunk: Buffer) => {
                   data += chunk.toString();
@@ -1119,7 +1251,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     info(`🔌 Found ${targets.length} DevTools targets`);
                     
                     // Look for renderer processes
-                    const rendererTargets = targets.filter((target: any) => 
+                    const rendererTargets = targets.filter((target: DevToolsTarget) => 
                       target.type === 'page' && target.url && 
                       (target.url.includes('workbench') || target.title.includes('Visual Studio Code'))
                     );
@@ -1226,7 +1358,7 @@ export async function activate(context: vscode.ExtensionContext) {
                           if (message.method === 'Runtime.consoleAPICalled' && 
                               message.params && message.params.args) {
                             
-                            const consoleMessage = message.params.args.map((arg: any) => arg.value).join(' ');
+                            const consoleMessage = message.params?.args?.map((arg: { value: unknown }) => arg.value).join(' ') || '';
                             
                             if (consoleMessage.includes('AI Prompt Detector: Mouse click detected')) {
                               info('🔌 DevTools detected mouse click in chat interface');
@@ -1252,7 +1384,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         }
                       });
                       
-                      debugWs.on('error', (err: any) => {
+                      debugWs.on('error', (err: ProcessError) => {
                         info(`🔌 WebSocket error: ${err}`);
                       });
                       
@@ -1274,7 +1406,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 });
               });
               
-              targetsReq.on('error', (err: any) => {
+              targetsReq.on('error', (err: ProcessError) => {
                 info(`🔌 DevTools HTTP request error: ${err}`);
               });
               
@@ -1348,14 +1480,14 @@ export async function activate(context: vscode.ExtensionContext) {
                   }
                 });
                 
-                netstatCmd.on('error', (err: any) => {
+                netstatCmd.on('error', (err: ProcessError) => {
                   info(`🔄 Netstat monitoring error: ${err}`);
                 });
               }
             }
           });
           
-          psProcess.on('error', (err: any) => {
+          psProcess.on('error', (err: ProcessError) => {
             info(`🔄 Process monitoring error: ${err}`);
           });
           

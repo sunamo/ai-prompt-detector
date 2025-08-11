@@ -576,6 +576,29 @@ Violation = immediate regression. Fix before proceeding.
 - **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
 - This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.
 
+## 🔧 TypeScript Type Safety Policy (Aug 11 2025 Addendum)
+- **CRITICAL RULE**: ALL code must be written with proper TypeScript types - NEVER use `any` type.
+- **ABSOLUTE PROHIBITION**: The `any` type is FORBIDDEN in all code generation and modifications.
+- **ALLOWED EXCEPTION**: Only `unknown` type is permitted when `any` would otherwise be required and no other solution exists.
+- **TYPE REQUIREMENTS**: 
+  - All function parameters must have explicit types
+  - All function return values must have explicit types  
+  - All variables must have explicit types or proper type inference
+  - All object properties must be typed
+  - All array elements must be typed
+- **INTERFACE DEFINITIONS**: Create proper interfaces for complex objects instead of using `any`
+- **TYPE GUARDS**: Use type guards with `unknown` when dealing with external APIs or uncertain data
+- **REGRESSION DEFINITION**: Any use of `any` type is a CRITICAL TYPE SAFETY REGRESSION
+- **ENFORCEMENT**: Search codebase for `: any` and `as any` before any commit and replace with proper types
+- **EXAMPLES**:
+  - ❌ FORBIDDEN: `function process(data: any): any`
+  - ✅ CORRECT: `function process(data: ChatSubmissionData): Promise<string>`
+  - ❌ FORBIDDEN: `const result = obj as any`
+  - ✅ CORRECT: `const result = obj as ChatWidget | undefined`
+  - ❌ FORBIDDEN: `let items: any[]`
+  - ✅ CORRECT: `let items: string[]` or `let items: ChatMessage[]`
+- This section is PERMANENT and MUST NOT be removed or weakened. Type safety is mandatory.
+
 ## 📁 Workspace Structure (Aug 11 2025)
 **IMPORTANT**: The root folder `E:\vs\TypeScript_Projects\_\` is ONLY a container with these subfolders:
 
