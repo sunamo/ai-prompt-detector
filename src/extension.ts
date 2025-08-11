@@ -169,133 +169,24 @@ async function setupAdvancedSubmissionDetection(
   try {
     info('🔧 Setting up Advanced Submission Detection for mouse clicks');
     
-    // Method 1: Comprehensive Command Interception
-    // Monitor ALL possible submit-related commands, not just the main ones
-    const submitCommands = [
-      'workbench.action.chat.submit',
-      'workbench.action.chat.acceptInput',
-      'workbench.action.chat.send',
-      'workbench.action.chat.sendMessage',
-      'github.copilot.chat.submit',
-      'github.copilot.chat.acceptInput',
-      'github.copilot.chat.send',
-      'github.copilot.chat.sendMessage',
-      'interactive.acceptInput',
-      'chat.acceptInput',
-      'inlineChat.accept'
-    ];
+    // Method 1: Command Interception - DISABLED to prevent duplicate notifications
+    // This caused triple notifications when combined with keybinding handlers
+    // Mouse detection is now handled by proper Chat API access (with --enable-proposed-api)
+    info('🔧 Command interception disabled - prevents duplicate notifications');
     
-    let commandInterceptCount = 0;
+    // Method 2: Active UI State Polling - DISABLED
+    // This method could cause duplicates and is not needed with Chat API
+    info('🔧 UI state polling disabled - using Chat API events instead');
     
-    for (const commandId of submitCommands) {
-      try {
-        // Try to register a pre-execution handler
-        const disposable = vscode.commands.registerCommand(commandId, async (...args: unknown[]) => {
-          info(`🎯 Command intercepted: ${commandId}`);
-          
-          try {
-            const inputText = await getChatInputText(false);
-            if (inputText && inputText.trim()) {
-              info(`✅ Command-based submission: "${inputText.substring(0, 100)}"`);
-              recordPrompt(inputText, `command-${commandId}`);
-            } else {
-              recordPrompt('[Command submission - no text captured]', `command-${commandId}-empty`);
-            }
-          } catch (error) {
-            info(`❌ Error in command handler: ${error}`);
-            recordPrompt('[Command submission - capture error]', `command-${commandId}-error`);
-          }
-          
-          // Execute the original command
-          return vscode.commands.executeCommand(`${commandId}.original`, ...args);
-        });
-        
-        commandInterceptCount++;
-      } catch (error) {
-        debug(`Failed to intercept command ${commandId}: ${error}`);
-      }
-    }
+    // Method 3: Document Change Detection - DISABLED  
+    // This method is unreliable and could cause duplicates
+    info('🔧 Document change monitoring disabled - using Chat API events instead');
     
-    info(`✅ Command interception setup: ${commandInterceptCount} commands monitored`);
+    // Method 4: Window Focus State Monitoring - DISABLED
+    // This method is unreliable and could cause duplicates
+    info('🔧 Window focus monitoring disabled - using Chat API events instead');
     
-    // Method 2: Active UI State Polling
-    // Continuously monitor chat input state for changes that indicate submission
-    let lastInputState = '';
-    let lastInputLength = 0;
-    
-    const pollChatState = async () => {
-      try {
-        const currentInput = await getChatInputText(false);
-        const currentLength = currentInput.length;
-        
-        // Detect sudden input clearing (indicates submission)
-        if (lastInputLength > 0 && currentLength === 0 && lastInputState.trim()) {
-          info(`🎯 Input clearing detected - likely submission: "${lastInputState.substring(0, 100)}"`);
-          recordPrompt(lastInputState, 'input-clearing-detection');
-        }
-        
-        lastInputState = currentInput;
-        lastInputLength = currentLength;
-        
-      } catch (error) {
-        debug(`Polling error: ${error}`);
-      }
-    };
-    
-    // Poll every 200ms for fast response
-    setInterval(pollChatState, 200);
-    info('✅ Active UI state polling enabled (200ms interval)');
-    
-    // Method 3: Document Change Detection
-    // Monitor workspace for any changes that might indicate chat activity
-    const documentWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
-      // Check if this might be a chat-related document change
-      if (event.document.uri.scheme === 'untitled' || 
-          event.document.uri.path.includes('chat') ||
-          event.document.uri.path.includes('copilot')) {
-        
-        const changes = event.contentChanges;
-        if (changes.length > 0) {
-          const changeText = changes.map(c => c.text).join(' ').trim();
-          if (changeText) {
-            info(`🎯 Document change detected: "${changeText.substring(0, 100)}"`);
-            recordPrompt(changeText, 'document-change-detection');
-          }
-        }
-      }
-    });
-    
-    info('✅ Document change monitoring enabled');
-    
-    // Method 4: Window Focus State Monitoring
-    // Detect when VS Code window loses/gains focus (might indicate submission processing)
-    let focusLostTime = 0;
-    let lastChatContent = '';
-    
-    vscode.window.onDidChangeWindowState(async (state) => {
-      if (!state.focused) {
-        focusLostTime = Date.now();
-        lastChatContent = await getChatInputText(false);
-      } else if (focusLostTime > 0) {
-        const focusRegainTime = Date.now();
-        const focusDuration = focusRegainTime - focusLostTime;
-        
-        // If focus was lost briefly and chat content changed, might be submission
-        if (focusDuration < 5000) { // Less than 5 seconds
-          const currentContent = await getChatInputText(false);
-          if (lastChatContent && lastChatContent !== currentContent) {
-            info(`🎯 Focus change + content change detected: "${lastChatContent.substring(0, 100)}"`);
-            recordPrompt(lastChatContent, 'focus-change-detection');
-          }
-        }
-        
-        focusLostTime = 0;
-      }
-    });
-    
-    info('✅ Window focus state monitoring enabled');
-    
-    info('🚀 Advanced Submission Detection setup complete - all methods active');
+    info('🚀 Advanced Submission Detection simplified - duplicates removed');
     
   } catch (error) {
     info(`❌ Failed to setup Advanced Submission Detection: ${error}`);
@@ -829,57 +720,42 @@ export async function activate(context: vscode.ExtensionContext) {
   try {
     info('🔧 Implementing combined mouse detection methods');
     
-    // Method 1: Command execution monitoring
-    const originalExecuteCommand = vscode.commands.executeCommand;
-    (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(
-      commandId: string, 
-      ...args: unknown[]
-    ): Promise<unknown> {
-      try {
-        if (commandId === 'workbench.action.chat.submit' || 
-            commandId === 'github.copilot.chat.acceptInput' ||
-            commandId === 'workbench.action.chat.acceptInput') {
-          
+    // Method 1: Direct Chat API monitoring with enabled proposals
+    try {
+      // Access the Chat API that should now be available with --enable-proposed-api
+      const vscodeAny = vscode as unknown as {
+        chat?: {
+          onDidSubmitRequest?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
+          onDidAcceptInput?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
+        };
+      };
+      
+      if (vscodeAny.chat?.onDidSubmitRequest) {
+        info('🔧 Chat API onDidSubmitRequest available - registering mouse detection');
+        const chatDisposable = vscodeAny.chat.onDidSubmitRequest((e: ChatEvent) => {
           const now = Date.now();
           const timeSinceLastEnter = now - lastEnterTime;
           
+          // Only record if this isn't from a recent Enter key press
           if (timeSinceLastEnter > 500) {
-            info(`🔧 Command execution detected: ${commandId} (mouse: ${timeSinceLastEnter}ms after Enter)`);
-            
-            // Try to capture text from active editor or focused element
-            let capturedText = '';
-            try {
-              const activeEditor = vscode.window.activeTextEditor;
-              if (activeEditor && activeEditor.document.uri.scheme === 'vscode-chat') {
-                capturedText = activeEditor.document.getText();
-              }
-              
-              if (!capturedText && args.length > 0) {
-                capturedText = String(args[0] || '');
-              }
-              
-              if (capturedText.trim()) {
-                info(`🔧 Command-based mouse submission: "${capturedText.substring(0, 100)}"`);
-                recordPrompt(capturedText, 'mouse-command-intercept');
-              } else {
-                info(`🔧 Mouse submission detected but no text captured`);
-                recordPrompt('[Mouse click detected - command interception]', 'mouse-command-detected');
-              }
-            } catch (textErr) {
-              info(`🔧 Text capture error: ${textErr}`);
-              recordPrompt('[Mouse click detected - text capture failed]', 'mouse-command-fallback');
+            const text = e.message || e.prompt || e.request?.message || e.command?.prompt || '';
+            if (text.trim()) {
+              info(`🔧 Mouse submission detected via Chat API: "${text.substring(0, 100)}"`);
+              recordPrompt(text, 'mouse-chat-api');
+            } else {
+              info(`🔧 Mouse submission detected but no text captured`);
+              recordPrompt('[Mouse click detected - Chat API]', 'mouse-chat-api-empty');
             }
           }
-        }
-        
-        return originalExecuteCommand.call(this, commandId, ...args);
-      } catch (err) {
-        info(`🔧 Command interception error: ${err}`);
-        return originalExecuteCommand.call(this, commandId, ...args);
+        });
+        context.subscriptions.push(chatDisposable);
+      } else {
+        info('🔧 Chat API onDidSubmitRequest not available - mouse detection limited');
       }
-    };
-    
-    info('🔧 Command execution interception enabled');
+      
+    } catch (chatApiError) {
+      info(`🔧 Chat API access error: ${chatApiError} - mouse detection will be limited`);
+    }
     
     // Method 2: Process and network monitoring
     const { spawn } = require('child_process');
