@@ -41,74 +41,110 @@ function refreshDebugFlag() {
 }
 
 /**
- * Rekurzivně prochází exporty Copilot Chat a pokouší se připojit k eventům submit.
+ * Implementuje detekci mouse kliků pomocí VS Code Chat Widget API.
+ * Využívá onDidAcceptInput event z IChatWidgetService pro zachycení všech submit událostí.
  * @param recordPrompt Callback k uložení promptu.
  */
-async function hookCopilotExports(
+async function setupChatWidgetMonitoring(
   recordPrompt: (raw: string, src: string) => boolean,
-) {
+): Promise<void> {
   try {
-    const ext =
-      vscode.extensions.getExtension('GitHub.copilot-chat') ||
-      vscode.extensions.getExtension('github.copilot-chat');
-    if (!ext) {
-      info('Copilot Chat extension not found');
-      return;
-    }
-    info(`Copilot Chat extension found: ${ext.id}, active: ${ext.isActive}`);
-    if (!ext.isActive) {
-      await ext.activate();
-      info('Copilot Chat extension activated');
-    }
+    info('🔧 Setting up Chat Widget monitoring for mouse detection');
     
-    let hookCount = 0;
-    const visited = new Set<any>();
-    const scan = (obj: any, depth = 0) => {
-      if (!obj || typeof obj !== 'object' || visited.has(obj) || depth > 6) return;
-      visited.add(obj);
-      for (const k of Object.keys(obj)) {
-        const v = (obj as any)[k];
-        try {
-          if (
-            /submit|send|accept/i.test(k) &&
-            v &&
-            typeof v === 'object' &&
-            typeof (v as any).event === 'function'
-          ) {
-            (v as any).event((e: any) => {
+    // Try to access chat widget service through various VS Code internal APIs
+    const extensionContext = (global as any).__vscodeExtensionContext;
+    
+    // Method 1: Try to get chat widget service via command execution
+    try {
+      const chatWidgets = await vscode.commands.executeCommand('_getChatWidgets') as any[];
+      
+      if (chatWidgets && chatWidgets.length > 0) {
+        info(`✅ Found ${chatWidgets.length} chat widgets - setting up monitoring`);
+        
+        for (const widget of chatWidgets) {
+          if (widget && widget.onDidAcceptInput) {
+            info('🔧 Attaching onDidAcceptInput listener to chat widget');
+            
+            const acceptListener = widget.onDidAcceptInput(async () => {
+              info('🎯 onDidAcceptInput event fired - capturing submission');
+              
               try {
-                const txt = String(
-                  e?.message ||
-                    e?.prompt ||
-                    e?.request?.message ||
-                    e?.request?.prompt ||
-                    e?.command?.message ||
-                    e?.command?.prompt ||
-                    e?.text ||
-                    '',
-                ).trim();
-                if (txt) {
-                  info(`Copilot exports captured mouse submission: "${txt.substring(0, 100)}" via ${k}`);
-                  if (recordPrompt(txt, 'mouse-copilot-exports'))
-                    info('Mouse submission via Copilot exports recorded successfully');
+                // Try to get input text from widget
+                let inputText = '';
+                if (widget.getInput && typeof widget.getInput === 'function') {
+                  inputText = widget.getInput();
+                } else if (widget.input && widget.input.getValue) {
+                  inputText = widget.input.getValue();
                 } else {
-                  info(`Copilot exports: no text found in event via ${k}`);
+                  // Fallback to our existing text capture method
+                  inputText = await getChatInputText(false);
                 }
-              } catch (err) {
-                info('exports event err ' + err);
+                
+                if (inputText && inputText.trim()) {
+                  info(`✅ Mouse/Keyboard submission captured: "${inputText.substring(0, 100)}"`);
+                  recordPrompt(inputText, 'widget-accept-input');
+                } else {
+                  // If no text available, record the event anyway
+                  info('⚠️ Submission detected but no text captured');
+                  recordPrompt('[Submission detected - no text captured]', 'widget-accept-input-empty');
+                }
+              } catch (error) {
+                info(`❌ Error capturing widget input: ${error}`);
+                recordPrompt('[Submission detected - capture error]', 'widget-accept-input-error');
               }
             });
-            hookCount++;
-            info('Hooked export event: ' + k);
           }
-        } catch {}
-        if (typeof v === 'object') scan(v, depth + 1);
+        }
+        
+        info('✅ Chat Widget monitoring setup complete');
+        return;
       }
-    };
-    scan(ext.exports);
-    info(`Copilot exports scan complete: ${hookCount} hooks registered`);
-  } catch (e) {
-    info('hookCopilotExports err ' + e);
+    } catch (error) {
+      debug(`Method 1 failed: ${error}`);
+    }
+    
+    // Method 2: Try to access through workbench services
+    try {
+      const workbench = (global as any).__vscode_workbench;
+      if (workbench) {
+        const chatWidgetService = workbench.chatWidgetService || workbench._chatWidgetService;
+        if (chatWidgetService && chatWidgetService.lastFocusedWidget) {
+          info('🔧 Found chat widget service through workbench');
+          
+          const widget = chatWidgetService.lastFocusedWidget;
+          if (widget && widget.onDidAcceptInput) {
+            info('🔧 Attaching onDidAcceptInput listener to focused widget');
+            
+            widget.onDidAcceptInput(async () => {
+              info('🎯 onDidAcceptInput event fired on focused widget');
+              
+              try {
+                const inputText = widget.getInput?.() || await getChatInputText(false);
+                if (inputText && inputText.trim()) {
+                  info(`✅ Submission captured: "${inputText.substring(0, 100)}"`);
+                  recordPrompt(inputText, 'widget-focused-accept');
+                } else {
+                  recordPrompt('[Submission detected - no text captured]', 'widget-focused-accept-empty');
+                }
+              } catch (error) {
+                info(`❌ Error capturing focused widget input: ${error}`);
+                recordPrompt('[Submission detected - capture error]', 'widget-focused-accept-error');
+              }
+            });
+            
+            info('✅ Chat Widget monitoring setup complete via workbench');
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      debug(`Method 2 failed: ${error}`);
+    }
+    
+    info('⚠️ Chat Widget Service not accessible - mouse detection will be limited');
+    
+  } catch (error) {
+    info(`❌ Failed to setup Chat Widget monitoring: ${error}`);
   }
 }
 
@@ -222,7 +258,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }, 1000);
 
-  hookCopilotExports(recordPrompt);
+  setupChatWidgetMonitoring(recordPrompt);
 
   // Direct Copilot Chat Webview Panel Monitoring
   let directWebviewMonitoringEnabled = true;
