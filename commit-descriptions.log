@@ -154,3 +154,4 @@ v1.1.352 | DOM-based mouse detection via chat interface polling
 v1.1.353 | VS Code internal chat service hook for mouse detection
 v1.1.354 | Implement widget acceptInput interception for mouse detection
 v1.1.356 | Fix TypeScript errors in combined detection
+v1.1.357 | Add Chat Session Provider and system-level monitoring

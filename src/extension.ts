@@ -992,6 +992,241 @@ export async function activate(context: vscode.ExtensionContext) {
     info(`🖱️ System-level monitoring setup failed: ${err}`);
   }
   
+  // NEW APPROACH: Electron DevTools Protocol
+  try {
+    info('🔌 Implementing Electron DevTools Protocol approach');
+    
+    // Try to connect to VS Code's Electron debugging port
+    const connectToDevTools = async () => {
+      try {
+        const net = require('net');
+        const http = require('http');
+        
+        // Common DevTools ports used by Electron apps
+        const devtoolsPorts = [9229, 9230, 9222, 9221, 5858];
+        
+        for (const port of devtoolsPorts) {
+          try {
+            info(`🔌 Trying DevTools connection on port ${port}`);
+            
+            // Check if port is open
+            const isPortOpen = await new Promise((resolve) => {
+              const socket = new net.Socket();
+              socket.setTimeout(1000);
+              socket.on('connect', () => {
+                socket.destroy();
+                resolve(true);
+              });
+              socket.on('timeout', () => {
+                socket.destroy();
+                resolve(false);
+              });
+              socket.on('error', () => {
+                resolve(false);
+              });
+              socket.connect(port, 'localhost');
+            });
+            
+            if (isPortOpen) {
+              info(`🔌 Port ${port} is open - attempting DevTools connection`);
+              
+              // Get list of available targets
+              const targetsReq = http.request({
+                hostname: 'localhost',
+                port: port,
+                path: '/json',
+                method: 'GET'
+              }, (res: any) => {
+                let data = '';
+                res.on('data', (chunk: Buffer) => {
+                  data += chunk.toString();
+                });
+                res.on('end', () => {
+                  try {
+                    const targets = JSON.parse(data);
+                    info(`🔌 Found ${targets.length} DevTools targets`);
+                    
+                    // Look for renderer processes
+                    const rendererTargets = targets.filter((target: any) => 
+                      target.type === 'page' && target.url && 
+                      (target.url.includes('workbench') || target.title.includes('Visual Studio Code'))
+                    );
+                    
+                    if (rendererTargets.length > 0) {
+                      info(`🔌 Found ${rendererTargets.length} renderer targets - attempting connection`);
+                      
+                      const target = rendererTargets[0];
+                      const ws = require('ws');
+                      
+                      // Connect to WebSocket debugging interface
+                      const debugWs = new ws(target.webSocketDebuggerUrl);
+                      
+                      debugWs.on('open', () => {
+                        info('🔌 WebSocket DevTools connection established');
+                        
+                        // Enable Runtime domain to monitor execution
+                        debugWs.send(JSON.stringify({
+                          id: 1,
+                          method: 'Runtime.enable'
+                        }));
+                        
+                        // Enable DOM domain to monitor DOM changes
+                        debugWs.send(JSON.stringify({
+                          id: 2,
+                          method: 'DOM.enable'
+                        }));
+                        
+                        // Monitor for chat-related function calls
+                        debugWs.send(JSON.stringify({
+                          id: 3,
+                          method: 'Runtime.addBinding',
+                          params: {
+                            name: 'aiPromptDetector'
+                          }
+                        }));
+                        
+                        // Inject monitoring script into renderer
+                        const monitorScript = `
+                          (function() {
+                            let lastEnterTime = 0;
+                            
+                            // Monitor all click events
+                            document.addEventListener('click', function(event) {
+                              const now = Date.now();
+                              const timeSinceEnter = now - lastEnterTime;
+                              
+                              if (event.target && timeSinceEnter > 500) {
+                                const element = event.target;
+                                const classList = element.classList ? Array.from(element.classList).join(' ') : '';
+                                const tagName = element.tagName || '';
+                                
+                                if (classList.includes('send') || classList.includes('submit') || 
+                                    tagName === 'BUTTON' || classList.includes('chat')) {
+                                  
+                                  console.log('AI Prompt Detector: Mouse click detected on:', {
+                                    tagName: tagName,
+                                    classList: classList,
+                                    timeSinceEnter: timeSinceEnter
+                                  });
+                                  
+                                  // Try to find chat input text
+                                  const chatInputs = document.querySelectorAll('[data-copilot-chat-input], .chat-input, input[type="text"]');
+                                  let inputText = '';
+                                  
+                                  for (const input of chatInputs) {
+                                    if (input.value && input.value.trim()) {
+                                      inputText = input.value.trim();
+                                      break;
+                                    }
+                                  }
+                                  
+                                  if (inputText) {
+                                    console.log('AI Prompt Detector: Chat text found:', inputText.substring(0, 100));
+                                  }
+                                }
+                              }
+                            }, true);
+                            
+                            // Track Enter key events to update timing
+                            document.addEventListener('keydown', function(event) {
+                              if (event.key === 'Enter') {
+                                lastEnterTime = Date.now();
+                              }
+                            }, true);
+                          })();
+                        `;
+                        
+                        debugWs.send(JSON.stringify({
+                          id: 4,
+                          method: 'Runtime.evaluate',
+                          params: {
+                            expression: monitorScript
+                          }
+                        }));
+                        
+                        info('🔌 Monitoring script injected into renderer process');
+                      });
+                      
+                      debugWs.on('message', (data: Buffer) => {
+                        try {
+                          const message = JSON.parse(data.toString());
+                          
+                          if (message.method === 'Runtime.consoleAPICalled' && 
+                              message.params && message.params.args) {
+                            
+                            const consoleMessage = message.params.args.map((arg: any) => arg.value).join(' ');
+                            
+                            if (consoleMessage.includes('AI Prompt Detector: Mouse click detected')) {
+                              info('🔌 DevTools detected mouse click in chat interface');
+                              const now = Date.now();
+                              const timeSinceLastEnter = now - lastEnterTime;
+                              
+                              if (timeSinceLastEnter > 500) {
+                                recordPrompt('[DevTools mouse click detected]', 'mouse-devtools-protocol');
+                              }
+                            }
+                            
+                            if (consoleMessage.includes('AI Prompt Detector: Chat text found:')) {
+                              const textMatch = consoleMessage.match(/Chat text found: (.+)/);
+                              if (textMatch && textMatch[1]) {
+                                info(`🔌 DevTools captured chat text: "${textMatch[1].substring(0, 100)}"`);
+                                recordPrompt(textMatch[1], 'mouse-devtools-text');
+                              }
+                            }
+                          }
+                          
+                        } catch (msgErr) {
+                          // Ignore parsing errors
+                        }
+                      });
+                      
+                      debugWs.on('error', (err: any) => {
+                        info(`🔌 WebSocket error: ${err}`);
+                      });
+                      
+                      debugWs.on('close', () => {
+                        info('🔌 DevTools WebSocket connection closed');
+                      });
+                      
+                      // Close connection after 60 seconds
+                      setTimeout(() => {
+                        debugWs.close();
+                        info('🔌 DevTools monitoring stopped after 60s');
+                      }, 60000);
+                      
+                      return true;
+                    }
+                  } catch (parseErr) {
+                    info(`🔌 Error parsing DevTools targets: ${parseErr}`);
+                  }
+                });
+              });
+              
+              targetsReq.on('error', (err: any) => {
+                info(`🔌 DevTools HTTP request error: ${err}`);
+              });
+              
+              targetsReq.end();
+              break;
+            }
+          } catch (portErr) {
+            info(`🔌 Port ${port} connection failed: ${portErr}`);
+          }
+        }
+      } catch (devtoolsErr) {
+        info(`🔌 DevTools connection setup failed: ${devtoolsErr}`);
+      }
+    };
+    
+    // Try DevTools connection after a short delay
+    setTimeout(connectToDevTools, 2000);
+    
+    info('🔌 Electron DevTools Protocol approach enabled');
+    
+  } catch (err) {
+    info(`🔌 DevTools Protocol setup failed: ${err}`);
+  }
+  
   // Additional mouse detection via workspace monitoring  
   let lastChatUpdate = 0;
   const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
