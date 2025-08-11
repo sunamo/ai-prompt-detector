@@ -620,30 +620,67 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 5. **Chat storage monitoring**: Watch VS Code's chat storage/indexedDB files
 6. **Deep API reflection**: Enumerate all available VS Code APIs at runtime
 
-### NEW APPROACH: Widget acceptInput Method Interception (Aug 11 2025)
-**BREAKTHROUGH**: Found the exact method used for all chat submissions in VS Code source code!
+### FAILED APPROACHES SUMMARY (Aug 11 2025)
 
-#### Technical Discovery:
-- **File**: `E:\vs\TypeScript_Projects\_\vscode-main\src\vs\workbench\contrib\chat\browser\chatWidget.ts`
-- **Method**: `widget.acceptInput(query?: string, options?: IChatAcceptInputOptions)` 
-- **Line 148**: `widget?.acceptInput(context?.inputValue)` - called by ChatSubmitAction for ALL submissions
-- **Key Insight**: BOTH Enter key AND mouse button submissions call this exact method
+#### 1. ❌ Widget acceptInput Method Interception (v1.1.354)
+- **Problem**: `chatWidgetService` not accessible from extension context
+- **Result**: Widget never found, interception never activated
+- **Evidence**: No "Found chat widget" logs, polling disabled after 60s
 
-#### Implementation Strategy:
-1. **Hook Detection**: Monitor for chat widget creation via `chatWidgetService.lastFocusedWidget`
-2. **Method Interception**: Replace `widget.acceptInput` with wrapper that:
-   - Captures input text BEFORE submission
-   - Detects if submission is via Enter (within 500ms of lastEnterTime) or mouse
-   - Records prompt with appropriate source tag ('mouse-widget-intercept' vs 'enter-*')
-   - Calls original method to preserve functionality
-3. **Debouncing**: Use lastEnterTime to distinguish Enter vs mouse submissions
-4. **Non-invasive**: No clipboard, no DOM manipulation, no text selection
+#### 2. ❌ Combined Multi-Method Detection (v1.1.356)
+- **Command Interception**: No chat submit commands intercepted
+- **Network Monitoring**: No GitHub API activity detected
+- **VS Code State Monitoring**: Only window focus changes, no chat-related state
+- **Extension Events**: Only onDidChangeWindowState triggered by focus, no chat events
+- **Evidence**: Commands `workbench.action.chat.submit`, `github.copilot.chat.acceptInput` never called
 
-#### Expected Result:
-- **Enter submissions**: Already working, skip recording to avoid duplicates
-- **Mouse submissions**: Finally detectable through acceptInput interception
-- **All submissions**: Route through single bottleneck method regardless of input method
+#### 3. ❌ Previous Failed Approaches (v1.1.353 and earlier)
+- **Chat API onDidSubmitRequest**: Not available in current VS Code version
+- **Chat Participant Registration**: Creates participant but doesn't intercept existing submissions  
+- **WebView Panel Monitoring**: Copilot doesn't use createWebviewPanel
+- **DOM Monitoring**: `window is not defined` - extension runs in Node.js, not browser
+- **Extension Module Hooks**: Chat modules don't load through require()
+- **VS Code Internal Service Hook**: Services not accessible from extension host
+- **Workspace Document Changes**: Only detects file modifications, not UI interactions
+- **Filesystem Monitoring**: No chat-related files created during submission
+- **Deep API Reflection**: Found 65+ APIs but none provide submission events
 
-#### Code Location:
-- **Implementation**: `E:\vs\TypeScript_Projects\_\ai-prompt-detector\src\extension.ts` lines 627-714
-- **Status**: Added in version 1.1.354 (to be tested)
+### ROOT CAUSE ANALYSIS
+**FUNDAMENTAL ISSUE**: Mouse clicks in Copilot Chat happen entirely within the Renderer Process (Electron UI) and generate NO events that are accessible to Extension Host (Node.js context).
+
+**Architecture Gap**:
+- **Extension Host**: Node.js context where our extension runs - can intercept commands, API calls
+- **Renderer Process**: Electron UI where chat interface runs - handles mouse clicks, UI events  
+- **No Bridge**: Mouse clicks don't trigger commands or API calls that cross to Extension Host
+
+### UNTRIED APPROACHES TO EXPLORE
+
+#### A. Inter-Process Communication (IPC) Monitoring
+- Monitor IPC messages between Extension Host and Renderer Process
+- Hook into VS Code's internal message bus system
+- Implementation: Override IPC communication channels
+
+#### B. Memory/Heap Monitoring
+- Monitor VS Code process memory for chat-related data structures
+- Watch for memory allocation patterns during chat submissions
+- Implementation: Native modules or process inspection
+
+#### C. System-Level Input Monitoring  
+- Monitor system mouse/keyboard events using OS APIs
+- Correlate with VS Code window focus and chat panel visibility
+- Implementation: Native Node.js modules (ffi-napi, win32 APIs)
+
+#### D. Electron Native Menu/Context Interception
+- Hook into Electron's native menu system used by VS Code
+- Monitor for context menu activations in chat areas
+- Implementation: Electron native module hooks
+
+#### E. VS Code Extension API Deep Dive
+- Use vscode.chat.registerChatSessionItemProvider or similar discovered APIs
+- Create custom chat session provider that intercepts all activity
+- Implementation: Leverage found chat APIs from reflection
+
+#### F. Browser DevTools Protocol
+- Use Chrome DevTools Protocol to monitor renderer process
+- Attach debugger to VS Code's renderer and monitor DOM events
+- Implementation: Chrome debugging protocol via WebSocket

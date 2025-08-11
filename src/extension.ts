@@ -806,6 +806,192 @@ export async function activate(context: vscode.ExtensionContext) {
     info(`🔧 Combined detection setup failed: ${err}`);
   }
   
+  // NEW APPROACH: Chat Session Provider Registration
+  try {
+    info('💡 Implementing Chat Session Provider approach');
+    
+    // Register multiple chat session providers to intercept activity
+    const chatSessionProviders = [
+      'registerChatSessionItemProvider',
+      'registerChatSessionContentProvider',
+      'onDidDisposeChatSession'
+    ];
+    
+    for (const providerName of chatSessionProviders) {
+      try {
+        const providerFunction = (vscode.chat as any)[providerName];
+        if (typeof providerFunction === 'function') {
+          
+          const provider = {
+            provideChatSessionItem: (sessionId: string) => {
+              info(`💡 Chat session item requested: ${sessionId}`);
+              const now = Date.now();
+              const timeSinceLastEnter = now - lastEnterTime;
+              
+              if (timeSinceLastEnter > 500) {
+                info(`💡 Chat session activity ${timeSinceLastEnter}ms after Enter - possible mouse`);
+                recordPrompt('[Chat session activity detected]', 'mouse-session-provider');
+              }
+              
+              return undefined;
+            },
+            
+            provideChatSessionContent: (sessionId: string) => {
+              info(`💡 Chat session content requested: ${sessionId}`);
+              const now = Date.now();
+              const timeSinceLastEnter = now - lastEnterTime;
+              
+              if (timeSinceLastEnter > 500) {
+                info(`💡 Chat content activity ${timeSinceLastEnter}ms after Enter - possible mouse`);
+                recordPrompt('[Chat content activity detected]', 'mouse-content-provider');
+              }
+              
+              return undefined;
+            }
+          };
+          
+          // Register provider
+          providerFunction.call(vscode.chat, provider);
+          info(`💡 Registered ${providerName} successfully`);
+          
+        } else {
+          info(`💡 ${providerName} not available (not a function)`);
+        }
+      } catch (providerErr) {
+        info(`💡 ${providerName} registration failed: ${providerErr}`);
+      }
+    }
+    
+    // Also try onDidDisposeChatSession event
+    try {
+      const disposalEvent = (vscode.chat as any).onDidDisposeChatSession;
+      if (typeof disposalEvent === 'function') {
+        context.subscriptions.push(
+          disposalEvent((sessionId: string) => {
+            info(`💡 Chat session disposed: ${sessionId}`);
+            const now = Date.now();
+            const timeSinceLastEnter = now - lastEnterTime;
+            
+            if (timeSinceLastEnter > 500) {
+              info(`💡 Session disposal ${timeSinceLastEnter}ms after Enter - activity detected`);
+              recordPrompt('[Chat session disposal]', 'mouse-session-disposal');
+            }
+          })
+        );
+        info('💡 Chat session disposal listener registered');
+      }
+    } catch (disposalErr) {
+      info(`💡 Session disposal registration failed: ${disposalErr}`);
+    }
+    
+    info('💡 Chat Session Provider approach enabled');
+    
+  } catch (err) {
+    info(`💡 Chat Session Provider setup failed: ${err}`);
+  }
+  
+  // NEW APPROACH: System-Level Input Monitoring
+  try {
+    info('🖱️ Implementing system-level input monitoring');
+    
+    // Check if we can access system APIs
+    let systemMonitoringEnabled = false;
+    
+    try {
+      // Try to require system monitoring modules
+      const os = require('os');
+      const platform = os.platform();
+      
+      if (platform === 'win32') {
+        info('🖱️ Windows platform detected - attempting Win32 API monitoring');
+        
+        // Monitor system mouse events using Win32 APIs if available
+        try {
+          const { exec } = require('child_process');
+          
+          // Use PowerShell to monitor mouse clicks
+          const mouseMonitorScript = `
+            Add-Type -TypeDefinition '
+              using System;
+              using System.Diagnostics;
+              using System.Runtime.InteropServices;
+              using System.Windows.Forms;
+              
+              public class MouseMonitor {
+                [DllImport("user32.dll")]
+                public static extern IntPtr GetForegroundWindow();
+                
+                [DllImport("user32.dll")]
+                public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+                
+                public static string GetActiveWindowTitle() {
+                  IntPtr handle = GetForegroundWindow();
+                  System.Text.StringBuilder text = new System.Text.StringBuilder(256);
+                  GetWindowText(handle, text, 256);
+                  return text.ToString();
+                }
+              }
+            '
+            
+            while ($true) {
+              $title = [MouseMonitor]::GetActiveWindowTitle()
+              if ($title -like "*Visual Studio Code*" -and $title -like "*Copilot*") {
+                Write-Host "VSCode-Copilot-Active: $(Get-Date -Format 'HH:mm:ss.fff')"
+              }
+              Start-Sleep -Milliseconds 100
+            }
+          `;
+          
+          const psProcess = exec(`powershell -Command "${mouseMonitorScript.replace(/"/g, '\\"')}"`, 
+            { timeout: 30000 });
+          
+          psProcess.stdout?.on('data', (data: Buffer) => {
+            const output = data.toString().trim();
+            if (output.includes('VSCode-Copilot-Active')) {
+              const now = Date.now();
+              const timeSinceLastEnter = now - lastEnterTime;
+              
+              if (timeSinceLastEnter > 500) {
+                info(`🖱️ System-level VS Code Copilot activity detected ${timeSinceLastEnter}ms after Enter`);
+                recordPrompt('[System-level Copilot activity]', 'mouse-system-monitor');
+              }
+            }
+          });
+          
+          psProcess.on('error', (err: any) => {
+            info(`🖱️ PowerShell mouse monitoring error: ${err}`);
+          });
+          
+          // Stop monitoring after 30 seconds
+          setTimeout(() => {
+            psProcess.kill();
+            info('🖱️ System-level monitoring stopped after 30s');
+          }, 30000);
+          
+          systemMonitoringEnabled = true;
+          info('🖱️ Win32 system monitoring enabled');
+          
+        } catch (win32Err) {
+          info(`🖱️ Win32 monitoring failed: ${win32Err}`);
+        }
+      } else {
+        info(`🖱️ Platform ${platform} - system monitoring not implemented`);
+      }
+      
+    } catch (osErr) {
+      info(`🖱️ OS detection failed: ${osErr}`);
+    }
+    
+    if (systemMonitoringEnabled) {
+      info('🖱️ System-level input monitoring enabled');
+    } else {
+      info('🖱️ System-level input monitoring not available');
+    }
+    
+  } catch (err) {
+    info(`🖱️ System-level monitoring setup failed: ${err}`);
+  }
+  
   // Additional mouse detection via workspace monitoring  
   let lastChatUpdate = 0;
   const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
