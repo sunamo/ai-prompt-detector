@@ -576,6 +576,17 @@ Violation = immediate regression. Fix before proceeding.
 - **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
 - This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.
 
+## 📁 Workspace Structure (Aug 11 2025)
+**IMPORTANT**: The root folder `E:\vs\TypeScript_Projects\_\` is ONLY a container with these subfolders:
+
+1. **ai-prompt-detector** - Our extension project (main working directory)
+2. **vscode-main** - VS Code source code for understanding internal APIs
+3. **vscode-copilot-chat-main** - GitHub Copilot Chat source code for reference
+4. **logs** - Extension log files directory
+
+**NEVER** look for `package.json` or any project files in `E:\vs\TypeScript_Projects\_\` root directory.
+**ALWAYS** work from `E:\vs\TypeScript_Projects\_\ai-prompt-detector\` for our extension.
+
 ## 🐛 Mouse Click Detection Problems Analysis (Aug 11 2025)
 **CRITICAL ISSUE**: Mouse clicks are completely invisible to all detection mechanisms.
 

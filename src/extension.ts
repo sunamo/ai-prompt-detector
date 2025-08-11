@@ -624,93 +624,186 @@ export async function activate(context: vscode.ExtensionContext) {
     info(`📁 Filesystem monitoring setup failed: ${err}`);
   }
   
-  // Widget acceptInput method interception - most reliable mouse detection approach
+  // Combined Multi-Method Mouse Detection Approach
   try {
-    info('🎯 Implementing widget acceptInput method interception');
+    info('🔧 Implementing combined mouse detection methods');
     
-    // Monitor for widget creation and hook acceptInput method
-    let widgetInterceptionEnabled = true;
-    const widgetCheckInterval = setInterval(() => {
+    // Method 1: Command execution monitoring
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    (vscode.commands as any).executeCommand = async function(commandId: string, ...args: any[]) {
       try {
-        if (!widgetInterceptionEnabled) return;
-        
-        // Get VS Code chat widget service
-        const widgetService = (vscode as any).chatWidgetService || (global as any).chatWidgetService;
-        if (!widgetService) return;
-        
-        // Try to get last focused widget
-        const widget = widgetService.lastFocusedWidget;
-        if (!widget) return;
-        
-        // Check if we already hooked this widget
-        if ((widget as any)._aiPromptDetectorHooked) return;
-        
-        info(`🎯 Found chat widget, hooking acceptInput method`);
-        
-        // Store original acceptInput method
-        const originalAcceptInput = widget.acceptInput;
-        if (!originalAcceptInput) return;
-        
-        // Replace acceptInput with our intercepted version
-        widget.acceptInput = async function(query?: string, options?: any) {
-          try {
-            // Capture the input text BEFORE submission
+        if (commandId === 'workbench.action.chat.submit' || 
+            commandId === 'github.copilot.chat.acceptInput' ||
+            commandId === 'workbench.action.chat.acceptInput') {
+          
+          const now = Date.now();
+          const timeSinceLastEnter = now - lastEnterTime;
+          
+          if (timeSinceLastEnter > 500) {
+            info(`🔧 Command execution detected: ${commandId} (mouse: ${timeSinceLastEnter}ms after Enter)`);
+            
+            // Try to capture text from active editor or focused element
             let capturedText = '';
-            
-            if (query) {
-              // Programmatic submission (usually followups)
-              capturedText = query;
-              info(`🎯 Programmatic submission detected: "${capturedText.substring(0, 100)}"`);
-            } else if (widget.input && widget.input._inputEditor) {
-              // User input from editor
-              capturedText = widget.input._inputEditor.getValue();
-              info(`🎯 User input submission detected: "${capturedText.substring(0, 100)}"`);
+            try {
+              const activeEditor = vscode.window.activeTextEditor;
+              if (activeEditor && activeEditor.document.uri.scheme === 'vscode-chat') {
+                capturedText = activeEditor.document.getText();
+              }
+              
+              if (!capturedText && args.length > 0) {
+                capturedText = String(args[0] || '');
+              }
+              
+              if (capturedText.trim()) {
+                info(`🔧 Command-based mouse submission: "${capturedText.substring(0, 100)}"`);
+                recordPrompt(capturedText, 'mouse-command-intercept');
+              } else {
+                info(`🔧 Mouse submission detected but no text captured`);
+                recordPrompt('[Mouse click detected - command interception]', 'mouse-command-detected');
+              }
+            } catch (textErr) {
+              info(`🔧 Text capture error: ${textErr}`);
+              recordPrompt('[Mouse click detected - text capture failed]', 'mouse-command-fallback');
             }
+          }
+        }
+        
+        return originalExecuteCommand.call(this, commandId, ...args);
+      } catch (err) {
+        info(`🔧 Command interception error: ${err}`);
+        return originalExecuteCommand.call(this, commandId, ...args);
+      }
+    };
+    
+    info('🔧 Command execution interception enabled');
+    
+    // Method 2: Process and network monitoring
+    const { spawn } = require('child_process');
+    
+    // Monitor network connections to detect Copilot API calls
+    const monitorNetworkActivity = () => {
+      try {
+        const netstat = spawn('netstat', ['-an']);
+        let lastNetworkState = '';
+        
+        netstat.stdout?.on('data', (data: Buffer) => {
+          const networkData = data.toString();
+          if (networkData !== lastNetworkState && networkData.includes('api.github.com')) {
+            const now = Date.now();
+            const timeSinceLastEnter = now - lastEnterTime;
             
-            // Record the prompt if we captured text
-            if (capturedText.trim()) {
+            if (timeSinceLastEnter > 500) {
+              info(`🔧 Network activity detected ${timeSinceLastEnter}ms after Enter`);
+              recordPrompt('[Network activity - possible mouse submission]', 'mouse-network-detected');
+            }
+            lastNetworkState = networkData;
+          }
+        });
+        
+        netstat.on('error', (err: any) => {
+          info(`🔧 Network monitoring error: ${err}`);
+        });
+        
+        // Stop monitoring after 30 seconds
+        setTimeout(() => {
+          netstat.kill();
+        }, 30000);
+        
+      } catch (err) {
+        info(`🔧 Network monitoring setup failed: ${err}`);
+      }
+    };
+    
+    monitorNetworkActivity();
+    
+    // Method 3: VS Code internal state monitoring
+    const monitorVSCodeState = () => {
+      try {
+        let lastWindowState = '';
+        
+        const stateCheckInterval = setInterval(() => {
+          try {
+            const currentState = JSON.stringify({
+              activeEditor: vscode.window.activeTextEditor?.document.uri.toString(),
+              visibleEditors: vscode.window.visibleTextEditors.length,
+              terminals: vscode.window.terminals.length
+            });
+            
+            if (currentState !== lastWindowState) {
               const now = Date.now();
               const timeSinceLastEnter = now - lastEnterTime;
               
-              if (timeSinceLastEnter < 500) {
-                info(`🎯 Submission via Enter key (${timeSinceLastEnter}ms after Enter)`);
-                // Don't record again - Enter handler already recorded it
-              } else {
-                info(`🎯 Submission via mouse click or other method (${timeSinceLastEnter}ms after last Enter)`);
-                recordPrompt(capturedText, 'mouse-widget-intercept');
+              if (timeSinceLastEnter > 500 && currentState.includes('chat')) {
+                info(`🔧 VS Code state change ${timeSinceLastEnter}ms after Enter`);
+                recordPrompt('[VS Code state change - possible submission]', 'mouse-state-change');
               }
+              
+              lastWindowState = currentState;
             }
-            
-            // Call original method
-            return originalAcceptInput.call(this, query, options);
-            
           } catch (err) {
-            info(`🎯 Widget acceptInput interception error: ${err}`);
-            // Call original method as fallback
-            return originalAcceptInput.call(this, query, options);
+            info(`🔧 State monitoring error: ${err}`);
           }
-        };
+        }, 1000);
         
-        // Mark this widget as hooked
-        (widget as any)._aiPromptDetectorHooked = true;
-        info(`🎯 Widget acceptInput method successfully intercepted`);
+        // Stop monitoring after 60 seconds
+        setTimeout(() => {
+          clearInterval(stateCheckInterval);
+          info('🔧 VS Code state monitoring disabled after 60s');
+        }, 60000);
         
       } catch (err) {
-        info(`🎯 Widget interception check error: ${err}`);
+        info(`🔧 VS Code state monitoring setup failed: ${err}`);
       }
-    }, 2000);
+    };
     
-    // Clear interval after 60 seconds to avoid permanent polling
-    setTimeout(() => {
-      widgetInterceptionEnabled = false;
-      clearInterval(widgetCheckInterval);
-      info('🎯 Widget interception polling disabled after 60s');
-    }, 60000);
+    monitorVSCodeState();
     
-    info('🎯 Widget acceptInput interception system enabled');
+    // Method 4: Extension host event monitoring
+    const monitorExtensionEvents = () => {
+      try {
+        // Monitor all possible extension events
+        const events = [
+          'onDidChangeActiveTextEditor',
+          'onDidChangeVisibleTextEditors',
+          'onDidChangeTextEditorSelection',
+          'onDidChangeWindowState'
+        ];
+        
+        for (const eventName of events) {
+          try {
+            const eventEmitter = (vscode.window as any)[eventName];
+            if (eventEmitter && typeof eventEmitter === 'function') {
+              eventEmitter((event: any) => {
+                const now = Date.now();
+                const timeSinceLastEnter = now - lastEnterTime;
+                
+                if (timeSinceLastEnter > 500) {
+                  info(`🔧 Extension event ${eventName} ${timeSinceLastEnter}ms after Enter`);
+                  
+                  if (event && event.document && event.document.uri.toString().includes('chat')) {
+                    recordPrompt('[Extension event - possible chat submission]', `mouse-event-${eventName}`);
+                  }
+                }
+              });
+            }
+          } catch (eventErr) {
+            info(`🔧 Event ${eventName} registration failed: ${eventErr}`);
+          }
+        }
+        
+        info('🔧 Extension event monitoring enabled');
+        
+      } catch (err) {
+        info(`🔧 Extension event monitoring setup failed: ${err}`);
+      }
+    };
+    
+    monitorExtensionEvents();
+    
+    info('🔧 Combined mouse detection methods enabled');
     
   } catch (err) {
-    info(`🎯 Widget acceptInput interception setup failed: ${err}`);
+    info(`🔧 Combined detection setup failed: ${err}`);
   }
   
   // Additional mouse detection via workspace monitoring  
