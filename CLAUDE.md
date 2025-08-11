@@ -676,7 +676,36 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 - **Renderer Process**: Electron UI where chat interface runs - handles mouse clicks, UI events  
 - **No Bridge**: Mouse clicks don't trigger commands or API calls that cross to Extension Host
 
-### UNTRIED APPROACHES TO EXPLORE
+### SOLUTION: API Proposal Access Required (Aug 11 2025)
+
+#### ❌ L. API Proposal Permission Issue (v1.1.364)
+- **Problem**: Extension cannot access advanced Chat APIs (chatSessionsProvider, chatParticipantPrivate, etc.)
+- **Evidence**: "Extension 'sunamocz.ai-prompt-detector' CANNOT use API proposal: chatSessionsProvider"
+- **Root Cause**: VS Code blocks access to experimental APIs unless specifically enabled
+- **Solution Required**: Start VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag
+
+#### ✅ RECOMMENDED SOLUTION: Enable Proposed APIs
+Two approaches to fix the API access issue:
+
+**Method 1: Command Line Flag (Immediate Fix)**
+```bash
+code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
+```
+
+**Method 2: Development Mode**
+- Start VS Code in extension development mode (F5 from extension project)
+- Development mode automatically enables API proposals for the extension being developed
+
+**Available APIs After Enabling:**
+- `vscode.chat.onDidSubmitRequest` - Direct chat submission events
+- `vscode.chat.registerChatSessionItemProvider` - Session monitoring
+- `vscode.chat.registerChatSessionContentProvider` - Content access
+- `vscode.chat.onDidDisposeChatSession` - Session lifecycle events
+
+**Expected Result:**
+Mouse click detection should work through proper Chat API access instead of complex workarounds.
+
+### UNTRIED APPROACHES TO EXPLORE (Backup Options)
 
 #### A. Inter-Process Communication (IPC) Monitoring
 - Monitor IPC messages between Extension Host and Renderer Process
@@ -692,21 +721,6 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 - Monitor system mouse/keyboard events using OS APIs
 - Correlate with VS Code window focus and chat panel visibility
 - Implementation: Native Node.js modules (ffi-napi, win32 APIs)
-
-#### D. Electron Native Menu/Context Interception
-- Hook into Electron's native menu system used by VS Code
-- Monitor for context menu activations in chat areas
-- Implementation: Electron native module hooks
-
-#### E. VS Code Extension API Deep Dive
-- Use vscode.chat.registerChatSessionItemProvider or similar discovered APIs
-- Create custom chat session provider that intercepts all activity
-- Implementation: Leverage found chat APIs from reflection
-
-#### F. Browser DevTools Protocol
-- Use Chrome DevTools Protocol to monitor renderer process
-- Attach debugger to VS Code's renderer and monitor DOM events
-- Implementation: Chrome debugging protocol via WebSocket
 
 ### NEW APPROACHES BASED ON CONSOLE ANALYSIS (Aug 11 2025)
 
