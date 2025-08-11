@@ -684,3 +684,25 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 - Use Chrome DevTools Protocol to monitor renderer process
 - Attach debugger to VS Code's renderer and monitor DOM events
 - Implementation: Chrome debugging protocol via WebSocket
+
+### NEW APPROACHES BASED ON CONSOLE ANALYSIS (Aug 11 2025)
+
+#### G. ❌ Extension-Level DevTools Protocol (v1.1.358)
+- **Attempt**: Connect to VS Code's Electron debugging ports (9229, 9230, 9222, 9221, 5858)
+- **Result**: All ports tested but none were open - VS Code not running with debug enabled
+- **Evidence**: DevTools connection attempts logged but no successful connections
+
+#### H. Console.log Renderer Process Injection 
+- **Insight**: VS Code dev console shows internal warnings and API proposals
+- **Approach**: Inject console monitoring script directly into VS Code renderer process
+- **Implementation**: Use executeCommand to inject JavaScript into webview context
+
+#### I. Extension Host Process Monitoring
+- **Insight**: Console shows Extension Host runs as separate process (pid 18704)
+- **Approach**: Monitor Extension Host process communication and IPC messages
+- **Implementation**: Attach to Extension Host process and monitor stdout/stderr
+
+#### J. Product.json API Proposal Override
+- **Insight**: Copilot has many enabled API proposals: `chatParticipantPrivate`, `chatProvider`, `chatEditing`
+- **Approach**: Temporarily enable same API proposals for our extension
+- **Implementation**: Modify package.json enabledApiProposals to match Copilot's permissions

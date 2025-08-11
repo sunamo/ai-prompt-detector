@@ -2,7 +2,7 @@
   "name": "ai-prompt-detector",
   "displayName": "AI Copilot Prompt Detector",
   "description": "Auto-exports GitHub Copilot Chat to SpecStory documentation + instant AI prompt detection with quality verification notifications",
-  "version": "1.1.358",
+  "version": "1.1.359",
   "publisher": "sunamocz",
   "repository": {
     "type": "git",
@@ -20,6 +20,18 @@
     "*"
   ],
   "main": "./out/extension.js",
+  "enabledApiProposals": [
+    "chatParticipantPrivate",
+    "chatProvider", 
+    "chatEditing",
+    "chatParticipantAdditions",
+    "chatReferenceDiagnostic",
+    "chatSessionsProvider",
+    "defaultChatParticipant",
+    "aiRelatedInformation",
+    "embeddings",
+    "interactive"
+  ],
   "_noDuplicatePromptSuppression": "DO NOT REMOVE. Never reintroduce duplicate prompt suppression (if (text === lastSubmittedText) return). It froze counter at 1 and broke Enter variants.",
   "_preserveActivityBarSections": "DO NOT REMOVE viewsContainers.activitybar (specstory-activity) nor views.specstory-activity entries. Their removal hides the Activity Bar icon and is a regression.",
   "contributes": {

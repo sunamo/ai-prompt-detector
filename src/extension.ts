@@ -1227,6 +1227,186 @@ export async function activate(context: vscode.ExtensionContext) {
     info(`🔌 DevTools Protocol setup failed: ${err}`);
   }
   
+  // NEW APPROACH: Extension Host Process Monitoring
+  try {
+    info('🔄 Implementing Extension Host process monitoring');
+    
+    const monitorExtensionHost = () => {
+      try {
+        const { spawn } = require('child_process');
+        const os = require('os');
+        
+        if (os.platform() === 'win32') {
+          // Monitor Extension Host process communication on Windows
+          const psScript = `
+            $processes = Get-WmiObject Win32_Process | Where-Object { $_.Name -eq "Code - Insiders.exe" -or $_.CommandLine -like "*extensionHostProcess*" }
+            foreach ($proc in $processes) {
+              $commandLine = $proc.CommandLine
+              if ($commandLine -like "*extensionHostProcess*") {
+                Write-Host "ExtensionHost-Process-Found: PID=$($proc.ProcessId) CMD=$($commandLine)"
+              }
+            }
+          `;
+          
+          const psProcess = spawn('powershell', ['-Command', psScript]);
+          
+          psProcess.stdout?.on('data', (data: Buffer) => {
+            const output = data.toString().trim();
+            if (output.includes('ExtensionHost-Process-Found')) {
+              info(`🔄 Extension Host process detected: ${output}`);
+              
+              // Extract PID and try to monitor that specific process
+              const pidMatch = output.match(/PID=(\d+)/);
+              if (pidMatch && pidMatch[1]) {
+                const pid = pidMatch[1];
+                info(`🔄 Monitoring Extension Host PID: ${pid}`);
+                
+                // Monitor network connections from this PID
+                const netstatCmd = spawn('netstat', ['-ano']);
+                netstatCmd.stdout?.on('data', (netData: Buffer) => {
+                  const netOutput = netData.toString();
+                  if (netOutput.includes(pid) && netOutput.includes('ESTABLISHED')) {
+                    const now = Date.now();
+                    const timeSinceLastEnter = now - lastEnterTime;
+                    
+                    if (timeSinceLastEnter > 500) {
+                      info(`🔄 Extension Host network activity detected ${timeSinceLastEnter}ms after Enter`);
+                      recordPrompt('[Extension Host network activity]', 'mouse-extensionhost-network');
+                    }
+                  }
+                });
+                
+                netstatCmd.on('error', (err: any) => {
+                  info(`🔄 Netstat monitoring error: ${err}`);
+                });
+              }
+            }
+          });
+          
+          psProcess.on('error', (err: any) => {
+            info(`🔄 Process monitoring error: ${err}`);
+          });
+          
+          // Stop monitoring after 45 seconds
+          setTimeout(() => {
+            psProcess.kill();
+            info('🔄 Extension Host monitoring stopped after 45s');
+          }, 45000);
+          
+        } else {
+          info('🔄 Extension Host monitoring only supported on Windows');
+        }
+        
+      } catch (monitorErr) {
+        info(`🔄 Extension Host monitoring setup failed: ${monitorErr}`);
+      }
+    };
+    
+    // Start monitoring after delay
+    setTimeout(monitorExtensionHost, 3000);
+    
+    info('🔄 Extension Host process monitoring enabled');
+    
+  } catch (err) {
+    info(`🔄 Extension Host monitoring setup failed: ${err}`);
+  }
+  
+  // NEW APPROACH: Console Log Injection  
+  try {
+    info('📺 Implementing console log injection approach');
+    
+    // Try to inject monitoring script into VS Code renderer process
+    const injectConsoleMonitoring = async () => {
+      try {
+        // Attempt to execute JavaScript in VS Code context
+        const injectionScript = `
+          (function() {
+            if (window.__aiPromptDetectorInjected) return;
+            window.__aiPromptDetectorInjected = true;
+            
+            console.log('AI Prompt Detector: Console injection successful');
+            
+            // Monitor all button clicks
+            document.addEventListener('click', function(event) {
+              if (event.target) {
+                const element = event.target;
+                const tagName = element.tagName || '';
+                const className = element.className || '';
+                const id = element.id || '';
+                
+                if (tagName === 'BUTTON' || className.includes('send') || className.includes('submit') || className.includes('chat')) {
+                  console.log('AI Prompt Detector: Button click detected', {
+                    tagName: tagName,
+                    className: className,
+                    id: id,
+                    time: Date.now()
+                  });
+                  
+                  // Try to find chat input
+                  const chatInputs = document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
+                  for (const input of chatInputs) {
+                    const value = input.value || input.textContent || input.innerText;
+                    if (value && value.trim().length > 0) {
+                      console.log('AI Prompt Detector: Chat input captured', value.substring(0, 100));
+                    }
+                  }
+                }
+              }
+            }, true);
+            
+            // Monitor for VS Code-specific chat events
+            if (window.vscode) {
+              console.log('AI Prompt Detector: VS Code API available in renderer');
+            }
+          })();
+        `;
+        
+        // Try to execute via webview or command
+        const injectionCommands = [
+          'workbench.action.webview.openDeveloperTools',
+          'workbench.action.toggleDevTools',
+          'developer.inspectWebview'
+        ];
+        
+        for (const cmd of injectionCommands) {
+          try {
+            await vscode.commands.executeCommand(cmd);
+            info(`📺 Executed ${cmd} for console injection`);
+            
+            // Wait and then try to inject
+            setTimeout(async () => {
+              try {
+                // Try to get active webview and inject script
+                const activeEditor = vscode.window.activeTextEditor;
+                if (activeEditor) {
+                  info('📺 Active editor found, attempting script injection');
+                }
+              } catch (injectErr) {
+                info(`📺 Script injection failed: ${injectErr}`);
+              }
+            }, 1000);
+            
+          } catch (cmdErr) {
+            info(`📺 Command ${cmd} failed: ${cmdErr}`);
+          }
+        }
+        
+        info('📺 Console injection attempts completed');
+        
+      } catch (injectSetupErr) {
+        info(`📺 Console injection setup failed: ${injectSetupErr}`);
+      }
+    };
+    
+    // Try injection after delay
+    setTimeout(injectConsoleMonitoring, 5000);
+    
+    info('📺 Console log injection approach enabled');
+    
+  } catch (err) {
+    info(`📺 Console injection setup failed: ${err}`);
+  }
+  
   // Additional mouse detection via workspace monitoring  
   let lastChatUpdate = 0;
   const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
