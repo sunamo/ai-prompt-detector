@@ -151,3 +151,4 @@ v1.1.347 | Updated instructions - install.ps1 handles version automatically
 v1.1.349 | Fixed TypeScript errors in mouse detection hooks
 v1.1.351 | Fixed webview message listener registration
 v1.1.352 | DOM-based mouse detection via chat interface polling
+v1.1.353 | VS Code internal chat service hook for mouse detection

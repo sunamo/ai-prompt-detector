@@ -597,8 +597,42 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 - Mouse clicks: generate NO events visible to extension host
 - All webview/DOM hooks fail: extension has no direct UI access
 
+### Failed Attempts - Additional Analysis (v1.1.353):
+8. **VS Code Internal Service Hook**: `VS Code services not accessible` - extension can't access internal service locator
+9. **DOM-based approach**: `window is not defined` spam - repeated every 500ms, shows extension is in Node.js context
+
 ### Next Approaches to Try:
-1. Study VS Code source code for internal chat event system
-2. Hook into actual chat service implementations from vscode-copilot-chat-main
-3. Monitor file system changes that might indicate chat activity
-4. Use VS Code's internal messaging between renderer and extension host
+1. **Filesystem monitoring**: Watch for chat history/temp files that VS Code might create
+2. **Memory/process monitoring**: Look for patterns in VS Code's memory usage during chat
+3. **Network monitoring**: Monitor HTTP requests to Copilot API endpoints  
+4. **Extension host IPC**: Try to intercept inter-process communication
+5. **Chat storage monitoring**: Watch VS Code's chat storage/indexedDB files
+6. **Deep API reflection**: Enumerate all available VS Code APIs at runtime
+
+### NEW APPROACH: Widget acceptInput Method Interception (Aug 11 2025)
+**BREAKTHROUGH**: Found the exact method used for all chat submissions in VS Code source code!
+
+#### Technical Discovery:
+- **File**: `E:\vs\TypeScript_Projects\_\vscode-main\src\vs\workbench\contrib\chat\browser\chatWidget.ts`
+- **Method**: `widget.acceptInput(query?: string, options?: IChatAcceptInputOptions)` 
+- **Line 148**: `widget?.acceptInput(context?.inputValue)` - called by ChatSubmitAction for ALL submissions
+- **Key Insight**: BOTH Enter key AND mouse button submissions call this exact method
+
+#### Implementation Strategy:
+1. **Hook Detection**: Monitor for chat widget creation via `chatWidgetService.lastFocusedWidget`
+2. **Method Interception**: Replace `widget.acceptInput` with wrapper that:
+   - Captures input text BEFORE submission
+   - Detects if submission is via Enter (within 500ms of lastEnterTime) or mouse
+   - Records prompt with appropriate source tag ('mouse-widget-intercept' vs 'enter-*')
+   - Calls original method to preserve functionality
+3. **Debouncing**: Use lastEnterTime to distinguish Enter vs mouse submissions
+4. **Non-invasive**: No clipboard, no DOM manipulation, no text selection
+
+#### Expected Result:
+- **Enter submissions**: Already working, skip recording to avoid duplicates
+- **Mouse submissions**: Finally detectable through acceptInput interception
+- **All submissions**: Route through single bottleneck method regardless of input method
+
+#### Code Location:
+- **Implementation**: `E:\vs\TypeScript_Projects\_\ai-prompt-detector\src\extension.ts` lines 627-714
+- **Status**: Added in version 1.1.354 (to be tested)

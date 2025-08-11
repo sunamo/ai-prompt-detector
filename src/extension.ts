@@ -503,108 +503,214 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // VS Code Internal Chat Service Hook (based on source code analysis)
+  // Deep VS Code API Reflection - enumerate all available APIs
   try {
-    // Hook into the chat service via VS Code's internal service locator
-    const workbench = (vscode as any).workbench;
-    const services = (global as any).services || (vscode as any).services;
+    info('🔍 Starting deep VS Code API reflection analysis');
     
-    if (services || workbench) {
-      info('Attempting to access VS Code internal chat service via service locator');
+    // Recursive function to explore object properties
+    const exploreObject = (obj: any, path: string, maxDepth: number) => {
+      if (maxDepth <= 0 || !obj || typeof obj !== 'object') return;
       
-      // Try to access chat service through various paths
-      const chatServicePaths = [
-        'chatService',
-        'interactiveChatService', 
-        'chatAgentService',
-        'contrib.chat.chatService',
-        'workbench.contrib.chat.chatService'
-      ];
-      
-      let chatService: any = null;
-      
-      for (const path of chatServicePaths) {
-        try {
-          let current = services || workbench;
-          for (const segment of path.split('.')) {
-            current = current?.[segment];
+      try {
+        const keys = Object.getOwnPropertyNames(obj);
+        for (const key of keys) {
+          if (key.toLowerCase().includes('chat') || key.toLowerCase().includes('copilot')) {
+            info(`🔍 Found chat-related API: ${path}.${key} (type: ${typeof obj[key]})`);
+            
+            // If it's a function, try to explore its properties too
+            if (typeof obj[key] === 'function') {
+              const funcKeys = Object.getOwnPropertyNames(obj[key]);
+              for (const funcKey of funcKeys) {
+                if (funcKey.toLowerCase().includes('chat') || funcKey.toLowerCase().includes('submit') || funcKey.toLowerCase().includes('send')) {
+                  info(`🔍 Found function property: ${path}.${key}.${funcKey}`);
+                }
+              }
+            }
+            
+            // Explore nested objects
+            if (maxDepth > 1 && obj[key] && typeof obj[key] === 'object') {
+              exploreObject(obj[key], `${path}.${key}`, maxDepth - 1);
+            }
           }
-          if (current && typeof current === 'object') {
-            chatService = current;
-            info(`Found chat service at path: ${path}`);
-            break;
-          }
-        } catch (err) {
-          info(`Failed to access ${path}: ${err}`);
         }
+      } catch (err) {
+        info(`🔍 Error exploring ${path}: ${err}`);
       }
-      
-      if (chatService) {
-        // Try to hook into sendRequest method
-        if (chatService.sendRequest && typeof chatService.sendRequest === 'function') {
-          const originalSendRequest = chatService.sendRequest;
-          chatService.sendRequest = function(...args: any[]) {
+    };
+    
+    // Explore vscode namespace
+    info('🔍 Exploring vscode namespace...');
+    exploreObject(vscode, 'vscode', 3);
+    
+    // Explore global objects
+    info('🔍 Exploring global objects...');
+    const globalObjects = ['global', 'process', 'require', 'module'];
+    for (const globalName of globalObjects) {
+      try {
+        const globalObj = (global as any)[globalName];
+        if (globalObj) {
+          exploreObject(globalObj, globalName, 2);
+        }
+      } catch (err) {
+        info(`🔍 Error exploring ${globalName}: ${err}`);
+      }
+    }
+    
+    info('🔍 API reflection analysis complete');
+    
+  } catch (err) {
+    info(`🔍 API reflection failed: ${err}`);
+  }
+  
+  // Filesystem monitoring for chat activity
+  try {
+    info('📁 Starting filesystem monitoring for chat activity');
+    
+    // Monitor VS Code's storage directories for chat-related files
+    const userDataPath = process.env.APPDATA || process.env.HOME || '';
+    const possibleChatPaths = [
+      path.join(userDataPath, 'Code', 'User', 'workspaceStorage'),
+      path.join(userDataPath, 'Code - Insiders', 'User', 'workspaceStorage'),
+      path.join(userDataPath, 'Code', 'CachedExtensions'),
+      path.join(userDataPath, 'Code - Insiders', 'CachedExtensions'),
+      '/tmp',
+      process.cwd()
+    ];
+    
+    for (const watchPath of possibleChatPaths) {
+      try {
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(watchPath, '**/*{chat,copilot,conversation}*')
+        );
+        
+        watcher.onDidCreate((uri) => {
+          info(`📁 Chat file created: ${uri.fsPath}`);
+          // Try to read the file content for prompt detection
+          setTimeout(async () => {
             try {
-              // Extract request data from arguments
-              const [sessionId, request, options] = args;
-              if (request && request.message) {
-                const text = String(request.message).trim();
-                if (text) {
-                  info(`Chat service sendRequest captured: "${text.substring(0, 100)}"`);
-                  recordPrompt(text, 'mouse-chat-service');
+              const content = await vscode.workspace.fs.readFile(uri);
+              const text = Buffer.from(content).toString('utf8');
+              if (text.includes('user') || text.includes('prompt')) {
+                const lines = text.split('\n');
+                for (const line of lines) {
+                  if (line.trim().length > 10 && !line.includes('assistant')) {
+                    info(`📁 Chat file content captured: "${line.trim().substring(0, 100)}"`);
+                    recordPrompt(line.trim(), 'mouse-filesystem');
+                    break;
+                  }
                 }
               }
             } catch (err) {
-              info(`Chat service hook error: ${err}`);
+              info(`📁 Error reading chat file: ${err}`);
+            }
+          }, 100);
+        });
+        
+        watcher.onDidChange((uri) => {
+          info(`📁 Chat file changed: ${uri.fsPath}`);
+        });
+        
+        context.subscriptions.push(watcher);
+        info(`📁 Monitoring: ${watchPath}`);
+        
+      } catch (err) {
+        info(`📁 Failed to monitor ${watchPath}: ${err}`);
+      }
+    }
+    
+    info('📁 Filesystem monitoring enabled');
+    
+  } catch (err) {
+    info(`📁 Filesystem monitoring setup failed: ${err}`);
+  }
+  
+  // Widget acceptInput method interception - most reliable mouse detection approach
+  try {
+    info('🎯 Implementing widget acceptInput method interception');
+    
+    // Monitor for widget creation and hook acceptInput method
+    let widgetInterceptionEnabled = true;
+    const widgetCheckInterval = setInterval(() => {
+      try {
+        if (!widgetInterceptionEnabled) return;
+        
+        // Get VS Code chat widget service
+        const widgetService = (vscode as any).chatWidgetService || (global as any).chatWidgetService;
+        if (!widgetService) return;
+        
+        // Try to get last focused widget
+        const widget = widgetService.lastFocusedWidget;
+        if (!widget) return;
+        
+        // Check if we already hooked this widget
+        if ((widget as any)._aiPromptDetectorHooked) return;
+        
+        info(`🎯 Found chat widget, hooking acceptInput method`);
+        
+        // Store original acceptInput method
+        const originalAcceptInput = widget.acceptInput;
+        if (!originalAcceptInput) return;
+        
+        // Replace acceptInput with our intercepted version
+        widget.acceptInput = async function(query?: string, options?: any) {
+          try {
+            // Capture the input text BEFORE submission
+            let capturedText = '';
+            
+            if (query) {
+              // Programmatic submission (usually followups)
+              capturedText = query;
+              info(`🎯 Programmatic submission detected: "${capturedText.substring(0, 100)}"`);
+            } else if (widget.input && widget.input._inputEditor) {
+              // User input from editor
+              capturedText = widget.input._inputEditor.getValue();
+              info(`🎯 User input submission detected: "${capturedText.substring(0, 100)}"`);
             }
             
-            return originalSendRequest.apply(this, args);
-          };
-          
-          info('Hooked into chat service sendRequest method');
-        }
-        
-        // Try to hook into other potential methods
-        const methodsToHook = ['_sendRequest', 'handleRequest', 'processRequest', 'submitRequest'];
-        for (const methodName of methodsToHook) {
-          if (chatService[methodName] && typeof chatService[methodName] === 'function') {
-            const originalMethod = chatService[methodName];
-            chatService[methodName] = function(...args: any[]) {
-              try {
-                // Look for text in arguments
-                for (const arg of args) {
-                  if (typeof arg === 'string' && arg.trim().length > 3) {
-                    info(`Chat service ${methodName} captured: "${arg.substring(0, 100)}"`);
-                    recordPrompt(arg.trim(), `mouse-chat-${methodName}`);
-                    break;
-                  } else if (arg && typeof arg === 'object' && (arg.message || arg.prompt)) {
-                    const text = String(arg.message || arg.prompt).trim();
-                    if (text) {
-                      info(`Chat service ${methodName} object captured: "${text.substring(0, 100)}"`);
-                      recordPrompt(text, `mouse-chat-${methodName}-obj`);
-                      break;
-                    }
-                  }
-                }
-              } catch (err) {
-                info(`Chat service ${methodName} hook error: ${err}`);
-              }
+            // Record the prompt if we captured text
+            if (capturedText.trim()) {
+              const now = Date.now();
+              const timeSinceLastEnter = now - lastEnterTime;
               
-              return originalMethod.apply(this, args);
-            };
+              if (timeSinceLastEnter < 500) {
+                info(`🎯 Submission via Enter key (${timeSinceLastEnter}ms after Enter)`);
+                // Don't record again - Enter handler already recorded it
+              } else {
+                info(`🎯 Submission via mouse click or other method (${timeSinceLastEnter}ms after last Enter)`);
+                recordPrompt(capturedText, 'mouse-widget-intercept');
+              }
+            }
             
-            info(`Hooked into chat service ${methodName} method`);
+            // Call original method
+            return originalAcceptInput.call(this, query, options);
+            
+          } catch (err) {
+            info(`🎯 Widget acceptInput interception error: ${err}`);
+            // Call original method as fallback
+            return originalAcceptInput.call(this, query, options);
           }
-        }
+        };
         
-      } else {
-        info('Could not locate VS Code chat service');
+        // Mark this widget as hooked
+        (widget as any)._aiPromptDetectorHooked = true;
+        info(`🎯 Widget acceptInput method successfully intercepted`);
+        
+      } catch (err) {
+        info(`🎯 Widget interception check error: ${err}`);
       }
-    } else {
-      info('VS Code services not accessible');
-    }
+    }, 2000);
+    
+    // Clear interval after 60 seconds to avoid permanent polling
+    setTimeout(() => {
+      widgetInterceptionEnabled = false;
+      clearInterval(widgetCheckInterval);
+      info('🎯 Widget interception polling disabled after 60s');
+    }, 60000);
+    
+    info('🎯 Widget acceptInput interception system enabled');
+    
   } catch (err) {
-    info(`VS Code chat service hook failed: ${err}`);
+    info(`🎯 Widget acceptInput interception setup failed: ${err}`);
   }
   
   // Additional mouse detection via workspace monitoring  
