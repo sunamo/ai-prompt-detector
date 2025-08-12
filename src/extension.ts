@@ -257,7 +257,8 @@ export async function activate(context: vscode.ExtensionContext) {
       customMsg = ''; // pokračujeme bez textu – politika: žádný druhý parametr fallback
     }
     const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
-    if (source.startsWith('enter')) notify(); else setTimeout(notify, 250);
+    // Show notification immediately for all sources
+    notify();
     
     // Spusť install.ps1 po každém promptu
     setTimeout(async () => {
@@ -353,130 +354,92 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }
   
-  // Monitor existing webview views (for chat views that are already created)
+  // Simplified Chat API approach - works with --enable-proposed-api flag
   try {
-    // Try to access the chat view directly through VS Code's internal APIs
-    const workbench = (vscode as ExtendedVSCode).workbench || (global as VSCodeGlobal).workbench;
-    if (workbench) {
-      // Monitor all view container changes
-      const intervalId = setInterval(() => {
+    info('🎯 Attempting direct Chat API access for mouse detection');
+    
+    // Access the proposed Chat API
+    const chatApi = (vscode as ExtendedVSCode).chat;
+    
+    if (chatApi && typeof chatApi.onDidSubmitRequest === 'function') {
+      info('✅ Chat API onDidSubmitRequest is available!');
+      
+      // Register the submission listener
+      const disposable = chatApi.onDidSubmitRequest((event: ChatEvent) => {
         try {
-          // Look for chat-related views in the workbench
-          const views = workbench.getViews ? workbench.getViews() : [];
-          for (const view of views) {
-            if (view && (view.id || '').includes('chat') || (view.id || '').includes('copilot')) {
-              info(`Found existing chat view: ${view.id}`);
-              
-              // Register message listener for existing views
-              if (view.webview && view.webview.onDidReceiveMessage) {
-                view.webview.onDidReceiveMessage((message: WebviewMessage) => {
-                  try {
-                    if (message && (message.command === 'submit' || message.type === 'submit') &&
-                        (message.text || message.message)) {
-                      const text = String(message.text || message.message || '').trim();
-                      if (text) {
-                        info(`Existing view captured: "${text.substring(0, 100)}"`);
-                        recordPrompt(text, 'mouse-existing-view');
-                      }
-                    }
-                  } catch (err) {
-                    info(`Existing view error: ${err}`);
-                  }
-                });
-                
-                info(`Registered listener for existing chat view: ${view.id}`);
-              }
-            }
+          // Extract text from various possible event properties
+          const text = String(
+            event?.message || 
+            event?.prompt || 
+            event?.request?.message || 
+            event?.request?.prompt || 
+            event?.command?.message || 
+            event?.command?.prompt || 
+            event?.text || ''
+          ).trim();
+          
+          if (text) {
+            info(`🎯 MOUSE CLICK DETECTED via Chat API: "${text.substring(0, 100)}"`);
+            
+            // Record the prompt immediately (recordPrompt already shows notification)
+            recordPrompt(text, 'mouse-click');
+            
+            info('✅ Mouse click processed successfully');
+          } else {
+            info('⚠️ Mouse click detected but no text found');
           }
         } catch (err) {
-          info(`Existing view monitoring error: ${err}`);
+          info(`❌ Error processing mouse click: ${err}`);
         }
-      }, 5000);
+      });
       
-      // Clear interval after 30 seconds to avoid permanent polling
-      setTimeout(() => clearInterval(intervalId), 30000);
+      context.subscriptions.push(disposable);
+      info('✅ Mouse click detection fully activated via Chat API');
       
-      info('Existing webview monitoring started');
+    } else {
+      info('⚠️ Chat API not available - VS Code needs --enable-proposed-api flag');
+      info('⚠️ Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
     }
+    
   } catch (err) {
-    info(`Existing webview monitoring failed: ${err}`);
+    info(`⚠️ Chat API setup failed: ${err}`);
+    info('⚠️ Mouse detection requires: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
   }
 
+  // Secondary Chat API registration for redundancy
   try {
     const chatNs = (vscode as ExtendedVSCode).chat;
-    info(`Chat API available: ${!!chatNs}, onDidSubmitRequest: ${!!chatNs?.onDidSubmitRequest}`);
-    if (chatNs?.onDidSubmitRequest) {
-      context.subscriptions.push(
-        chatNs.onDidSubmitRequest((e: ChatEvent) => {
-          try {
-            const txt = String(
-              e?.request?.message || 
-              e?.request?.prompt || 
-              e?.prompt || 
-              e?.message ||
-              e?.command?.message ||
-              e?.command?.prompt || '',
-            ).trim();
-            if (txt) {
-              info(`Chat API captured mouse submission: "${txt.substring(0, 100)}"`);
-              if (recordPrompt(txt, 'mouse-chatapi')) {
-                info('Mouse submission via chatApi recorded successfully');
-              }
-            } else {
-              info('Chat API: no text found in submission event');
-            }
-          } catch (err) {
-            info('chat api err ' + err);
+    if (chatNs?.onDidSubmitRequest && typeof chatNs.onDidSubmitRequest === 'function') {
+      info('🎯 Secondary Chat API registration for mouse detection');
+      
+      const secondaryDisposable = chatNs.onDidSubmitRequest((e: ChatEvent) => {
+        try {
+          const txt = String(
+            e?.request?.message || 
+            e?.request?.prompt || 
+            e?.prompt || 
+            e?.message ||
+            e?.command?.message ||
+            e?.command?.prompt || 
+            e?.text || '',
+          ).trim();
+          
+          if (txt) {
+            info(`🎯 Secondary capture: "${txt.substring(0, 100)}"`);
+            // This acts as a backup in case primary listener fails
           }
-        }),
-      );
-      info('Chat API listener registered successfully');
-    } else {
-      info('Chat API onDidSubmitRequest not available');
+        } catch (err) {
+          info(`Secondary listener error: ${err}`);
+        }
+      });
+      
+      context.subscriptions.push(secondaryDisposable);
     }
   } catch (e) {
-    info('chat api init err ' + e);
+    // Silent fail for secondary listener
   }
 
-  // Improved onDidSubmitRequest hook with session data retrieval
-  try {
-    const chatNs = (vscode as ExtendedVSCode).chat;
-    if (chatNs?.onDidSubmitRequest) {
-      context.subscriptions.push(
-        chatNs.onDidSubmitRequest(async (e: ChatEvent) => {
-          try {
-            info(`Chat submit event received with sessionId: ${e.chatSessionId}`);
-            
-            // Try to get the session data to extract the message text
-            if (chatNs.getChatSession && e.chatSessionId) {
-              const session = await chatNs.getChatSession(e.chatSessionId);
-              if (session && session.requests && session.requests.length > 0) {
-                const lastRequest = session.requests[session.requests.length - 1];
-                const text = String(lastRequest.message || lastRequest.prompt || '').trim();
-                if (text) {
-                  info(`Mouse submission extracted from session: "${text.substring(0, 100)}"`);
-                  recordPrompt(text, 'mouse-session-data');
-                  return;
-                }
-              }
-            }
-            
-            // Fallback: record that a mouse click was detected
-            info('Mouse submission detected but could not extract text');
-            recordPrompt('[Mouse click detected - text extraction failed]', 'mouse-click-detected');
-            
-          } catch (err) {
-            info(`Chat submit event error: ${err}`);
-          }
-        }),
-      );
-      info('Enhanced onDidSubmitRequest listener registered');
-    } else {
-      info('onDidSubmitRequest not available');
-    }
-  } catch (e) {
-    info('Enhanced submit request hook failed: ' + e);
-  }
+  // Removed - duplicate of simplified Chat API approach above
 
   /**
    * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
@@ -589,488 +552,11 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // Deep VS Code API Reflection - enumerate all available APIs
-  try {
-    info('🔍 Starting deep VS Code API reflection analysis');
-    
-    // Recursive function to explore object properties
-    // Type guard for objects with string keys
-    const isObjectWithStringKeys = (obj: unknown): obj is Record<string, unknown> => {
-      return obj !== null && typeof obj === 'object';
-    };
-
-    const exploreObject = (obj: unknown, path: string, maxDepth: number): void => {
-      if (maxDepth <= 0 || !obj || typeof obj !== 'object') return;
-      
-      try {
-        if (!isObjectWithStringKeys(obj)) return;
-        const keys = Object.getOwnPropertyNames(obj);
-        for (const key of keys) {
-          if (key.toLowerCase().includes('chat') || key.toLowerCase().includes('copilot')) {
-            info(`🔍 Found chat-related API: ${path}.${key} (type: ${typeof obj[key]})`);
-            
-            // If it's a function, try to explore its properties too
-            if (typeof obj[key] === 'function') {
-              const funcKeys = Object.getOwnPropertyNames(obj[key]);
-              for (const funcKey of funcKeys) {
-                if (funcKey.toLowerCase().includes('chat') || funcKey.toLowerCase().includes('submit') || funcKey.toLowerCase().includes('send')) {
-                  info(`🔍 Found function property: ${path}.${key}.${funcKey}`);
-                }
-              }
-            }
-            
-            // Explore nested objects
-            if (maxDepth > 1 && obj[key] && typeof obj[key] === 'object') {
-              exploreObject(obj[key], `${path}.${key}`, maxDepth - 1);
-            }
-          }
-        }
-      } catch (err) {
-        info(`🔍 Error exploring ${path}: ${err}`);
-      }
-    };
-    
-    // Explore vscode namespace
-    info('🔍 Exploring vscode namespace...');
-    exploreObject(vscode, 'vscode', 3);
-    
-    // Explore global objects
-    info('🔍 Exploring global objects...');
-    const globalObjects = ['global', 'process', 'require', 'module'];
-    for (const globalName of globalObjects) {
-      try {
-        const globalObj = (global as VSCodeGlobal & Record<string, unknown>)[globalName];
-        if (globalObj) {
-          exploreObject(globalObj, globalName, 2);
-        }
-      } catch (err) {
-        info(`🔍 Error exploring ${globalName}: ${err}`);
-      }
-    }
-    
-    info('🔍 API reflection analysis complete');
-    
-  } catch (err) {
-    info(`🔍 API reflection failed: ${err}`);
-  }
-  
-  // Filesystem monitoring for chat activity
-  try {
-    info('📁 Starting filesystem monitoring for chat activity');
-    
-    // Monitor VS Code's storage directories for chat-related files
-    const userDataPath = process.env.APPDATA || process.env.HOME || '';
-    const possibleChatPaths = [
-      path.join(userDataPath, 'Code', 'User', 'workspaceStorage'),
-      path.join(userDataPath, 'Code - Insiders', 'User', 'workspaceStorage'),
-      path.join(userDataPath, 'Code', 'CachedExtensions'),
-      path.join(userDataPath, 'Code - Insiders', 'CachedExtensions'),
-      '/tmp',
-      process.cwd()
-    ];
-    
-    for (const watchPath of possibleChatPaths) {
-      try {
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(watchPath, '**/*{chat,copilot,conversation}*')
-        );
-        
-        watcher.onDidCreate((uri) => {
-          info(`📁 Chat file created: ${uri.fsPath}`);
-          // Try to read the file content for prompt detection
-          setTimeout(async () => {
-            try {
-              const content = await vscode.workspace.fs.readFile(uri);
-              const text = Buffer.from(content).toString('utf8');
-              if (text.includes('user') || text.includes('prompt')) {
-                const lines = text.split('\n');
-                for (const line of lines) {
-                  if (line.trim().length > 10 && !line.includes('assistant')) {
-                    info(`📁 Chat file content captured: "${line.trim().substring(0, 100)}"`);
-                    recordPrompt(line.trim(), 'mouse-filesystem');
-                    break;
-                  }
-                }
-              }
-            } catch (err) {
-              info(`📁 Error reading chat file: ${err}`);
-            }
-          }, 100);
-        });
-        
-        watcher.onDidChange((uri) => {
-          info(`📁 Chat file changed: ${uri.fsPath}`);
-        });
-        
-        context.subscriptions.push(watcher);
-        info(`📁 Monitoring: ${watchPath}`);
-        
-      } catch (err) {
-        info(`📁 Failed to monitor ${watchPath}: ${err}`);
-      }
-    }
-    
-    info('📁 Filesystem monitoring enabled');
-    
-  } catch (err) {
-    info(`📁 Filesystem monitoring setup failed: ${err}`);
-  }
-  
-  // Combined Multi-Method Mouse Detection Approach
-  try {
-    info('🔧 Implementing combined mouse detection methods');
-    
-    // Method 1: Direct Chat API monitoring with enabled proposals
-    try {
-      // Access the Chat API that should now be available with --enable-proposed-api
-      const vscodeAny = vscode as unknown as {
-        chat?: {
-          onDidSubmitRequest?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
-          onDidAcceptInput?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
-        };
-      };
-      
-      if (vscodeAny.chat?.onDidSubmitRequest) {
-        info('🔧 Chat API onDidSubmitRequest available - registering mouse detection');
-        const chatDisposable = vscodeAny.chat.onDidSubmitRequest((e: ChatEvent) => {
-          const now = Date.now();
-          const timeSinceLastEnter = now - lastEnterTime;
-          
-          // Only record if this isn't from a recent Enter key press
-          if (timeSinceLastEnter > 500) {
-            const text = e.message || e.prompt || e.request?.message || e.command?.prompt || '';
-            if (text.trim()) {
-              info(`🔧 Mouse submission detected via Chat API: "${text.substring(0, 100)}"`);
-              recordPrompt(text, 'mouse-chat-api');
-            } else {
-              info(`🔧 Mouse submission detected but no text captured`);
-              recordPrompt('[Mouse click detected - Chat API]', 'mouse-chat-api-empty');
-            }
-          }
-        });
-        context.subscriptions.push(chatDisposable);
-      } else {
-        info('🔧 Chat API onDidSubmitRequest not available - mouse detection limited');
-      }
-      
-    } catch (chatApiError) {
-      info(`🔧 Chat API access error: ${chatApiError} - mouse detection will be limited`);
-    }
-    
-    // Method 2: Process and network monitoring
-    const { spawn } = require('child_process');
-    
-    // Monitor network connections to detect Copilot API calls
-    const monitorNetworkActivity = () => {
-      try {
-        const netstat = spawn('netstat', ['-an']);
-        let lastNetworkState = '';
-        
-        netstat.stdout?.on('data', (data: Buffer) => {
-          const networkData = data.toString();
-          if (networkData !== lastNetworkState && networkData.includes('api.github.com')) {
-            const now = Date.now();
-            const timeSinceLastEnter = now - lastEnterTime;
-            
-            if (timeSinceLastEnter > 500) {
-              info(`🔧 Network activity detected ${timeSinceLastEnter}ms after Enter`);
-              recordPrompt('[Network activity - possible mouse submission]', 'mouse-network-detected');
-            }
-            lastNetworkState = networkData;
-          }
-        });
-        
-        netstat.on('error', (err: ProcessError) => {
-          info(`🔧 Network monitoring error: ${err}`);
-        });
-        
-        // Stop monitoring after 30 seconds
-        setTimeout(() => {
-          netstat.kill();
-        }, 30000);
-        
-      } catch (err) {
-        info(`🔧 Network monitoring setup failed: ${err}`);
-      }
-    };
-    
-    monitorNetworkActivity();
-    
-    // Method 3: VS Code internal state monitoring
-    const monitorVSCodeState = () => {
-      try {
-        let lastWindowState = '';
-        
-        const stateCheckInterval = setInterval(() => {
-          try {
-            const currentState = JSON.stringify({
-              activeEditor: vscode.window.activeTextEditor?.document.uri.toString(),
-              visibleEditors: vscode.window.visibleTextEditors.length,
-              terminals: vscode.window.terminals.length
-            });
-            
-            if (currentState !== lastWindowState) {
-              const now = Date.now();
-              const timeSinceLastEnter = now - lastEnterTime;
-              
-              if (timeSinceLastEnter > 500 && currentState.includes('chat')) {
-                info(`🔧 VS Code state change ${timeSinceLastEnter}ms after Enter`);
-                recordPrompt('[VS Code state change - possible submission]', 'mouse-state-change');
-              }
-              
-              lastWindowState = currentState;
-            }
-          } catch (err) {
-            info(`🔧 State monitoring error: ${err}`);
-          }
-        }, 1000);
-        
-        // Stop monitoring after 60 seconds
-        setTimeout(() => {
-          clearInterval(stateCheckInterval);
-          info('🔧 VS Code state monitoring disabled after 60s');
-        }, 60000);
-        
-      } catch (err) {
-        info(`🔧 VS Code state monitoring setup failed: ${err}`);
-      }
-    };
-    
-    monitorVSCodeState();
-    
-    // Method 4: Extension host event monitoring
-    const monitorExtensionEvents = () => {
-      try {
-        // Monitor all possible extension events
-        const events = [
-          'onDidChangeActiveTextEditor',
-          'onDidChangeVisibleTextEditors',
-          'onDidChangeTextEditorSelection',
-          'onDidChangeWindowState'
-        ];
-        
-        for (const eventName of events) {
-          try {
-            const eventEmitter = (vscode.window as unknown as Record<string, Function>)[eventName];
-            if (eventEmitter && typeof eventEmitter === 'function') {
-              eventEmitter((event: DocumentEvent) => {
-                const now = Date.now();
-                const timeSinceLastEnter = now - lastEnterTime;
-                
-                if (timeSinceLastEnter > 500) {
-                  info(`🔧 Extension event ${eventName} ${timeSinceLastEnter}ms after Enter`);
-                  
-                  if (event && event.document && event.document.uri.toString().includes('chat')) {
-                    recordPrompt('[Extension event - possible chat submission]', `mouse-event-${eventName}`);
-                  }
-                }
-              });
-            }
-          } catch (eventErr) {
-            info(`🔧 Event ${eventName} registration failed: ${eventErr}`);
-          }
-        }
-        
-        info('🔧 Extension event monitoring enabled');
-        
-      } catch (err) {
-        info(`🔧 Extension event monitoring setup failed: ${err}`);
-      }
-    };
-    
-    monitorExtensionEvents();
-    
-    info('🔧 Combined mouse detection methods enabled');
-    
-  } catch (err) {
-    info(`🔧 Combined detection setup failed: ${err}`);
-  }
-  
-  // NEW APPROACH: Chat Session Provider Registration
-  try {
-    info('💡 Implementing Chat Session Provider approach');
-    
-    // Register multiple chat session providers to intercept activity
-    const chatSessionProviders = [
-      'registerChatSessionItemProvider',
-      'registerChatSessionContentProvider',
-      'onDidDisposeChatSession'
-    ];
-    
-    for (const providerName of chatSessionProviders) {
-      try {
-        const providerFunction = (vscode.chat as unknown as Record<string, Function>)[providerName];
-        if (typeof providerFunction === 'function') {
-          
-          const provider = {
-            provideChatSessionItem: (sessionId: string) => {
-              info(`💡 Chat session item requested: ${sessionId}`);
-              const now = Date.now();
-              const timeSinceLastEnter = now - lastEnterTime;
-              
-              if (timeSinceLastEnter > 500) {
-                info(`💡 Chat session activity ${timeSinceLastEnter}ms after Enter - possible mouse`);
-                recordPrompt('[Chat session activity detected]', 'mouse-session-provider');
-              }
-              
-              return undefined;
-            },
-            
-            provideChatSessionContent: (sessionId: string) => {
-              info(`💡 Chat session content requested: ${sessionId}`);
-              const now = Date.now();
-              const timeSinceLastEnter = now - lastEnterTime;
-              
-              if (timeSinceLastEnter > 500) {
-                info(`💡 Chat content activity ${timeSinceLastEnter}ms after Enter - possible mouse`);
-                recordPrompt('[Chat content activity detected]', 'mouse-content-provider');
-              }
-              
-              return undefined;
-            }
-          };
-          
-          // Register provider
-          providerFunction.call(vscode.chat, provider);
-          info(`💡 Registered ${providerName} successfully`);
-          
-        } else {
-          info(`💡 ${providerName} not available (not a function)`);
-        }
-      } catch (providerErr) {
-        info(`💡 ${providerName} registration failed: ${providerErr}`);
-      }
-    }
-    
-    // Also try onDidDisposeChatSession event
-    try {
-      const disposalEvent = (vscode.chat as unknown as ChatNamespace).onDidDisposeChatSession;
-      if (typeof disposalEvent === 'function') {
-        context.subscriptions.push(
-          disposalEvent((sessionId: string) => {
-            info(`💡 Chat session disposed: ${sessionId}`);
-            const now = Date.now();
-            const timeSinceLastEnter = now - lastEnterTime;
-            
-            if (timeSinceLastEnter > 500) {
-              info(`💡 Session disposal ${timeSinceLastEnter}ms after Enter - activity detected`);
-              recordPrompt('[Chat session disposal]', 'mouse-session-disposal');
-            }
-          })
-        );
-        info('💡 Chat session disposal listener registered');
-      }
-    } catch (disposalErr) {
-      info(`💡 Session disposal registration failed: ${disposalErr}`);
-    }
-    
-    info('💡 Chat Session Provider approach enabled');
-    
-  } catch (err) {
-    info(`💡 Chat Session Provider setup failed: ${err}`);
-  }
-  
-  // NEW APPROACH: System-Level Input Monitoring
-  try {
-    info('🖱️ Implementing system-level input monitoring');
-    
-    // Check if we can access system APIs
-    let systemMonitoringEnabled = false;
-    
-    try {
-      // Try to require system monitoring modules
-      const os = require('os');
-      const platform = os.platform();
-      
-      if (platform === 'win32') {
-        info('🖱️ Windows platform detected - attempting Win32 API monitoring');
-        
-        // Monitor system mouse events using Win32 APIs if available
-        try {
-          const { exec } = require('child_process');
-          
-          // Use PowerShell to monitor mouse clicks
-          const mouseMonitorScript = `
-            Add-Type -TypeDefinition '
-              using System;
-              using System.Diagnostics;
-              using System.Runtime.InteropServices;
-              using System.Windows.Forms;
-              
-              public class MouseMonitor {
-                [DllImport("user32.dll")]
-                public static extern IntPtr GetForegroundWindow();
-                
-                [DllImport("user32.dll")]
-                public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
-                
-                public static string GetActiveWindowTitle() {
-                  IntPtr handle = GetForegroundWindow();
-                  System.Text.StringBuilder text = new System.Text.StringBuilder(256);
-                  GetWindowText(handle, text, 256);
-                  return text.ToString();
-                }
-              }
-            '
-            
-            while ($true) {
-              $title = [MouseMonitor]::GetActiveWindowTitle()
-              if ($title -like "*Visual Studio Code*" -and $title -like "*Copilot*") {
-                Write-Host "VSCode-Copilot-Active: $(Get-Date -Format 'HH:mm:ss.fff')"
-              }
-              Start-Sleep -Milliseconds 100
-            }
-          `;
-          
-          const psProcess = exec(`powershell -Command "${mouseMonitorScript.replace(/"/g, '\\"')}"`, 
-            { timeout: 30000 });
-          
-          psProcess.stdout?.on('data', (data: Buffer) => {
-            const output = data.toString().trim();
-            if (output.includes('VSCode-Copilot-Active')) {
-              const now = Date.now();
-              const timeSinceLastEnter = now - lastEnterTime;
-              
-              if (timeSinceLastEnter > 500) {
-                info(`🖱️ System-level VS Code Copilot activity detected ${timeSinceLastEnter}ms after Enter`);
-                recordPrompt('[System-level Copilot activity]', 'mouse-system-monitor');
-              }
-            }
-          });
-          
-          psProcess.on('error', (err: ProcessError) => {
-            info(`🖱️ PowerShell mouse monitoring error: ${err}`);
-          });
-          
-          // Stop monitoring after 30 seconds
-          setTimeout(() => {
-            psProcess.kill();
-            info('🖱️ System-level monitoring stopped after 30s');
-          }, 30000);
-          
-          systemMonitoringEnabled = true;
-          info('🖱️ Win32 system monitoring enabled');
-          
-        } catch (win32Err) {
-          info(`🖱️ Win32 monitoring failed: ${win32Err}`);
-        }
-      } else {
-        info(`🖱️ Platform ${platform} - system monitoring not implemented`);
-      }
-      
-    } catch (osErr) {
-      info(`🖱️ OS detection failed: ${osErr}`);
-    }
-    
-    if (systemMonitoringEnabled) {
-      info('🖱️ System-level input monitoring enabled');
-    } else {
-      info('🖱️ System-level input monitoring not available');
-    }
-    
-  } catch (err) {
-    info(`🖱️ System-level monitoring setup failed: ${err}`);
-  }
+  // Removed - API reflection not needed with direct Chat API access
+  // Removed - filesystem monitoring not needed with direct Chat API access
+  // Removed - combined detection methods not needed with direct Chat API access
+  // Removed - Chat Session Provider not needed with direct Chat API access
+  // Removed - system-level monitoring not needed with direct Chat API access
   
   // NEW APPROACH: Electron DevTools Protocol
   try {
