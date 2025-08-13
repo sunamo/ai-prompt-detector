@@ -167,26 +167,106 @@ async function setupAdvancedSubmissionDetection(
   recordPrompt: (raw: string, src: string) => boolean,
 ): Promise<void> {
   try {
-    info('🔧 Setting up Advanced Submission Detection for mouse clicks');
+    info('🔧 Setting up AGGRESSIVE Advanced Submission Detection for mouse clicks');
     
-    // Method 1: Command Interception - DISABLED to prevent duplicate notifications
-    // This caused triple notifications when combined with keybinding handlers
-    // Mouse detection is now handled by proper Chat API access (with --enable-proposed-api)
-    info('🔧 Command interception disabled - prevents duplicate notifications');
+    // Method 1: Aggressive Command Interception
+    const submitCommands = [
+      'github.copilot.chat.acceptInput',
+      'github.copilot.chat.send', 
+      'github.copilot.chat.submit',
+      'workbench.action.chat.acceptInput',
+      'workbench.action.chat.submit',
+      'chat.acceptInput',
+      'chat.send',
+      'chat.submit',
+      'inlineChat.accept'
+    ];
     
-    // Method 2: Active UI State Polling - DISABLED
-    // This method could cause duplicates and is not needed with Chat API
-    info('🔧 UI state polling disabled - using Chat API events instead');
+    // Hook into all possible submit commands
+    for (const cmd of submitCommands) {
+      try {
+        const original = vscode.commands.executeCommand;
+        (vscode.commands as any).executeCommand = async function(commandId: string, ...args: any[]) {
+          if (commandId === cmd) {
+            info(`🎯 Command intercepted: ${commandId}`);
+            // Try to capture text immediately before command executes
+            setTimeout(async () => {
+              const text = await getChatInputText(false, false);
+              if (text && text.trim()) {
+                info(`🖱️ Mouse click detected via command: "${text.substring(0, 100)}"`);
+                recordPrompt(text, 'mouse-command');
+              }
+            }, 50);
+          }
+          return original.call(this, commandId, ...args);
+        };
+      } catch (e) {
+        // Silent fail for individual command hooks
+      }
+    }
     
-    // Method 3: Document Change Detection - DISABLED  
-    // This method is unreliable and could cause duplicates
-    info('🔧 Document change monitoring disabled - using Chat API events instead');
+    // Method 2: AGGRESSIVE Active Polling - 100ms intervals
+    let lastCapturedText = '';
+    let emptyCount = 0;
     
-    // Method 4: Window Focus State Monitoring - DISABLED
-    // This method is unreliable and could cause duplicates
-    info('🔧 Window focus monitoring disabled - using Chat API events instead');
+    const aggressivePolling = setInterval(async () => {
+      try {
+        // Get current chat input text
+        const currentText = await getChatInputText(false, false);
+        
+        if (currentText && currentText.trim() && currentText !== lastCapturedText) {
+          // Text found and different from last capture
+          lastCapturedText = currentText;
+          emptyCount = 0;
+          info(`📊 Polling: Text detected: "${currentText.substring(0, 50)}"`);
+        } else if (!currentText && lastCapturedText) {
+          // Text disappeared - likely submitted
+          emptyCount++;
+          if (emptyCount === 1) {
+            info(`🖱️ MOUSE CLICK DETECTED - text disappeared after: "${lastCapturedText.substring(0, 100)}"`);
+            recordPrompt(lastCapturedText, 'mouse-polling');
+            lastCapturedText = '';
+          }
+        } else if (!currentText) {
+          emptyCount++;
+          if (emptyCount > 10) {
+            lastCapturedText = '';
+            emptyCount = 0;
+          }
+        }
+      } catch (e) {
+        // Silent fail in polling
+      }
+    }, 50); // Poll every 50ms for ULTRA responsiveness
     
-    info('🚀 Advanced Submission Detection simplified - duplicates removed');
+    // Method 3: Monitor active editor changes
+    let monitoringActive = true;
+    const editorMonitor = setInterval(() => {
+      if (!monitoringActive) return;
+      
+      try {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && activeEditor.document.uri.scheme === 'vscode-chat-input') {
+          const text = activeEditor.document.getText();
+          if (text && text !== lastCapturedText) {
+            lastCapturedText = text;
+            info(`📝 Editor monitor: Text detected: "${text.substring(0, 50)}"`);
+          }
+        }
+      } catch (e) {
+        // Silent fail
+      }
+    }, 50);
+    
+    // Stop aggressive polling after 10 minutes to prevent excessive resource usage
+    setTimeout(() => {
+      clearInterval(aggressivePolling);
+      clearInterval(editorMonitor);
+      monitoringActive = false;
+      info('⏸️ Aggressive polling stopped after 10 minutes');
+    }, 10 * 60 * 1000);
+    
+    info('🚀 AGGRESSIVE Advanced Submission Detection activated - high resource mode');
     
   } catch (error) {
     info(`❌ Failed to setup Advanced Submission Detection: ${error}`);
@@ -280,10 +360,52 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  // Send button detection disabled - clipboard usage prohibited
+  // Aggressive mouse click detection with high resource usage
   let lastEnterTime = 0; // Čas posledního Enter eventu pro Chat Participant debouncing
   let commandMonitoringEnabled = true; // Command monitoring pro mouse detection
-  info('Send button polling disabled - clipboard usage prohibited');
+  let globalLastText = ''; // Global state for tracking last seen text
+  let globalPollingActive = true;
+  
+  // ULTRA AGGRESSIVE POLLING - 25ms intervals
+  const ultraPolling = setInterval(async () => {
+    if (!globalPollingActive) return;
+    
+    try {
+      // Try multiple methods to get text
+      const text1 = await getChatInputText(false, false);
+      
+      // Check if we have text
+      if (text1 && text1.trim() && text1 !== globalLastText) {
+        globalLastText = text1;
+        info(`🔥 ULTRA: New text detected: "${text1.substring(0, 50)}"`);
+      } else if (!text1 && globalLastText) {
+        // Text disappeared - submit detected!
+        info(`🖱️ ULTRA MOUSE CLICK DETECTED: "${globalLastText.substring(0, 100)}"`);
+        recordPrompt(globalLastText, 'mouse-ultra');
+        globalLastText = '';
+      }
+      
+      // Also try to detect via active editor
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor && activeEditor.document.uri.toString().includes('chat')) {
+        const editorText = activeEditor.document.getText();
+        if (editorText && editorText !== globalLastText) {
+          globalLastText = editorText;
+        }
+      }
+    } catch (e) {
+      // Silent fail
+    }
+  }, 25); // 25ms for MAXIMUM responsiveness
+  
+  // Stop after 15 minutes
+  setTimeout(() => {
+    clearInterval(ultraPolling);
+    globalPollingActive = false;
+    info('⏸️ ULTRA polling stopped after 15 minutes');
+  }, 15 * 60 * 1000);
+  
+  info('🔥 ULTRA AGGRESSIVE polling activated - 25ms intervals');
 
   updateStatusBar();
 

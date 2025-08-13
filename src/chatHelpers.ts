@@ -43,17 +43,42 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 };
 
 /**
- * Získá text z chat inputu - POUZE bez použití clipboard.
+ * Získá text z chat inputu - používá copyInput příkazy místo clipboard.
  * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
- * @param allowKeyboardSimulation Ignorováno - clipboard se nikdy nepoužívá.
- * @returns Vždy prázdný řetězec - text capture je vypnutý kvůli clipboard problémům.
+ * @param allowKeyboardSimulation Pokud true, pokusí se simulovat keyboard pro získání textu.
+ * @returns Text z chat inputu nebo prázdný řetězec.
  */
 export const getChatInputText = async (
 	attemptFocus?: boolean,
 	allowKeyboardSimulation = false,
 ): Promise<string> => {
   try {
-    info('getChatInputText: Text capture disabled - clipboard usage prohibited');
+    if (attemptFocus) {
+      await focusChatInput();
+      await new Promise(r => setTimeout(r, 50));
+    }
+    
+    // Try copyInput commands that might return text directly
+    const copyCommands = [
+      'workbench.action.chat.copyInput',
+      'github.copilot.chat.copyInput',
+      'chat.copyInput'
+    ];
+    
+    for (const cmd of copyCommands) {
+      try {
+        const result = await vscode.commands.executeCommand(cmd);
+        if (result && typeof result === 'string') {
+          info(`getChatInputText: Got text via ${cmd}: "${result.substring(0, 50)}"`);
+          return result;
+        }
+      } catch {
+        // Silent fail for individual commands
+      }
+    }
+    
+    // If no direct text, return empty
+    info('getChatInputText: No text captured via copyInput commands');
     return '';
   } catch (e) { 
     info(`getChatInputText error: ${e}`);
