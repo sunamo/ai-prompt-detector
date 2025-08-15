@@ -142,6 +142,11 @@ let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
 let snapshotTimer: NodeJS.Timeout | undefined;
 
+// Global state for mouse detection
+let globalLastText = '';
+let pollingInterval: NodeJS.Timeout | undefined;
+let lastTextClearTime = 0;
+
 /** Aktualizuje interní příznak zda jsou povoleny debug logy.
  * INVARIANT: Žádný druhý parametr u get() – pokud undefined => debugEnabled=false + notifikace (jen 1x).
  */
@@ -159,118 +164,74 @@ function refreshDebugFlag() {
 }
 
 /**
- * Implementuje pokročilou detekci submit událostí pomocí všech dostupných VS Code API.
- * Kombinuje command interception, event monitoring a aktivní polling pro maximální pokrytí.
- * @param recordPrompt Callback k uložení promptu.
+ * DOKUMENTACE POKUSŮ O DETEKCI MYŠI (všechny selhaly):
+ * 
+ * FUNGUJÍCÍ PŘÍSTUPY:
+ * ✅ Enter detekce - funguje spolehlivě přes command interception
+ * 
+ * NEFUNGUJÍCÍ PŘÍSTUPY (mouse click detection):
+ * ❌ Chat API (vscode.chat.onDidSubmitRequest) - není dostupné bez --enable-proposed-api flag
+ * ❌ Command interception - mouse clicks negenerují commands
+ * ❌ Webview monitoring - Copilot nepoužívá createWebviewPanel
+ * ❌ DOM monitoring - extension běží v Node.js, ne v browseru
+ * ❌ DevTools Protocol - porty nejsou otevřené
+ * ❌ Extension Host monitoring - nedostupné z extension contextu
+ * ❌ Workspace document changes - detekuje jen změny souborů
+ * ❌ Console injection - nelze injektovat do renderer procesu
+ * 
+ * ČÁSTEČNĚ FUNGUJÍCÍ:
+ * ⚠️ Polling přístup - detekuje zmizení textu, ale se zpožděním
+ * 
+ * ZÁVĚR: Mouse clicks probíhají v Renderer Process (Electron UI) a negenerují
+ * žádné události dostupné v Extension Host (Node.js context).
+ * 
+ * ŘEŠENÍ: Agresivní polling s 25ms intervalem pro rychlou detekci.
  */
 async function setupAdvancedSubmissionDetection(
   recordPrompt: (raw: string, src: string) => boolean,
 ): Promise<void> {
-  try {
-    info('🔧 Setting up AGGRESSIVE Advanced Submission Detection for mouse clicks');
-    
-    // Method 1: Aggressive Command Interception
-    const submitCommands = [
-      'github.copilot.chat.acceptInput',
-      'github.copilot.chat.send', 
-      'github.copilot.chat.submit',
-      'workbench.action.chat.acceptInput',
-      'workbench.action.chat.submit',
-      'chat.acceptInput',
-      'chat.send',
-      'chat.submit',
-      'inlineChat.accept'
-    ];
-    
-    // Hook into all possible submit commands
-    for (const cmd of submitCommands) {
-      try {
-        const original = vscode.commands.executeCommand;
-        (vscode.commands as any).executeCommand = async function(commandId: string, ...args: any[]) {
-          if (commandId === cmd) {
-            info(`🎯 Command intercepted: ${commandId}`);
-            // Try to capture text immediately before command executes
-            setTimeout(async () => {
-              const text = await getChatInputText(false, false);
-              if (text && text.trim()) {
-                info(`🖱️ Mouse click detected via command: "${text.substring(0, 100)}"`);
-                recordPrompt(text, 'mouse-command');
-              }
-            }, 50);
-          }
-          return original.call(this, commandId, ...args);
-        };
-      } catch (e) {
-        // Silent fail for individual command hooks
-      }
-    }
-    
-    // Method 2: AGGRESSIVE Active Polling - 100ms intervals
-    let lastCapturedText = '';
-    let emptyCount = 0;
-    
-    const aggressivePolling = setInterval(async () => {
-      try {
-        // Get current chat input text
-        const currentText = await getChatInputText(false, false);
-        
-        if (currentText && currentText.trim() && currentText !== lastCapturedText) {
-          // Text found and different from last capture
-          lastCapturedText = currentText;
-          emptyCount = 0;
-          info(`📊 Polling: Text detected: "${currentText.substring(0, 50)}"`);
-        } else if (!currentText && lastCapturedText) {
-          // Text disappeared - likely submitted
-          emptyCount++;
-          if (emptyCount === 1) {
-            info(`🖱️ MOUSE CLICK DETECTED - text disappeared after: "${lastCapturedText.substring(0, 100)}"`);
-            recordPrompt(lastCapturedText, 'mouse-polling');
-            lastCapturedText = '';
-          }
-        } else if (!currentText) {
-          emptyCount++;
-          if (emptyCount > 10) {
-            lastCapturedText = '';
-            emptyCount = 0;
-          }
-        }
-      } catch (e) {
-        // Silent fail in polling
-      }
-    }, 50); // Poll every 50ms for ULTRA responsiveness
-    
-    // Method 3: Monitor active editor changes
-    let monitoringActive = true;
-    const editorMonitor = setInterval(() => {
-      if (!monitoringActive) return;
+  info('🔧 Setting up optimized mouse click detection');
+  
+  // JEDINÝ POLLING MECHANISMUS - 25ms interval pro rychlou detekci
+  pollingInterval = setInterval(async () => {
+    try {
+      const currentText = await getChatInputText(false, false);
+      const now = Date.now();
       
-      try {
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor && activeEditor.document.uri.scheme === 'vscode-chat-input') {
-          const text = activeEditor.document.getText();
-          if (text && text !== lastCapturedText) {
-            lastCapturedText = text;
-            info(`📝 Editor monitor: Text detected: "${text.substring(0, 50)}"`);
-          }
+      if (currentText && currentText.trim()) {
+        // Text nalezen
+        if (currentText !== globalLastText) {
+          globalLastText = currentText;
+          lastTextClearTime = 0;
+          debug(`Polling: New text detected: "${currentText.substring(0, 50)}"`);
         }
-      } catch (e) {
-        // Silent fail
+      } else if (globalLastText && !currentText) {
+        // Text zmizel - pravděpodobně odeslán myší
+        if (lastTextClearTime === 0) {
+          lastTextClearTime = now;
+          info(`🖱️ MOUSE CLICK DETECTED - immediate notification for: "${globalLastText.substring(0, 100)}"`);
+          recordPrompt(globalLastText, 'mouse-click');
+          globalLastText = '';
+        }
+      } else if (!currentText && !globalLastText) {
+        // Reset state když není žádný text
+        lastTextClearTime = 0;
       }
-    }, 50);
-    
-    // Stop aggressive polling after 10 minutes to prevent excessive resource usage
-    setTimeout(() => {
-      clearInterval(aggressivePolling);
-      clearInterval(editorMonitor);
-      monitoringActive = false;
-      info('⏸️ Aggressive polling stopped after 10 minutes');
-    }, 10 * 60 * 1000);
-    
-    info('🚀 AGGRESSIVE Advanced Submission Detection activated - high resource mode');
-    
-  } catch (error) {
-    info(`❌ Failed to setup Advanced Submission Detection: ${error}`);
-  }
+    } catch (e) {
+      // Silent fail
+    }
+  }, 25); // 25ms pro rychlou odezvu
+  
+  // Zastavit polling po 30 minutách
+  setTimeout(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = undefined;
+      info('⏸️ Mouse detection polling stopped after 30 minutes');
+    }
+  }, 30 * 60 * 1000);
+  
+  info('✅ Mouse click detection active (25ms polling)')
 }
 
 /**
@@ -360,52 +321,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  // Aggressive mouse click detection with high resource usage
-  let lastEnterTime = 0; // Čas posledního Enter eventu pro Chat Participant debouncing
-  let commandMonitoringEnabled = true; // Command monitoring pro mouse detection
-  let globalLastText = ''; // Global state for tracking last seen text
-  let globalPollingActive = true;
-  
-  // ULTRA AGGRESSIVE POLLING - 25ms intervals
-  const ultraPolling = setInterval(async () => {
-    if (!globalPollingActive) return;
-    
-    try {
-      // Try multiple methods to get text
-      const text1 = await getChatInputText(false, false);
-      
-      // Check if we have text
-      if (text1 && text1.trim() && text1 !== globalLastText) {
-        globalLastText = text1;
-        info(`🔥 ULTRA: New text detected: "${text1.substring(0, 50)}"`);
-      } else if (!text1 && globalLastText) {
-        // Text disappeared - submit detected!
-        info(`🖱️ ULTRA MOUSE CLICK DETECTED: "${globalLastText.substring(0, 100)}"`);
-        recordPrompt(globalLastText, 'mouse-ultra');
-        globalLastText = '';
-      }
-      
-      // Also try to detect via active editor
-      const activeEditor = vscode.window.activeTextEditor;
-      if (activeEditor && activeEditor.document.uri.toString().includes('chat')) {
-        const editorText = activeEditor.document.getText();
-        if (editorText && editorText !== globalLastText) {
-          globalLastText = editorText;
-        }
-      }
-    } catch (e) {
-      // Silent fail
-    }
-  }, 25); // 25ms for MAXIMUM responsiveness
-  
-  // Stop after 15 minutes
-  setTimeout(() => {
-    clearInterval(ultraPolling);
-    globalPollingActive = false;
-    info('⏸️ ULTRA polling stopped after 15 minutes');
-  }, 15 * 60 * 1000);
-  
-  info('🔥 ULTRA AGGRESSIVE polling activated - 25ms intervals');
+  // Removed duplicate polling - already handled in setupAdvancedSubmissionDetection
 
   updateStatusBar();
 
@@ -428,140 +344,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   setupAdvancedSubmissionDetection(recordPrompt);
 
-  // Direct Copilot Chat Webview Panel Monitoring
-  let directWebviewMonitoringEnabled = true;
-  if (directWebviewMonitoringEnabled) {
-    try {
-      // Monitor for webview panels being created
-      const originalCreateWebviewPanel = vscode.window.createWebviewPanel;
-      (vscode.window as unknown as { createWebviewPanel: Function }).createWebviewPanel = function(
-        viewType: string, 
-        title: string, 
-        showOptions: vscode.ViewColumn | { viewColumn: vscode.ViewColumn, preserveFocus?: boolean }, 
-        options?: vscode.WebviewPanelOptions & vscode.WebviewOptions
-      ): ExtendedWebviewPanel {
-        const panel = originalCreateWebviewPanel.call(this, viewType, title, showOptions, options);
-        
-        // Check if this is a chat-related webview
-        if (viewType.includes('chat') || viewType.includes('copilot') || title.includes('Chat') || title.includes('Copilot')) {
-          info(`Chat webview panel created: ${viewType} - ${title}`);
-          
-          // Register our own message listener
-          panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
-            try {
-              if (message && typeof message === 'object' &&
-                  (message.command === 'submit' || message.type === 'submit' || message.action === 'send') &&
-                  (message.text || message.message || message.prompt)) {
-                
-                const text = String(message.text || message.message || message.prompt || '').trim();
-                if (text) {
-                  info(`Direct webview captured mouse submission: "${text.substring(0, 100)}"`);
-                  recordPrompt(text, 'mouse-direct-webview');
-                }
-              }
-            } catch (err) {
-              info(`Direct webview message error: ${err}`);
-            }
-          });
-          
-          info(`Hooked into chat webview panel: ${viewType}`);
-        }
-        
-        return panel as ExtendedWebviewPanel;
-      };
-      
-      info('Direct webview panel monitoring enabled');
-    } catch (err) {
-      info(`Direct webview monitoring setup failed: ${err}`);
-    }
-  }
+  // Webview monitoring removed - Copilot doesn't use createWebviewPanel
   
-  // Simplified Chat API approach - works with --enable-proposed-api flag
-  try {
-    info('🎯 Attempting direct Chat API access for mouse detection');
-    
-    // Access the proposed Chat API
-    const chatApi = (vscode as ExtendedVSCode).chat;
-    
-    if (chatApi && typeof chatApi.onDidSubmitRequest === 'function') {
-      info('✅ Chat API onDidSubmitRequest is available!');
-      
-      // Register the submission listener
-      const disposable = chatApi.onDidSubmitRequest((event: ChatEvent) => {
-        try {
-          // Extract text from various possible event properties
-          const text = String(
-            event?.message || 
-            event?.prompt || 
-            event?.request?.message || 
-            event?.request?.prompt || 
-            event?.command?.message || 
-            event?.command?.prompt || 
-            event?.text || ''
-          ).trim();
-          
-          if (text) {
-            info(`🎯 MOUSE CLICK DETECTED via Chat API: "${text.substring(0, 100)}"`);
-            
-            // Record the prompt immediately (recordPrompt already shows notification)
-            recordPrompt(text, 'mouse-click');
-            
-            info('✅ Mouse click processed successfully');
-          } else {
-            info('⚠️ Mouse click detected but no text found');
-          }
-        } catch (err) {
-          info(`❌ Error processing mouse click: ${err}`);
-        }
-      });
-      
-      context.subscriptions.push(disposable);
-      info('✅ Mouse click detection fully activated via Chat API');
-      
-    } else {
-      info('⚠️ Chat API not available - VS Code needs --enable-proposed-api flag');
-      info('⚠️ Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
-    }
-    
-  } catch (err) {
-    info(`⚠️ Chat API setup failed: ${err}`);
-    info('⚠️ Mouse detection requires: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
-  }
+  // Chat API removed - requires --enable-proposed-api flag which is not available
 
-  // Secondary Chat API registration for redundancy
-  try {
-    const chatNs = (vscode as ExtendedVSCode).chat;
-    if (chatNs?.onDidSubmitRequest && typeof chatNs.onDidSubmitRequest === 'function') {
-      info('🎯 Secondary Chat API registration for mouse detection');
-      
-      const secondaryDisposable = chatNs.onDidSubmitRequest((e: ChatEvent) => {
-        try {
-          const txt = String(
-            e?.request?.message || 
-            e?.request?.prompt || 
-            e?.prompt || 
-            e?.message ||
-            e?.command?.message ||
-            e?.command?.prompt || 
-            e?.text || '',
-          ).trim();
-          
-          if (txt) {
-            info(`🎯 Secondary capture: "${txt.substring(0, 100)}"`);
-            // This acts as a backup in case primary listener fails
-          }
-        } catch (err) {
-          info(`Secondary listener error: ${err}`);
-        }
-      });
-      
-      context.subscriptions.push(secondaryDisposable);
-    }
-  } catch (e) {
-    // Silent fail for secondary listener
-  }
-
-  // Removed - duplicate of simplified Chat API approach above
 
   /**
    * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
@@ -579,8 +365,8 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       info(`=== ENTER ${variant} START ===`);
       
-      // Zaznamenej čas Enter eventu pro debouncing
-      lastEnterTime = Date.now();
+      // Reset global text state při Enter
+      globalLastText = '';
 
       // 1) Zaměří vstupní pole
       await focusChatInput();
@@ -674,456 +460,6 @@ export async function activate(context: vscode.ExtensionContext) {
     configWatcher,
     statusBarItem,
   );
-  // Removed - API reflection not needed with direct Chat API access
-  // Removed - filesystem monitoring not needed with direct Chat API access
-  // Removed - combined detection methods not needed with direct Chat API access
-  // Removed - Chat Session Provider not needed with direct Chat API access
-  // Removed - system-level monitoring not needed with direct Chat API access
-  
-  // NEW APPROACH: Electron DevTools Protocol
-  try {
-    info('🔌 Implementing Electron DevTools Protocol approach');
-    
-    // Try to connect to VS Code's Electron debugging port
-    const connectToDevTools = async () => {
-      try {
-        const net = require('net');
-        const http = require('http');
-        
-        // Common DevTools ports used by Electron apps
-        const devtoolsPorts = [9229, 9230, 9222, 9221, 5858];
-        
-        for (const port of devtoolsPorts) {
-          try {
-            info(`🔌 Trying DevTools connection on port ${port}`);
-            
-            // Check if port is open
-            const isPortOpen = await new Promise((resolve) => {
-              const socket = new net.Socket();
-              socket.setTimeout(1000);
-              socket.on('connect', () => {
-                socket.destroy();
-                resolve(true);
-              });
-              socket.on('timeout', () => {
-                socket.destroy();
-                resolve(false);
-              });
-              socket.on('error', () => {
-                resolve(false);
-              });
-              socket.connect(port, 'localhost');
-            });
-            
-            if (isPortOpen) {
-              info(`🔌 Port ${port} is open - attempting DevTools connection`);
-              
-              // Get list of available targets
-              const targetsReq = http.request({
-                hostname: 'localhost',
-                port: port,
-                path: '/json',
-                method: 'GET'
-              }, (res: http.IncomingMessage) => {
-                let data = '';
-                res.on('data', (chunk: Buffer) => {
-                  data += chunk.toString();
-                });
-                res.on('end', () => {
-                  try {
-                    const targets = JSON.parse(data);
-                    info(`🔌 Found ${targets.length} DevTools targets`);
-                    
-                    // Look for renderer processes
-                    const rendererTargets = targets.filter((target: DevToolsTarget) => 
-                      target.type === 'page' && target.url && 
-                      (target.url.includes('workbench') || target.title.includes('Visual Studio Code'))
-                    );
-                    
-                    if (rendererTargets.length > 0) {
-                      info(`🔌 Found ${rendererTargets.length} renderer targets - attempting connection`);
-                      
-                      const target = rendererTargets[0];
-                      const ws = require('ws');
-                      
-                      // Connect to WebSocket debugging interface
-                      const debugWs = new ws(target.webSocketDebuggerUrl);
-                      
-                      debugWs.on('open', () => {
-                        info('🔌 WebSocket DevTools connection established');
-                        
-                        // Enable Runtime domain to monitor execution
-                        debugWs.send(JSON.stringify({
-                          id: 1,
-                          method: 'Runtime.enable'
-                        }));
-                        
-                        // Enable DOM domain to monitor DOM changes
-                        debugWs.send(JSON.stringify({
-                          id: 2,
-                          method: 'DOM.enable'
-                        }));
-                        
-                        // Monitor for chat-related function calls
-                        debugWs.send(JSON.stringify({
-                          id: 3,
-                          method: 'Runtime.addBinding',
-                          params: {
-                            name: 'aiPromptDetector'
-                          }
-                        }));
-                        
-                        // Inject monitoring script into renderer
-                        const monitorScript = `
-                          (function() {
-                            let lastEnterTime = 0;
-                            
-                            // Monitor all click events
-                            document.addEventListener('click', function(event) {
-                              const now = Date.now();
-                              const timeSinceEnter = now - lastEnterTime;
-                              
-                              if (event.target && timeSinceEnter > 500) {
-                                const element = event.target;
-                                const classList = element.classList ? Array.from(element.classList).join(' ') : '';
-                                const tagName = element.tagName || '';
-                                
-                                if (classList.includes('send') || classList.includes('submit') || 
-                                    tagName === 'BUTTON' || classList.includes('chat')) {
-                                  
-                                  console.log('AI Prompt Detector: Mouse click detected on:', {
-                                    tagName: tagName,
-                                    classList: classList,
-                                    timeSinceEnter: timeSinceEnter
-                                  });
-                                  
-                                  // Try to find chat input text
-                                  const chatInputs = document.querySelectorAll('[data-copilot-chat-input], .chat-input, input[type="text"]');
-                                  let inputText = '';
-                                  
-                                  for (const input of chatInputs) {
-                                    if (input.value && input.value.trim()) {
-                                      inputText = input.value.trim();
-                                      break;
-                                    }
-                                  }
-                                  
-                                  if (inputText) {
-                                    console.log('AI Prompt Detector: Chat text found:', inputText.substring(0, 100));
-                                  }
-                                }
-                              }
-                            }, true);
-                            
-                            // Track Enter key events to update timing
-                            document.addEventListener('keydown', function(event) {
-                              if (event.key === 'Enter') {
-                                lastEnterTime = Date.now();
-                              }
-                            }, true);
-                          })();
-                        `;
-                        
-                        debugWs.send(JSON.stringify({
-                          id: 4,
-                          method: 'Runtime.evaluate',
-                          params: {
-                            expression: monitorScript
-                          }
-                        }));
-                        
-                        info('🔌 Monitoring script injected into renderer process');
-                      });
-                      
-                      debugWs.on('message', (data: Buffer) => {
-                        try {
-                          const message = JSON.parse(data.toString());
-                          
-                          if (message.method === 'Runtime.consoleAPICalled' && 
-                              message.params && message.params.args) {
-                            
-                            const consoleMessage = message.params?.args?.map((arg: { value: unknown }) => arg.value).join(' ') || '';
-                            
-                            if (consoleMessage.includes('AI Prompt Detector: Mouse click detected')) {
-                              info('🔌 DevTools detected mouse click in chat interface');
-                              const now = Date.now();
-                              const timeSinceLastEnter = now - lastEnterTime;
-                              
-                              if (timeSinceLastEnter > 500) {
-                                recordPrompt('[DevTools mouse click detected]', 'mouse-devtools-protocol');
-                              }
-                            }
-                            
-                            if (consoleMessage.includes('AI Prompt Detector: Chat text found:')) {
-                              const textMatch = consoleMessage.match(/Chat text found: (.+)/);
-                              if (textMatch && textMatch[1]) {
-                                info(`🔌 DevTools captured chat text: "${textMatch[1].substring(0, 100)}"`);
-                                recordPrompt(textMatch[1], 'mouse-devtools-text');
-                              }
-                            }
-                          }
-                          
-                        } catch (msgErr) {
-                          // Ignore parsing errors
-                        }
-                      });
-                      
-                      debugWs.on('error', (err: ProcessError) => {
-                        info(`🔌 WebSocket error: ${err}`);
-                      });
-                      
-                      debugWs.on('close', () => {
-                        info('🔌 DevTools WebSocket connection closed');
-                      });
-                      
-                      // Close connection after 60 seconds
-                      setTimeout(() => {
-                        debugWs.close();
-                        info('🔌 DevTools monitoring stopped after 60s');
-                      }, 60000);
-                      
-                      return true;
-                    }
-                  } catch (parseErr) {
-                    info(`🔌 Error parsing DevTools targets: ${parseErr}`);
-                  }
-                });
-              });
-              
-              targetsReq.on('error', (err: ProcessError) => {
-                info(`🔌 DevTools HTTP request error: ${err}`);
-              });
-              
-              targetsReq.end();
-              break;
-            }
-          } catch (portErr) {
-            info(`🔌 Port ${port} connection failed: ${portErr}`);
-          }
-        }
-      } catch (devtoolsErr) {
-        info(`🔌 DevTools connection setup failed: ${devtoolsErr}`);
-      }
-    };
-    
-    // Try DevTools connection after a short delay
-    setTimeout(connectToDevTools, 2000);
-    
-    info('🔌 Electron DevTools Protocol approach enabled');
-    
-  } catch (err) {
-    info(`🔌 DevTools Protocol setup failed: ${err}`);
-  }
-  
-  // NEW APPROACH: Extension Host Process Monitoring
-  try {
-    info('🔄 Implementing Extension Host process monitoring');
-    
-    const monitorExtensionHost = () => {
-      try {
-        const { spawn } = require('child_process');
-        const os = require('os');
-        
-        if (os.platform() === 'win32') {
-          // Monitor Extension Host process communication on Windows
-          const psScript = `
-            $processes = Get-WmiObject Win32_Process | Where-Object { $_.Name -eq "Code - Insiders.exe" -or $_.CommandLine -like "*extensionHostProcess*" }
-            foreach ($proc in $processes) {
-              $commandLine = $proc.CommandLine
-              if ($commandLine -like "*extensionHostProcess*") {
-                Write-Host "ExtensionHost-Process-Found: PID=$($proc.ProcessId) CMD=$($commandLine)"
-              }
-            }
-          `;
-          
-          const psProcess = spawn('powershell', ['-Command', psScript]);
-          
-          psProcess.stdout?.on('data', (data: Buffer) => {
-            const output = data.toString().trim();
-            if (output.includes('ExtensionHost-Process-Found')) {
-              info(`🔄 Extension Host process detected: ${output}`);
-              
-              // Extract PID and try to monitor that specific process
-              const pidMatch = output.match(/PID=(\d+)/);
-              if (pidMatch && pidMatch[1]) {
-                const pid = pidMatch[1];
-                info(`🔄 Monitoring Extension Host PID: ${pid}`);
-                
-                // Monitor network connections from this PID
-                const netstatCmd = spawn('netstat', ['-ano']);
-                netstatCmd.stdout?.on('data', (netData: Buffer) => {
-                  const netOutput = netData.toString();
-                  if (netOutput.includes(pid) && netOutput.includes('ESTABLISHED')) {
-                    const now = Date.now();
-                    const timeSinceLastEnter = now - lastEnterTime;
-                    
-                    if (timeSinceLastEnter > 500) {
-                      info(`🔄 Extension Host network activity detected ${timeSinceLastEnter}ms after Enter`);
-                      recordPrompt('[Extension Host network activity]', 'mouse-extensionhost-network');
-                    }
-                  }
-                });
-                
-                netstatCmd.on('error', (err: ProcessError) => {
-                  info(`🔄 Netstat monitoring error: ${err}`);
-                });
-              }
-            }
-          });
-          
-          psProcess.on('error', (err: ProcessError) => {
-            info(`🔄 Process monitoring error: ${err}`);
-          });
-          
-          // Stop monitoring after 45 seconds
-          setTimeout(() => {
-            psProcess.kill();
-            info('🔄 Extension Host monitoring stopped after 45s');
-          }, 45000);
-          
-        } else {
-          info('🔄 Extension Host monitoring only supported on Windows');
-        }
-        
-      } catch (monitorErr) {
-        info(`🔄 Extension Host monitoring setup failed: ${monitorErr}`);
-      }
-    };
-    
-    // Start monitoring after delay
-    setTimeout(monitorExtensionHost, 3000);
-    
-    info('🔄 Extension Host process monitoring enabled');
-    
-  } catch (err) {
-    info(`🔄 Extension Host monitoring setup failed: ${err}`);
-  }
-  
-  // NEW APPROACH: Console Log Injection  
-  try {
-    info('📺 Implementing console log injection approach');
-    
-    // Try to inject monitoring script into VS Code renderer process
-    const injectConsoleMonitoring = async () => {
-      try {
-        // Attempt to execute JavaScript in VS Code context
-        const injectionScript = `
-          (function() {
-            if (window.__aiPromptDetectorInjected) return;
-            window.__aiPromptDetectorInjected = true;
-            
-            console.log('AI Prompt Detector: Console injection successful');
-            
-            // Monitor all button clicks
-            document.addEventListener('click', function(event) {
-              if (event.target) {
-                const element = event.target;
-                const tagName = element.tagName || '';
-                const className = element.className || '';
-                const id = element.id || '';
-                
-                if (tagName === 'BUTTON' || className.includes('send') || className.includes('submit') || className.includes('chat')) {
-                  console.log('AI Prompt Detector: Button click detected', {
-                    tagName: tagName,
-                    className: className,
-                    id: id,
-                    time: Date.now()
-                  });
-                  
-                  // Try to find chat input
-                  const chatInputs = document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
-                  for (const input of chatInputs) {
-                    const value = input.value || input.textContent || input.innerText;
-                    if (value && value.trim().length > 0) {
-                      console.log('AI Prompt Detector: Chat input captured', value.substring(0, 100));
-                    }
-                  }
-                }
-              }
-            }, true);
-            
-            // Monitor for VS Code-specific chat events
-            if (window.vscode) {
-              console.log('AI Prompt Detector: VS Code API available in renderer');
-            }
-          })();
-        `;
-        
-        // Try to execute via webview or command
-        const injectionCommands = [
-          'workbench.action.webview.openDeveloperTools',
-          'workbench.action.toggleDevTools',
-          'developer.inspectWebview'
-        ];
-        
-        for (const cmd of injectionCommands) {
-          try {
-            await vscode.commands.executeCommand(cmd);
-            info(`📺 Executed ${cmd} for console injection`);
-            
-            // Wait and then try to inject
-            setTimeout(async () => {
-              try {
-                // Try to get active webview and inject script
-                const activeEditor = vscode.window.activeTextEditor;
-                if (activeEditor) {
-                  info('📺 Active editor found, attempting script injection');
-                }
-              } catch (injectErr) {
-                info(`📺 Script injection failed: ${injectErr}`);
-              }
-            }, 1000);
-            
-          } catch (cmdErr) {
-            info(`📺 Command ${cmd} failed: ${cmdErr}`);
-          }
-        }
-        
-        info('📺 Console injection attempts completed');
-        
-      } catch (injectSetupErr) {
-        info(`📺 Console injection setup failed: ${injectSetupErr}`);
-      }
-    };
-    
-    // Try injection after delay
-    setTimeout(injectConsoleMonitoring, 5000);
-    
-    info('📺 Console log injection approach enabled');
-    
-  } catch (err) {
-    info(`📺 Console injection setup failed: ${err}`);
-  }
-  
-  // Additional mouse detection via workspace monitoring  
-  let lastChatUpdate = 0;
-  const workspaceWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
-    try {
-      // Skip if this is not a chat-related document or too frequent
-      if (Date.now() - lastChatUpdate < 1000) return;
-      
-      const uri = event.document.uri.toString();
-      if (uri.includes('copilot') || uri.includes('chat') || event.document.languageId === 'markdown') {
-        for (const change of event.contentChanges) {
-          const text = change.text.trim();
-          // Look for patterns that suggest a user prompt was added
-          if (text.length > 10 && 
-              (text.includes('user') || text.includes('User') || 
-               text.match(/^[A-Z].*[.?!]$/) || text.includes('help'))) {
-            info(`Workspace change detected possible prompt: "${text.substring(0, 100)}"`);
-            recordPrompt(text, 'mouse-workspace-monitor');
-            lastChatUpdate = Date.now();
-            break;
-          }
-        }
-      }
-    } catch (err) {
-      info(`Workspace monitoring error: ${err}`);
-    }
-  });
-  
-  context.subscriptions.push(workspaceWatcher);
-  info('Workspace monitoring enabled for mouse detection');
 
   info('Activation done');
 }

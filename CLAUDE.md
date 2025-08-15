@@ -643,6 +643,15 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 5. **Chat storage monitoring**: Watch VS Code's chat storage/indexedDB files
 6. **Deep API reflection**: Enumerate all available VS Code APIs at runtime
 
+## 📋 COMPLETE HISTORY OF MOUSE DETECTION ATTEMPTS (Persistent Documentation)
+
+### ✅ WORKING SOLUTION (Current Implementation)
+**Polling with 25ms interval** - Detects text disappearance from chat input
+- Implementation: Single polling loop checking getChatInputText() every 25ms
+- Detects when text disappears (submitted) and shows immediate notification
+- Limitation: Slight delay (25-50ms) but acceptable for user experience
+- Status: ACTIVE in current version
+
 ### FAILED APPROACHES SUMMARY (Aug 11 2025)
 
 #### 1. ❌ Widget acceptInput Method Interception (v1.1.354)
@@ -704,6 +713,27 @@ code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
 
 **Expected Result:**
 Mouse click detection should work through proper Chat API access instead of complex workarounds.
+
+### COMPLETE LIST OF ALL ATTEMPTED APPROACHES (Dec 2024)
+
+#### FAILED - Architecture limitations:
+1. **Chat API (vscode.chat.onDidSubmitRequest)** - Requires --enable-proposed-api flag
+2. **Command interception** - Mouse clicks don't generate commands
+3. **Webview panel monitoring** - Copilot doesn't use createWebviewPanel
+4. **DOM monitoring** - Extension runs in Node.js, not browser (window undefined)
+5. **DevTools Protocol** - Ports not open unless VS Code started with debug flag
+6. **Extension Host monitoring** - Can't access from extension context
+7. **Console injection** - Can't inject into renderer process from extension
+8. **Workspace document changes** - Only detects file changes, not UI events
+9. **Widget service access** - Internal VS Code services not exposed to extensions
+10. **Extension module hooks** - Chat modules don't load through require()
+11. **Network monitoring** - No GitHub API activity during local chat
+12. **VS Code state monitoring** - Only window focus changes visible
+13. **Filesystem monitoring** - No chat files created during submission
+14. **Deep API reflection** - Found 65+ APIs but none provide submission events
+15. **Memory/heap monitoring** - Would require native modules (security blocked)
+16. **System-level input monitoring** - Would require OS-level permissions
+17. **IPC message monitoring** - Extension sandbox prevents IPC access
 
 ### UNTRIED APPROACHES TO EXPLORE (Backup Options)
 
