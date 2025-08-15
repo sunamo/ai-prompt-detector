@@ -26,11 +26,17 @@ let mouseDetectionWorking = false;
  * Interface pro chat API (proposed)
  */
 interface ChatAPI {
-  onDidSubmitRequest?: vscode.Event<any>;
-  onDidSubmitFeedback?: vscode.Event<any>;
+  onDidSubmitRequest?: vscode.Event<unknown>;
+  onDidSubmitFeedback?: vscode.Event<unknown>;
   registerChatSessionItemProvider?: Function;
-  onDidDisposeChatSession?: vscode.Event<any>;
+  onDidDisposeChatSession?: vscode.Event<unknown>;
   createChatParticipant?: Function;
+  createDynamicChatParticipant?: Function;
+  registerChatSessionContentProvider?: Function;
+  registerRelatedFilesProvider?: Function;
+  registerChatOutputRenderer?: Function;
+  registerMappedEditsProvider?: Function;
+  registerChatParticipantDetectionProvider?: Function;
 }
 
 /**
@@ -67,7 +73,7 @@ function checkProposedApiAvailability(): boolean {
     info(`Process arguments: ${args.join(' ')}`);
     
     // Try multiple ways to detect API
-    const vscodeExtended = vscode as any as ExtendedVSCode;
+    const vscodeExtended = vscode as unknown as ExtendedVSCode;
     
     // Log what's available in vscode namespace
     info(`vscode.chat exists: ${!!vscodeExtended.chat}`);
@@ -193,13 +199,13 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     try {
-      const vscodeExtended = vscode as any as ExtendedVSCode;
+      const vscodeExtended = vscode as unknown as ExtendedVSCode;
       
       // Try different APIs based on what's available
       
       // Option 1: onDidSubmitRequest (if available)
       if (vscodeExtended.chat?.onDidSubmitRequest) {
-        const disposable = vscodeExtended.chat.onDidSubmitRequest((event: any) => {
+        const disposable = vscodeExtended.chat.onDidSubmitRequest((event: unknown) => {
           info('🎯 Chat submission detected via onDidSubmitRequest!');
           handleChatEvent(event);
         });
@@ -208,12 +214,36 @@ export async function activate(context: vscode.ExtensionContext) {
         return true;
       }
       
-      // Option 2: Create a chat participant to intercept messages
+      // Option 2: Try multiple participant approaches
+      // 2a: Dynamic chat participant
+      if (vscodeExtended.chat?.createDynamicChatParticipant) {
+        try {
+          const dynamicParticipant = vscodeExtended.chat.createDynamicChatParticipant('ai-prompt-detector.dynamic', {
+            name: 'AI Detector',
+            description: 'Monitors AI prompts',
+            handler: (request: unknown, context: unknown, response: unknown, token: unknown) => {
+              info('🎯 Chat detected via DYNAMIC participant!');
+              const req = request as { prompt?: string };
+              if (req?.prompt) {
+                recordPrompt(req.prompt, 'dynamic-participant');
+              }
+              return undefined;
+            }
+          });
+          context.subscriptions.push(dynamicParticipant);
+          info('✅ Dynamic chat participant registered');
+        } catch (e) {
+          info(`Dynamic participant failed: ${e}`);
+        }
+      }
+      
+      // 2b: Standard chat participant
       if (vscodeExtended.chat?.createChatParticipant) {
-        const participant = vscodeExtended.chat.createChatParticipant('ai-prompt-detector.monitor', (request: any, context: any, response: any, token: any) => {
+        const participant = vscodeExtended.chat.createChatParticipant('ai-prompt-detector.monitor', (request: unknown, context: unknown, response: unknown, token: unknown) => {
           info('🎯 Chat detected via participant!');
-          if (request?.prompt) {
-            recordPrompt(request.prompt, 'participant');
+          const req = request as { prompt?: string };
+          if (req?.prompt) {
+            recordPrompt(req.prompt, 'participant');
           }
           // Don't actually handle the request, just monitor
           return undefined;
@@ -225,28 +255,139 @@ export async function activate(context: vscode.ExtensionContext) {
         return true;
       }
       
-      // Option 3: Monitor chat sessions
+      // Option 3: Try all session-related APIs
+      // 3a: Session disposal
       if (vscodeExtended.chat?.onDidDisposeChatSession) {
-        const disposable = vscodeExtended.chat.onDidDisposeChatSession((sessionId: any) => {
+        const disposable = vscodeExtended.chat.onDidDisposeChatSession((sessionId: unknown) => {
           info(`Chat session disposed: ${sessionId}`);
         });
         context.subscriptions.push(disposable);
-        info('✅ Chat session monitor registered');
+        info('✅ Chat session disposal monitor registered');
+      }
+      
+      // 3b: Session Item Provider
+      if (vscodeExtended.chat?.registerChatSessionItemProvider) {
+        try {
+          const provider = vscodeExtended.chat.registerChatSessionItemProvider('ai-prompt-detector.session', {
+            provideItems: (session: unknown) => {
+              const sess = session as { id?: string };
+              info(`Session items requested for: ${sess?.id}`);
+              return [];
+            }
+          });
+          context.subscriptions.push(provider);
+          info('✅ Chat session item provider registered');
+        } catch (e) {
+          info(`Session item provider failed: ${e}`);
+        }
+      }
+      
+      // 3c: Session Content Provider
+      if (vscodeExtended.chat?.registerChatSessionContentProvider) {
+        try {
+          const contentProvider = vscodeExtended.chat.registerChatSessionContentProvider('ai-prompt-detector.content', {
+            provideContent: (session: unknown) => {
+              const sess = session as { id?: string };
+              info(`Session content requested for: ${sess?.id}`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(contentProvider);
+          info('✅ Chat session content provider registered');
+        } catch (e) {
+          info(`Session content provider failed: ${e}`);
+        }
+      }
+      
+      // 3d: Related Files Provider
+      if (vscodeExtended.chat?.registerRelatedFilesProvider) {
+        try {
+          const relatedProvider = vscodeExtended.chat.registerRelatedFilesProvider('ai-prompt-detector.related', {
+            provideRelatedFiles: (request: unknown, token: unknown) => {
+              const req = request as { prompt?: string };
+              info(`Related files requested for prompt: "${req?.prompt?.substring(0, 50)}"`);
+              // Try to capture the prompt here
+              if (req?.prompt) {
+                recordPrompt(req.prompt, 'related-files');
+              }
+              return [];
+            }
+          });
+          context.subscriptions.push(relatedProvider);
+          info('✅ Related files provider registered');
+        } catch (e) {
+          info(`Related files provider failed: ${e}`);
+        }
+      }
+      
+      // 3e: Chat Output Renderer
+      if (vscodeExtended.chat?.registerChatOutputRenderer) {
+        try {
+          const renderer = vscodeExtended.chat.registerChatOutputRenderer('ai-prompt-detector.renderer', {
+            render: (output: unknown) => {
+              info(`Chat output render requested`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(renderer);
+          info('✅ Chat output renderer registered');
+        } catch (e) {
+          info(`Chat output renderer failed: ${e}`);
+        }
+      }
+      
+      // 3f: Mapped Edits Provider
+      if (vscodeExtended.chat?.registerMappedEditsProvider) {
+        try {
+          const editsProvider = vscodeExtended.chat.registerMappedEditsProvider('ai-prompt-detector.edits', {
+            provideMappedEdits: (document: unknown, codeBlocks: unknown, context: unknown, token: unknown) => {
+              info(`Mapped edits requested`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(editsProvider);
+          info('✅ Mapped edits provider registered');
+        } catch (e) {
+          info(`Mapped edits provider failed: ${e}`);
+        }
+      }
+      
+      // 3g: Chat Participant Detection Provider
+      if (vscodeExtended.chat?.registerChatParticipantDetectionProvider) {
+        try {
+          const detectionProvider = vscodeExtended.chat.registerChatParticipantDetectionProvider({
+            provideParticipants: (text: string, token: unknown) => {
+              info(`Participant detection for text: "${text.substring(0, 50)}"`);
+              // Try to capture prompts here
+              if (text && text.length > 2) {
+                recordPrompt(text, 'detection-provider');
+              }
+              return [];
+            }
+          });
+          context.subscriptions.push(detectionProvider);
+          info('✅ Chat participant detection provider registered');
+        } catch (e) {
+          info(`Participant detection provider failed: ${e}`);
+        }
       }
       
       // Helper function to handle chat events
-      function handleChatEvent(event: any) {
+      function handleChatEvent(event: unknown) {
         let text = '';
         if (typeof event === 'string') {
           text = event;
-        } else if (event?.message) {
-          text = event.message;
-        } else if (event?.prompt) {
-          text = event.prompt;
-        } else if (event?.text) {
-          text = event.text;
-        } else if (event?.request?.message) {
-          text = event.request.message;
+        } else {
+          const evt = event as { message?: string; prompt?: string; text?: string; request?: { message?: string } };
+          if (evt?.message) {
+            text = evt.message;
+          } else if (evt?.prompt) {
+            text = evt.prompt;
+          } else if (evt?.text) {
+            text = evt.text;
+          } else if (evt?.request?.message) {
+            text = evt.request.message;
+          }
         }
         
         if (text) {
@@ -271,7 +412,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Monitor command execution
     const originalExecute = vscode.commands.executeCommand;
-    (vscode.commands as any).executeCommand = async function(command: string, ...args: any[]) {
+    (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(command: string, ...args: unknown[]) {
       // Log chat-related commands
       if (command.includes('chat') || 
           command.includes('copilot') || 
