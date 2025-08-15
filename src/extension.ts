@@ -28,6 +28,9 @@ let mouseDetectionWorking = false;
 interface ChatAPI {
   onDidSubmitRequest?: vscode.Event<any>;
   onDidSubmitFeedback?: vscode.Event<any>;
+  registerChatSessionItemProvider?: Function;
+  onDidDisposeChatSession?: vscode.Event<any>;
+  createChatParticipant?: Function;
 }
 
 /**
@@ -73,18 +76,23 @@ function checkProposedApiAvailability(): boolean {
       info(`Available chat API methods: ${chatKeys.join(', ')}`);
     }
     
-    // Check if specific API is available
-    if (vscodeExtended.chat && typeof vscodeExtended.chat.onDidSubmitRequest !== 'undefined') {
-      info('✅ Proposed API is AVAILABLE - mouse detection will work!');
-      return true;
-    }
-    
-    // Alternative check - try to access chat namespace directly
-    const directChat = (vscode as any).chat;
-    if (directChat) {
-      info(`Direct chat namespace found: ${Object.keys(directChat).join(', ')}`);
-      if (directChat.onDidSubmitRequest) {
-        info('✅ Proposed API is AVAILABLE via direct access!');
+    // Check if chat API is available (different methods in different VS Code versions)
+    if (vscodeExtended.chat) {
+      // Check for any of the useful chat APIs
+      if (typeof vscodeExtended.chat.onDidSubmitRequest !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - onDidSubmitRequest found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.registerChatSessionItemProvider !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - registerChatSessionItemProvider found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.onDidDisposeChatSession !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - onDidDisposeChatSession found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.createChatParticipant !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - createChatParticipant found!');
         return true;
       }
     }
@@ -187,41 +195,72 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       const vscodeExtended = vscode as any as ExtendedVSCode;
       
-      // Try to subscribe to chat submission events
+      // Try different APIs based on what's available
+      
+      // Option 1: onDidSubmitRequest (if available)
       if (vscodeExtended.chat?.onDidSubmitRequest) {
         const disposable = vscodeExtended.chat.onDidSubmitRequest((event: any) => {
-          info('🎯 Chat submission detected via proposed API!');
-          
-          // Extract text from event (structure may vary)
-          let text = '';
-          if (typeof event === 'string') {
-            text = event;
-          } else if (event?.message) {
-            text = event.message;
-          } else if (event?.prompt) {
-            text = event.prompt;
-          } else if (event?.text) {
-            text = event.text;
-          } else if (event?.request?.message) {
-            text = event.request.message;
-          }
-          
-          if (text) {
-            info(`Captured via proposed API: "${text.substring(0, 100)}"`);
-            recordPrompt(text, 'proposed-api');
-            mouseDetectionWorking = true;
-          }
+          info('🎯 Chat submission detected via onDidSubmitRequest!');
+          handleChatEvent(event);
         });
-        
         context.subscriptions.push(disposable);
-        info('✅ Chat API listener registered successfully');
+        info('✅ Chat API listener registered via onDidSubmitRequest');
         return true;
       }
+      
+      // Option 2: Create a chat participant to intercept messages
+      if (vscodeExtended.chat?.createChatParticipant) {
+        const participant = vscodeExtended.chat.createChatParticipant('ai-prompt-detector.monitor', (request: any, context: any, response: any, token: any) => {
+          info('🎯 Chat detected via participant!');
+          if (request?.prompt) {
+            recordPrompt(request.prompt, 'participant');
+          }
+          // Don't actually handle the request, just monitor
+          return undefined;
+        });
+        participant.isSticky = false;
+        context.subscriptions.push(participant);
+        info('✅ Chat participant registered for monitoring');
+        mouseDetectionWorking = true;
+        return true;
+      }
+      
+      // Option 3: Monitor chat sessions
+      if (vscodeExtended.chat?.onDidDisposeChatSession) {
+        const disposable = vscodeExtended.chat.onDidDisposeChatSession((sessionId: any) => {
+          info(`Chat session disposed: ${sessionId}`);
+        });
+        context.subscriptions.push(disposable);
+        info('✅ Chat session monitor registered');
+      }
+      
+      // Helper function to handle chat events
+      function handleChatEvent(event: any) {
+        let text = '';
+        if (typeof event === 'string') {
+          text = event;
+        } else if (event?.message) {
+          text = event.message;
+        } else if (event?.prompt) {
+          text = event.prompt;
+        } else if (event?.text) {
+          text = event.text;
+        } else if (event?.request?.message) {
+          text = event.request.message;
+        }
+        
+        if (text) {
+          info(`Captured via proposed API: "${text.substring(0, 100)}"`);
+          recordPrompt(text, 'proposed-api');
+          mouseDetectionWorking = true;
+        }
+      }
+      
     } catch (e) {
       info(`Failed to setup proposed API: ${e}`);
     }
     
-    return false;
+    return mouseDetectionWorking;
   }
 
   /**
