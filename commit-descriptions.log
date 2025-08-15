@@ -193,3 +193,4 @@ v1.1.403 | Added more command patterns + file watcher for mouse detection
 v1.1.405 | Final truth - mouse detection is architecturally impossible
 v1.1.407 | Added mouse detection via counter monitoring
 v1.1.409 | Add support for new onDidSubmitInput API
+v1.1.410 | Add support for patched VS Code onDidSubmitInput API

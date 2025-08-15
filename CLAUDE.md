@@ -52,6 +52,9 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
+- **NEVER create any alternative installation scripts** like setup.ps1, test-extension.ps1, etc.
+- **install.ps1 is the ONLY supported way** to build, test and deploy the extension
+- Any other scripts for testing/development are FORBIDDEN
 
 ### 📊 VERSION MANAGEMENT - CRITICAL RULE!
 - **NEVER manually change version in package.json** - install.ps1 handles version increments automatically
@@ -61,6 +64,20 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **NEVER change MAJOR version** without explicit command
 - **Just run ./install.ps1** - it will increment version, build, commit, push, package and install automatically
 - Format: MAJOR.MINOR.PATCH (e.g. 1.1.15, 1.1.16, 1.1.17...)
+
+## 📝 PowerShell Script Documentation Policy
+- **EVERY PowerShell script (.ps1) MUST start with a detailed, comprehensive comment block**
+- **Comment block must be in Czech language and explain:**
+  - Primary purpose of the script (minimum 3-5 sentences)
+  - Detailed functionality description (what it does step by step)
+  - All input parameters with their purpose and allowed values
+  - Expected output and side effects
+  - When to use this script vs other scripts
+  - Prerequisites and dependencies
+  - Example usage with real commands
+- **Format:** Use PowerShell block comment `<# ... #>` at the very beginning
+- **Length:** Minimum 15-20 lines of descriptive text
+- **Update requirement:** When modifying script functionality, ALWAYS update the comment block
 
 ## 🎯 TARGET FUNCTIONALITY - SPECSTORY INTEGRATION
 
@@ -142,6 +159,9 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
+- **NEVER create any alternative installation scripts** like setup.ps1, test-extension.ps1, etc.
+- **install.ps1 is the ONLY supported way** to build, test and deploy the extension
+- Any other scripts for testing/development are FORBIDDEN
 
 ### 📝 Git commit workflow
 - Order: 1) Code change → 2) Build test → 3) `./install.ps1` (automatically: commit → push → package)
