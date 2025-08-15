@@ -153,8 +153,18 @@ $vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-
 if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VSIX packaging failed" }
 Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
 
+# --- Close Code - OSS before installation ---
+Write-Host "5. Closing Code - OSS before installation..." -ForegroundColor Yellow
+try {
+    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Write-Host "   ✅ Code - OSS closed" -ForegroundColor Green
+} catch {
+    Write-Host "   ⚠️ Code - OSS was not running or couldn't be closed" -ForegroundColor Yellow
+}
+
 # --- Uninstall previous & install new (silent) ---
-Write-Host "5. Reinstalling extension in VS Code..." -ForegroundColor Yellow
+Write-Host "6. Reinstalling extension in VS Code..." -ForegroundColor Yellow
 Start-Process -FilePath 'code' -ArgumentList '--uninstall-extension','sunamocz.ai-prompt-detector' -WindowStyle Hidden -Wait 2>$null | Out-Null
 Start-Sleep -Seconds 2
 $result = Start-Process -FilePath 'code' -ArgumentList '--install-extension',$vsixName,'--force' -WindowStyle Hidden -Wait -PassThru
@@ -164,25 +174,26 @@ Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor G
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
 
-# --- Restart VS Code to load the new extension version ---
-Write-Host "6. Restarting VS Code..." -ForegroundColor Yellow
+# --- Restart Code - OSS to load the new extension version ---
+Write-Host "7. Restarting Code - OSS..." -ForegroundColor Yellow
 try {
-    # Zavři všechny instance VS Code
-    Write-Host "   - Closing all VS Code instances..." -ForegroundColor Gray
+    # Zavři všechny instance VS Code a Code - OSS
+    Write-Host "   - Closing all VS Code and Code - OSS instances..." -ForegroundColor Gray
     Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
     
-    # Spusť VS Code s projektem
-    Write-Host "   - Starting VS Code..." -ForegroundColor Gray
-    # Otevřít náš VS Code projekt
-    Start-Process -FilePath 'code' -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    # Spusť Code - OSS s projektem
+    Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
+    # Otevřít náš VS Code projekt v Code - OSS
+    Start-Process -FilePath 'Code - OSS.exe' -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
-    Write-Host "   ✅ VS Code restarted" -ForegroundColor Green
+    Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
-    Write-Host "   ⚠️ VS Code restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "   ⚠️ Code - OSS restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Extension v$newVersion installed and VS Code restarted!" -ForegroundColor Green
+Write-Host "Extension v$newVersion installed and Code - OSS restarted!" -ForegroundColor Green

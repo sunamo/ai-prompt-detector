@@ -1,3 +1,80 @@
+<#
+.SYNOPSIS
+    Sofistikovaný nástroj pro návrat projektu na předchozí commit při zachování aktuální verze.
+    Umožňuje bezpečný rollback změn bez narušení verzovacího schématu.
+
+.DESCRIPTION
+    Tento skript obnovuje stav projektu na zadaný Git commit, ale NIKDY nesnižuje číslo verze.
+    Je navržen tak, aby umožnil návrat k funkční verzi kódu při zachování kontinuity verzování,
+    což je kritické pro správnou funkci extension marketplace a uživatelských aktualizací.
+    
+    Proces obnovení probíhá v následujících krocích:
+    1. Validace existence zadaného commitu v Git historii
+    2. Uložení aktuální verze z package.json (tato verze bude zachována)
+    3. Vytvoření seznamu všech souborů v cílovém commitu pomocí git ls-tree
+    4. Obnovení všech souborů na stav z cílového commitu (git restore)
+    5. Odstranění souborů, které existují nyní, ale nebyly v cílovém commitu
+    6. Zachování kritických souborů (install.ps1, restore-from-commit.ps1, commit-descriptions.log)
+    7. Re-aplikace původní verze do package.json (pokud byla změněna)
+    8. Automatické spuštění install.ps1 pro vytvoření nového commitu s popisem restore
+    
+    Speciální vlastnosti:
+    - Verze NIKDY neklesne, i když cílový commit má nižší verzi
+    - Zachovává audit trail v commit-descriptions.log
+    - Nemaže sám sebe ani install.ps1 (potřebné pro dokončení procesu)
+    - Používá HashSet pro efektivní porovnání souborů
+    - Automaticky vytváří nový commit s popisem "restore-from-[hash]"
+    
+    Bezpečnostní opatření:
+    - Kontroluje existenci commitu před zahájením
+    - Zachovává důležité workflow soubory
+    - Nepřepisuje verzi na nižší číslo
+    - Loguje všechny důležité kroky
+
+.PARAMETER CommitHash
+    [POVINNÝ] Git commit hash, na který chcete projekt obnovit.
+    Může být plný 40-znakový hash nebo zkrácená verze (minimálně 7 znaků).
+    Commit musí existovat v aktuální Git historii.
+
+.PARAMETER ExtraDescription
+    [NEPOVINNÝ] Dodatečný popis, který bude přidán k restore commit message.
+    Výsledná message bude: "restore-from-[hash] [ExtraDescription]"
+
+.EXAMPLE
+    ./restore-from-commit.ps1 9fd8c29
+    
+    Obnoví projekt na commit 9fd8c29, zachová aktuální verzi a vytvoří nový commit.
+
+.EXAMPLE
+    ./restore-from-commit.ps1 16a18e4 "před problematickou změnou detekce myši"
+    
+    Obnoví na commit 16a18e4 s dodatečným popisem v commit message.
+
+.EXAMPLE
+    ./restore-from-commit.ps1 HEAD~5
+    
+    Obnoví projekt o 5 commitů zpět od aktuálního HEAD.
+
+.NOTES
+    - Skript NIKDY nesníží číslo verze
+    - Automaticky spouští install.ps1 po dokončení restore
+    - Zachovává historii v commit-descriptions.log
+    - Ideální pro rollback problematických změn
+    - Podporuje i relativní reference (HEAD~n, HEAD^, atd.)
+
+.PREREQUISITES
+    - Git repozitář s historií
+    - Funkční install.ps1 skript
+    - package.json s version polem
+    - Git nainstalovaný a dostupný v PATH
+
+.OUTPUTS
+    - Obnovené soubory na stav z cílového commitu
+    - Zachovaná aktuální verze v package.json
+    - Nový Git commit s popisem restore
+    - Aktualizovaný commit-descriptions.log
+    - Spuštění install.ps1 pro finalizaci
+#>
 param(
     [Parameter(Mandatory=$true, Position=0)][string]$CommitHash,
     [Parameter(Mandatory=$false, Position=1)][string]$ExtraDescription = ''
