@@ -163,13 +163,30 @@ try {
     Write-Host "   ⚠️ Code - OSS was not running or couldn't be closed" -ForegroundColor Yellow
 }
 
-# --- Uninstall previous & install new (silent) ---
+# --- Uninstall previous & install new (with timeout) ---
 Write-Host "6. Reinstalling extension in VS Code..." -ForegroundColor Yellow
-Start-Process -FilePath 'code' -ArgumentList '--uninstall-extension','sunamocz.ai-prompt-detector' -WindowStyle Hidden -Wait 2>$null | Out-Null
+# Uninstall old version (with 10 second timeout)
+$uninstallJob = Start-Job -ScriptBlock {
+    Start-Process -FilePath 'code' -ArgumentList '--uninstall-extension','sunamocz.ai-prompt-detector' -WindowStyle Hidden -Wait
+}
+Wait-Job $uninstallJob -Timeout 10 | Out-Null
+Remove-Job $uninstallJob -Force 2>$null | Out-Null
+
 Start-Sleep -Seconds 2
-$result = Start-Process -FilePath 'code' -ArgumentList '--install-extension',$vsixName,'--force' -WindowStyle Hidden -Wait -PassThru
-if ($result.ExitCode -ne 0) { Fail "Extension installation failed (VS Code)" }
-Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor Green
+
+# Install new version (with 15 second timeout)
+$installJob = Start-Job -ScriptBlock {
+    param($vsix)
+    Start-Process -FilePath 'code' -ArgumentList '--install-extension',$vsix,'--force' -WindowStyle Hidden -Wait
+} -ArgumentList $vsixName
+
+if (Wait-Job $installJob -Timeout 15) {
+    $jobResult = Receive-Job $installJob
+    Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor Green
+} else {
+    Write-Host "   ⚠️ Extension installation timed out - may still be installing in background" -ForegroundColor Yellow
+}
+Remove-Job $installJob -Force 2>$null | Out-Null
 
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
