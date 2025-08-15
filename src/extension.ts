@@ -452,7 +452,10 @@ export async function activate(context: vscode.ExtensionContext) {
         return originalExecute.call(vscode.commands, command, ...args);
       }
       
-      debug(`[CMD] ${command}`); // Log commands for debugging (use debug not info)
+      // Temporarily log ALL commands to find what mouse uses
+      if (command.includes('chat') || command.includes('copilot') || command.includes('submit') || command.includes('accept')) {
+        info(`[CMD] ${command}`); // Log chat-related commands
+      }
       
       // These commands indicate submission FROM MOUSE (not from our keyboard handler)
       if (!command.startsWith('ai-prompt-detector.') &&
@@ -460,7 +463,11 @@ export async function activate(context: vscode.ExtensionContext) {
            command === 'github.copilot.chat.acceptInput' ||
            command === 'workbench.action.chat.acceptInput' ||
            command === 'workbench.action.chat.send' ||
-           command === 'github.copilot.chat.submit')) {
+           command === 'github.copilot.chat.submit' ||
+           command === 'workbench.action.chat.execute' ||
+           command === 'workbench.action.chat.executeAction' ||
+           command === 'workbench.action.acceptSelectedCodeAction' ||
+           command.includes('chat') && command.includes('execute'))) {
         info(`🎯 MOUSE SUBMISSION DETECTED via command: ${command}`);
         recordPrompt('[Prompt sent via mouse]', 'mouse');
       }
@@ -499,6 +506,36 @@ export async function activate(context: vscode.ExtensionContext) {
         isOurCommand = false;
       })
     );
+    
+    // Method 4: Monitor workspace state changes (might detect new chat messages)
+    const workspaceState = context.workspaceState;
+    let lastUpdateTime = Date.now();
+    
+    // Try monitoring file system for chat history
+    const chatWatcher = vscode.workspace.createFileSystemWatcher(
+      '**/.vscode*/**/*chat*',
+      false, // Don't ignore creates
+      false, // Don't ignore changes
+      true   // Ignore deletes
+    );
+    
+    chatWatcher.onDidCreate((uri) => {
+      const now = Date.now();
+      if (now - lastUpdateTime > 1000) { // Debounce
+        info('🎯 Chat file created - possible submission');
+        lastUpdateTime = now;
+      }
+    });
+    
+    chatWatcher.onDidChange((uri) => {
+      const now = Date.now();
+      if (now - lastUpdateTime > 1000) { // Debounce
+        info('🎯 Chat file changed - possible submission');
+        lastUpdateTime = now;
+      }
+    });
+    
+    context.subscriptions.push(chatWatcher);
     
     info('✅ Chat monitoring installed');
   }
