@@ -190,3 +190,4 @@ v1.1.397 | MAJOR FIX - removed ALL keybinding blocks that prevented mouse from w
 v1.1.399 | Restored keyboard detection + added command monitoring for mouse
 v1.1.401 | Fixed double detection - separate keyboard vs mouse detection
 v1.1.403 | Added more command patterns + file watcher for mouse detection
+v1.1.405 | Final truth - mouse detection is architecturally impossible

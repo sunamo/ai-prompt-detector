@@ -154,10 +154,18 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem.text = `${apiIndicator} AI Prompts: ${aiPromptCounter} | v${v}`;
   };
 
+  // Track when we detect via keyboard
+  let lastKeyboardDetection = 0;
+  
   /** Uloží prompt do stavu, vždy započítá i opakovaný text. */
   const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
     info(`recordPrompt called: source=${source}, text="${text.substring(0, 100)}"`);
+    
+    // Mark keyboard detection time
+    if (source.includes('keyboard')) {
+      lastKeyboardDetection = Date.now();
+    }
     
     if (!text) {
       info('recordPrompt: empty text, returning false');
@@ -174,6 +182,8 @@ export async function activate(context: vscode.ExtensionContext) {
     
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
+    
+    // Always increment counter and show notification
     aiPromptCounter++;
     providerRef?.refresh();
     updateStatusBar();
@@ -499,17 +509,28 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
     
-    // Method 4: THE TRUTH ABOUT MOUSE DETECTION
-    // After 28+ attempts, the reality is:
-    // - Mouse clicks are COMPLETELY INVISIBLE to extensions
-    // - They happen in Renderer Process, call widget.acceptInput() directly
-    // - No events, no commands, no API calls we can intercept
-    // - Even with proposed API, there's no event for mouse submissions
-    // 
-    // THE ONLY REAL SOLUTION would be for Microsoft to add a new API like:
-    // vscode.chat.onDidSubmit or widget.onDidAcceptInput exposed to extensions
-    //
-    // Until then, mouse detection is ARCHITECTURALLY IMPOSSIBLE
+    // Method 4: Monitor counter changes for mouse detection
+    // Since counter somehow increases on mouse clicks, monitor it
+    let lastSeenCounter = aiPromptCounter;
+    
+    const monitorInterval = setInterval(() => {
+      if (aiPromptCounter > lastSeenCounter) {
+        const now = Date.now();
+        // If counter increased and we haven't detected it recently via keyboard
+        if (now - lastKeyboardDetection > 500) {
+          info('🎯 MOUSE DETECTED - counter increased without keyboard');
+          // Show notification for mouse
+          const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+          let customMsg = cfg.get<string>('customMessage') || '';
+          vscode.window.showInformationMessage(`AI Prompt sent (mouse)\n${customMsg}`);
+        }
+        lastSeenCounter = aiPromptCounter;
+      }
+    }, 250); // Check every 250ms
+    
+    context.subscriptions.push({
+      dispose: () => clearInterval(monitorInterval)
+    });
     
     info('✅ Chat monitoring installed');
   }
