@@ -549,22 +549,47 @@ export async function activate(context: vscode.ExtensionContext) {
   // Try new onDidSubmitInput API first (if VS Code is patched)
   const tryNewApi = () => {
     const vscodeExtended = vscode as unknown as ExtendedVSCode;
-    if (vscodeExtended.chat && typeof (vscodeExtended.chat as any).onDidSubmitInput === 'function') {
-      info('🎉 NEW onDidSubmitInput API DETECTED - trying to use it!');
+    
+    // Check if our patched API is available
+    if (vscodeExtended.chat && typeof (vscodeExtended.chat as any).onDidSubmitInput !== 'undefined') {
+      info('🎉 NEW onDidSubmitInput API DETECTED from our VS Code patch!');
+      info('  Type of onDidSubmitInput: ' + typeof (vscodeExtended.chat as any).onDidSubmitInput);
+      
       try {
         const disposable = (vscodeExtended.chat as any).onDidSubmitInput((event: any) => {
-          info(`🎯 NEW API EVENT: Chat submitted via ${event.isKeyboard ? 'KEYBOARD' : 'MOUSE'}`);
-          info(`  Prompt: "${event.prompt?.substring(0, 100)}"`);
-          recordPrompt(event.prompt || '[Prompt via new API]', event.isKeyboard ? 'new-api-keyboard' : 'new-api-mouse');
+          info('🎯 NEW PATCHED API EVENT FIRED!');
+          info(`  Event type: ${typeof event}`);
+          info(`  Event keys: ${event ? Object.keys(event).join(', ') : 'null'}`);
+          info(`  Is Keyboard: ${event?.isKeyboard}`);
+          info(`  Prompt: "${event?.prompt?.substring(0, 100)}"`);
+          info(`  Location: ${event?.location}`);
+          info(`  Session ID: ${event?.sessionId}`);
+          
+          // Show success notification
+          vscode.window.showInformationMessage(
+            `🎉 VS Code patch works! Detected ${event.isKeyboard ? 'KEYBOARD' : '🖱️ MOUSE'} submission!`
+          );
+          
+          recordPrompt(event.prompt || '[Prompt via patched API]', event.isKeyboard ? 'patch-keyboard' : 'patch-mouse');
         });
+        
         context.subscriptions.push(disposable);
-        info('✅ Successfully subscribed to NEW onDidSubmitInput API!');
+        info('✅ Successfully subscribed to PATCHED onDidSubmitInput API!');
+        info('🎉 MOUSE DETECTION NOW WORKING via our VS Code patch!');
         mouseDetectionWorking = true;
+        
+        // Update status bar to show patch is working
+        statusBarItem.tooltip = '🎉 AI Prompt Detector\n✅ VS Code PATCHED\n✅ onDidSubmitInput API WORKING\n✅ Mouse detection FULLY WORKING!';
+        
         return true;
       } catch (e) {
-        info(`Failed to subscribe to new API: ${e}`);
+        info(`Failed to subscribe to patched API: ${e}`);
       }
+    } else {
+      info('❌ Patched onDidSubmitInput API not found');
+      info('  Available chat methods: ' + (vscodeExtended.chat ? Object.keys(vscodeExtended.chat).join(', ') : 'none'));
     }
+    
     return false;
   };
 
