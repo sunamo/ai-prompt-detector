@@ -207,12 +207,25 @@ try {
     Start-Sleep -Seconds 2
     
     # Oprav main.js před spuštěním Code - OSS
-    Write-Host "   - Patching Code - OSS main.js to fix sandbox error..." -ForegroundColor Gray
+    Write-Host "   - Patching Code - OSS main.js to fix startup errors..." -ForegroundColor Gray
     $mainJsPath = 'E:\vs\TypeScript_Projects\_\vscode\out\main.js'
     if (Test-Path $mainJsPath) {
         $mainContent = Get-Content $mainJsPath -Raw
-        # Zakomentuj řádek s app.enableSandbox()
-        $mainContent = $mainContent -replace '(\s+)(app\.enableSandbox\(\);)', '$1// $2 // Patched by install.ps1'
+        
+        # Zakomentuj problematické řádky
+        # 1. app.enableSandbox()
+        if ($mainContent -notmatch '// app\.enableSandbox\(\)') {
+            $mainContent = $mainContent -replace '(\s+)(app\.enableSandbox\(\);)', '$1// $2 // Patched by install.ps1'
+        }
+        
+        # 2. protocol.registerSchemesAsPrivileged - jednoduše to zakomentujeme
+        if ($mainContent -notmatch '// protocol\.registerSchemesAsPrivileged') {
+            # Najdeme celý blok a zakomentujeme ho
+            $mainContent = $mainContent -replace '(protocol\.registerSchemesAsPrivileged\(\[[\s\S]*?\]\);)', '/* Patched by install.ps1 - moved to whenReady
+$1
+*/'
+        }
+        
         Set-Content $mainJsPath $mainContent -NoNewline
         Write-Host "   ✅ main.js patched" -ForegroundColor Green
     }
