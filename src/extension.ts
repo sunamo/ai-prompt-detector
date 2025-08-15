@@ -451,11 +451,14 @@ export async function activate(context: vscode.ExtensionContext) {
           command.includes('accept')) {
         debug(`📡 Command intercepted: ${command}`);
         
-        // These commands indicate keyboard submission (working)
+        // These commands indicate submission (keyboard OR mouse)
         if (command === 'workbench.action.chat.submit' ||
             command === 'github.copilot.chat.acceptInput' ||
-            command === 'workbench.action.chat.acceptInput') {
-          debug('Keyboard submission command detected');
+            command === 'workbench.action.chat.acceptInput' ||
+            command === 'workbench.action.chat.send' ||
+            command === 'github.copilot.chat.submit') {
+          info(`🎯 SUBMISSION DETECTED via command: ${command}`);
+          recordPrompt('[Prompt sent - text capture not available]', 'command-' + command.split('.').pop());
         }
       }
       
@@ -466,87 +469,9 @@ export async function activate(context: vscode.ExtensionContext) {
     info('✅ Command spy installed');
   }
 
-  /**
-   * Obslouží všechny varianty Enter.
-   */
-  const handleForwardEnter = async (variant: string) => {
-    try {
-      info(`=== ENTER ${variant} START ===`);
-      
-      // Focus chat input
-      await focusChatInput();
-      await new Promise((r) => setTimeout(r, 100));
+  // Removed handleForwardEnter - was interfering with normal chat operation
 
-      // Try to capture text from visible editors
-      let text = '';
-      for (const editor of vscode.window.visibleTextEditors) {
-        const doc = editor.document;
-        if (doc.uri.scheme === 'vscode-chat' || 
-            doc.uri.scheme === 'comment' ||
-            doc.uri.toString().includes('chat') ||
-            doc.uri.toString().includes('copilot')) {
-          text = doc.getText();
-          if (text) {
-            info(`Captured text from editor: "${text.substring(0, 100)}"`);
-            break;
-          }
-        }
-      }
-
-      // Fallback message if no text captured
-      if (!text) {
-        text = `[Prompt sent via ${variant} - text capture failed]`;
-        info('Unable to capture actual text');
-      }
-
-      // Record prompt
-      recordPrompt(text, 'keyboard-' + variant);
-
-      // Forward to Copilot
-      let ok = await forwardToChatAccept();
-      if (!ok) {
-        const fallbackCommands = [
-          'github.copilot.chat.acceptInput',
-          'github.copilot.chat.send',
-          'github.copilot.chat.submit',
-          'workbench.action.chat.acceptInput',
-          'workbench.action.chat.submit',
-        ];
-        for (const id of fallbackCommands) {
-          try {
-            await vscode.commands.executeCommand(id);
-            ok = true;
-            info(`Forward successful via: ${id}`);
-            break;
-          } catch {}
-        }
-      }
-      
-      info(`=== ENTER ${variant} END ===`);
-    } catch (e) {
-      info(`=== ENTER ${variant} ERROR === ${e}`);
-    }
-  };
-
-  // Register commands
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'ai-prompt-detector.forwardEnterToChat',
-      () => handleForwardEnter('ctrl-enter'),
-    ),
-    vscode.commands.registerCommand(
-      'ai-prompt-detector.forwardEnterPlain',
-      () => handleForwardEnter('enter'),
-    ),
-    vscode.commands.registerCommand(
-      'ai-prompt-detector.forwardEnterCtrlShift',
-      () => handleForwardEnter('ctrl-shift-enter'),
-    ),
-    vscode.commands.registerCommand(
-      'ai-prompt-detector.forwardEnterCtrlAlt',
-      () => handleForwardEnter('ctrl-alt-enter'),
-    ),
-  );
+  // Removed command registration - was blocking mouse functionality
 
   updateStatusBar();
   await loadExistingPrompts();

@@ -185,3 +185,4 @@ v1.1.387 | Add detailed diagnostics for proposed API detection
 v1.1.388 | Use correct proposed API methods available in current VS Code version
 v1.1.391 | Fixed TypeScript types - removed all any types for type safety
 v1.1.393 | New approach - widget.onDidAcceptInput event discovered in VS Code source
+v1.1.395 | CRITICAL FIX - removed widget detection that broke mouse submission
