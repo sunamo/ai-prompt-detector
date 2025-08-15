@@ -180,3 +180,4 @@ v1.1.382 | Fix mouse click detection - improved text capture and removed auto-in
 v1.1.383 | Document mouse detection limitation - keyboard works, mouse architecturally impossible
 v1.1.384 | Add proposed API detection with status bar indicator - clipboard READ ONLY fallback
 v1.1.385 | Remove clipboard monitoring, fix status bar display, always use AI Prompts:
+v1.1.386 | Fix VS Code launch with --enable-proposed-api flag, remove emoji from notifications

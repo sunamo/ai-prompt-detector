@@ -56,14 +56,42 @@ function refreshDebugFlag() {
  */
 function checkProposedApiAvailability(): boolean {
   try {
+    // Log what we're checking
+    info('Checking for proposed API availability...');
+    
+    // Check process arguments to see if --enable-proposed-api was used
+    const args = process.argv;
+    info(`Process arguments: ${args.join(' ')}`);
+    
+    // Try multiple ways to detect API
     const vscodeExtended = vscode as any as ExtendedVSCode;
+    
+    // Log what's available in vscode namespace
+    info(`vscode.chat exists: ${!!vscodeExtended.chat}`);
+    if (vscodeExtended.chat) {
+      const chatKeys = Object.keys(vscodeExtended.chat);
+      info(`Available chat API methods: ${chatKeys.join(', ')}`);
+    }
+    
+    // Check if specific API is available
     if (vscodeExtended.chat && typeof vscodeExtended.chat.onDidSubmitRequest !== 'undefined') {
       info('✅ Proposed API is AVAILABLE - mouse detection will work!');
       return true;
     }
+    
+    // Alternative check - try to access chat namespace directly
+    const directChat = (vscode as any).chat;
+    if (directChat) {
+      info(`Direct chat namespace found: ${Object.keys(directChat).join(', ')}`);
+      if (directChat.onDidSubmitRequest) {
+        info('✅ Proposed API is AVAILABLE via direct access!');
+        return true;
+      }
+    }
   } catch (e) {
-    debug(`Proposed API check failed: ${e}`);
+    info(`Proposed API check error: ${e}`);
   }
+  
   info('❌ Proposed API is NOT available - mouse detection limited');
   info('💡 TIP: Run VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
   return false;
