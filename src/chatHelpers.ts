@@ -43,7 +43,7 @@ export const forwardToChatAccept = async (): Promise<boolean> => {
 };
 
 /**
- * Získá text z chat inputu - používá copyInput příkazy místo clipboard.
+ * Získá text z chat inputu - používá aktivní editor jako zdroj textu.
  * @param attemptFocus Pokud true, pokusí se přesměrovat fokus na input box.
  * @param allowKeyboardSimulation Pokud true, pokusí se simulovat keyboard pro získání textu.
  * @returns Text z chat inputu nebo prázdný řetězec.
@@ -58,27 +58,42 @@ export const getChatInputText = async (
       await new Promise(r => setTimeout(r, 50));
     }
     
-    // Try copyInput commands that might return text directly
-    const copyCommands = [
-      'workbench.action.chat.copyInput',
-      'github.copilot.chat.copyInput',
-      'chat.copyInput'
-    ];
-    
-    for (const cmd of copyCommands) {
-      try {
-        const result = await vscode.commands.executeCommand(cmd);
-        if (result && typeof result === 'string') {
-          info(`getChatInputText: Got text via ${cmd}: "${result.substring(0, 50)}"`);
-          return result;
+    // Try to get text from active text editor (chat input is often a text editor)
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+      const document = activeEditor.document;
+      // Check if this is a chat input by URI or language ID
+      if (document.uri.scheme === 'vscode-chat' || 
+          document.uri.scheme === 'comment' || 
+          document.languageId === 'copilot-chat' ||
+          document.uri.toString().includes('chat') ||
+          document.uri.toString().includes('copilot')) {
+        const text = document.getText();
+        if (text) {
+          info(`getChatInputText: Got text from active editor: "${text.substring(0, 50)}"`);
+          return text;
         }
-      } catch {
-        // Silent fail for individual commands
       }
     }
     
-    // If no direct text, return empty
-    info('getChatInputText: No text captured via copyInput commands');
+    // Try visible text editors
+    for (const editor of vscode.window.visibleTextEditors) {
+      const document = editor.document;
+      if (document.uri.scheme === 'vscode-chat' || 
+          document.uri.scheme === 'comment' || 
+          document.languageId === 'copilot-chat' ||
+          document.uri.toString().includes('chat') ||
+          document.uri.toString().includes('copilot')) {
+        const text = document.getText();
+        if (text) {
+          info(`getChatInputText: Got text from visible editor: "${text.substring(0, 50)}"`);
+          return text;
+        }
+      }
+    }
+    
+    // If no text found, return empty
+    info('getChatInputText: No text captured from editors');
     return '';
   } catch (e) { 
     info(`getChatInputText error: ${e}`);

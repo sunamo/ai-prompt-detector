@@ -215,7 +215,7 @@ async function setupAdvancedSubmissionDetection(
           lastTextClearTime = 0;
           debug(`Polling: New text detected: "${currentText.substring(0, 50)}"`);
         }
-      } else if (globalLastText && !currentText) {
+      } else if (globalLastText && globalLastText.trim() && !currentText) {
         // Text zmizel - pravděpodobně odeslán myší
         if (lastTextClearTime === 0) {
           lastTextClearTime = now;
@@ -228,7 +228,8 @@ async function setupAdvancedSubmissionDetection(
         lastTextClearTime = 0;
       }
     } catch (e) {
-      // Silent fail
+      // Silent fail - polling continues
+      debug(`Polling error (silent): ${e}`);
     }
   }, 25); // 25ms pro rychlou odezvu
   
@@ -310,22 +311,6 @@ export async function activate(context: vscode.ExtensionContext) {
     const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
     // Show notification immediately for all sources
     notify();
-    
-    // Spusť install.ps1 po každém promptu
-    setTimeout(async () => {
-      try {
-        info('Executing install.ps1 after prompt detection...');
-        const terminal = vscode.window.createTerminal({
-          name: 'AI Prompt Detector Auto-Install',
-          cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-        });
-        terminal.sendText(`powershell -ExecutionPolicy Bypass -File "./install.ps1" "Auto-install after prompt #${aiPromptCounter}"`);
-        terminal.show(false); // Nezaměřuj terminal
-        info('install.ps1 execution initiated');
-      } catch (err) {
-        info(`Failed to execute install.ps1: ${err}`);
-      }
-    }, 1000); // 1 sekunda zpoždění
     
     debug(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
     return true;
