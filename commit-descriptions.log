@@ -204,3 +204,4 @@ v1.1.417 | Use ELECTRON_DISABLE_SANDBOX environment variable for Code - OSS
 v1.1.418 | Added timeout to extension installation to prevent hanging
 v1.1.419 | Fixed Code - OSS launch with proper ELECTRON_DISABLE_SANDBOX environment variable
 v1.1.420 | Use --no-sandbox parameter directly for Code - OSS
+v1.1.421 | Install extension directly to Code - OSS extensions folder and use --disable-sandbox
