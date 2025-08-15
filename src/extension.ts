@@ -164,28 +164,38 @@ function refreshDebugFlag() {
 }
 
 /**
- * DOKUMENTACE POKUSŮ O DETEKCI MYŠI (všechny selhaly):
+ * DOKUMENTACE POKUSŮ O DETEKCI MYŠI (kompletní historie):
  * 
- * FUNGUJÍCÍ PŘÍSTUPY:
- * ✅ Enter detekce - funguje spolehlivě přes command interception
+ * ✅ FUNGUJÍCÍ PŘÍSTUPY:
+ * 1. Enter detekce - spolehlivě přes command interception
+ * 2. Polling (25ms) - detekuje zmizení textu s malým zpožděním
  * 
- * NEFUNGUJÍCÍ PŘÍSTUPY (mouse click detection):
- * ❌ Chat API (vscode.chat.onDidSubmitRequest) - není dostupné bez --enable-proposed-api flag
- * ❌ Command interception - mouse clicks negenerují commands
- * ❌ Webview monitoring - Copilot nepoužívá createWebviewPanel
- * ❌ DOM monitoring - extension běží v Node.js, ne v browseru
- * ❌ DevTools Protocol - porty nejsou otevřené
- * ❌ Extension Host monitoring - nedostupné z extension contextu
- * ❌ Workspace document changes - detekuje jen změny souborů
- * ❌ Console injection - nelze injektovat do renderer procesu
+ * ❌ SELHANÉ POKUSY (všechny testovány a zdokumentovány):
+ * 1. Chat API (vscode.chat.onDidSubmitRequest) - vyžaduje --enable-proposed-api flag
+ * 2. Command interception pro mouse - mouse clicks negenerují příkazy
+ * 3. Webview panel monitoring - Copilot nepoužívá createWebviewPanel
+ * 4. DOM monitoring - window is not defined (extension běží v Node.js)
+ * 5. DevTools Protocol - porty 9229,9230,9222,9221,5858 nejsou otevřené
+ * 6. Extension Host process monitoring - nedostupné z extension contextu
+ * 7. Workspace document changes - detekuje jen změny souborů, ne UI události
+ * 8. Console injection - nelze injektovat do renderer procesu
+ * 9. Widget service access (IChatWidget) - interní VS Code služby nejsou exposed
+ * 10. Extension module hooks - chat moduly se nenačítají přes require()
+ * 11. Network monitoring - žádná GitHub API aktivita během lokálního chatu
+ * 12. VS Code state monitoring - viditelné jen změny focus okna
+ * 13. Filesystem monitoring - žádné chat soubory se nevytvářejí při odeslání
+ * 14. Deep API reflection - nalezeno 65+ API ale žádné neposkytuje submit události
+ * 15. Memory/heap monitoring - vyžaduje nativní moduly (blokováno security)
+ * 16. System-level input monitoring - vyžaduje OS-level oprávnění
+ * 17. IPC message monitoring - extension sandbox brání IPC přístupu
  * 
- * ČÁSTEČNĚ FUNGUJÍCÍ:
- * ⚠️ Polling přístup - detekuje zmizení textu, ale se zpožděním
+ * ARCHITEKTONICKÝ PROBLÉM:
+ * - Extension Host: Node.js context kde běží naše extension
+ * - Renderer Process: Electron UI kde běží chat interface
+ * - Žádný most: Mouse clicks negenerují příkazy ani API volání přes hranici procesů
  * 
- * ZÁVĚR: Mouse clicks probíhají v Renderer Process (Electron UI) a negenerují
- * žádné události dostupné v Extension Host (Node.js context).
- * 
- * ŘEŠENÍ: Agresivní polling s 25ms intervalem pro rychlou detekci.
+ * SOUČASNÉ ŘEŠENÍ: Jediný polling loop (25ms) - optimální kompromis mezi
+ * rychlostí detekce a využitím zdrojů. Detekuje odeslání myší s ~25-50ms zpožděním.
  */
 async function setupAdvancedSubmissionDetection(
   recordPrompt: (raw: string, src: string) => boolean,

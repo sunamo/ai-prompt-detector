@@ -252,7 +252,7 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 
 User wants everything to run automatically without waiting for confirmation!
 
-follow the sources for a better solution to my requirements. I have attached the folders C:_\vscode-copilot-chat\ and C:_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
+follow the sources for a better solution to my requirements. I have attached the folders E:\vs\TypeScript_Projects\_\vscode-copilot-chat\ and E:\vs\TypeScript_Projects\_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
 
 Use only the copilot-instructions.md file to write instructions. Not ai-instructions.md as you keep trying to create. Write all instructions in English.
 
@@ -643,15 +643,6 @@ Mouse clicks happen in renderer, but extension can't directly access renderer DO
 5. **Chat storage monitoring**: Watch VS Code's chat storage/indexedDB files
 6. **Deep API reflection**: Enumerate all available VS Code APIs at runtime
 
-## 📋 COMPLETE HISTORY OF MOUSE DETECTION ATTEMPTS (Persistent Documentation)
-
-### ✅ WORKING SOLUTION (Current Implementation)
-**Polling with 25ms interval** - Detects text disappearance from chat input
-- Implementation: Single polling loop checking getChatInputText() every 25ms
-- Detects when text disappears (submitted) and shows immediate notification
-- Limitation: Slight delay (25-50ms) but acceptable for user experience
-- Status: ACTIVE in current version
-
 ### FAILED APPROACHES SUMMARY (Aug 11 2025)
 
 #### 1. ❌ Widget acceptInput Method Interception (v1.1.354)
@@ -714,26 +705,21 @@ code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
 **Expected Result:**
 Mouse click detection should work through proper Chat API access instead of complex workarounds.
 
-### COMPLETE LIST OF ALL ATTEMPTED APPROACHES (Dec 2024)
+### 📊 FINAL STATUS - Why Mouse Detection is Limited (Dec 2024)
 
-#### FAILED - Architecture limitations:
-1. **Chat API (vscode.chat.onDidSubmitRequest)** - Requires --enable-proposed-api flag
-2. **Command interception** - Mouse clicks don't generate commands
-3. **Webview panel monitoring** - Copilot doesn't use createWebviewPanel
-4. **DOM monitoring** - Extension runs in Node.js, not browser (window undefined)
-5. **DevTools Protocol** - Ports not open unless VS Code started with debug flag
-6. **Extension Host monitoring** - Can't access from extension context
-7. **Console injection** - Can't inject into renderer process from extension
-8. **Workspace document changes** - Only detects file changes, not UI events
-9. **Widget service access** - Internal VS Code services not exposed to extensions
-10. **Extension module hooks** - Chat modules don't load through require()
-11. **Network monitoring** - No GitHub API activity during local chat
-12. **VS Code state monitoring** - Only window focus changes visible
-13. **Filesystem monitoring** - No chat files created during submission
-14. **Deep API reflection** - Found 65+ APIs but none provide submission events
-15. **Memory/heap monitoring** - Would require native modules (security blocked)
-16. **System-level input monitoring** - Would require OS-level permissions
-17. **IPC message monitoring** - Extension sandbox prevents IPC access
+**Root Cause Analysis from VS Code Source Code:**
+- VS Code chat UI runs in **Renderer Process** (Electron browser context)
+- Extensions run in **Extension Host** (Node.js context)
+- Mouse clicks in chat UI trigger `ChatSubmitAction` (found in chatExecuteActions.ts:154)
+- This action runs entirely in Renderer Process
+- No command or API event crosses to Extension Host for mouse clicks
+- Enter key works because it triggers commands that DO cross process boundary
+
+**The Only Real Solution:**
+Run VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag to access `vscode.chat.onDidSubmitRequest` API
+
+**Current Workaround:**
+25ms polling - detects text disappearance with minimal delay, shows notification immediately
 
 ### UNTRIED APPROACHES TO EXPLORE (Backup Options)
 

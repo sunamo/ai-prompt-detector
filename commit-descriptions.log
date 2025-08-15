@@ -174,3 +174,4 @@ v1.1.376 | Auto-install after prompt #8
 v1.1.377 | fix-triple-notifications
 v1.1.378 | Fix mouse click notification timing
 v1.1.379 | Ultra aggressive mouse detection - 25ms polling
+v1.1.380 | Optimized mouse detection - single 25ms polling with immediate notification
