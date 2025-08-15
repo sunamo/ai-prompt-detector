@@ -436,42 +436,61 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   /**
-   * Command spy - monitors all commands for chat-related activity
+   * Setup monitoring of chat submissions without blocking
    */
-  function setupCommandSpy() {
-    info('🔧 Setting up command spy for chat commands');
+  function setupChatMonitoring(context: vscode.ExtensionContext) {
+    info('🔧 Setting up chat monitoring');
     
-    // Monitor command execution
+    // Method 1: Monitor command execution
     const originalExecute = vscode.commands.executeCommand;
     (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(command: string, ...args: unknown[]) {
-      // Log chat-related commands
-      if (command.includes('chat') || 
-          command.includes('copilot') || 
-          command.includes('submit') ||
-          command.includes('accept')) {
-        debug(`📡 Command intercepted: ${command}`);
-        
-        // These commands indicate submission (keyboard OR mouse)
-        if (command === 'workbench.action.chat.submit' ||
-            command === 'github.copilot.chat.acceptInput' ||
-            command === 'workbench.action.chat.acceptInput' ||
-            command === 'workbench.action.chat.send' ||
-            command === 'github.copilot.chat.submit') {
-          info(`🎯 SUBMISSION DETECTED via command: ${command}`);
-          recordPrompt('[Prompt sent - text capture not available]', 'command-' + command.split('.').pop());
-        }
+      info(`[CMD] ${command}`); // Log ALL commands for debugging
+      
+      // These commands indicate submission
+      if (command === 'workbench.action.chat.submit' ||
+          command === 'github.copilot.chat.acceptInput' ||
+          command === 'workbench.action.chat.acceptInput' ||
+          command === 'workbench.action.chat.send' ||
+          command === 'github.copilot.chat.submit') {
+        info(`🎯 SUBMISSION DETECTED via command: ${command}`);
+        recordPrompt('[Prompt sent via ' + command.split('.').pop() + ']', 'command');
       }
       
       // Call original
       return originalExecute.call(vscode.commands, command, ...args);
     };
     
-    info('✅ Command spy installed');
+    // Method 2: Monitor context changes
+    const contextService = (vscode as unknown as { contextKeyService?: { onDidChangeContext?: vscode.Event<unknown> } }).contextKeyService;
+    if (contextService?.onDidChangeContext) {
+      contextService.onDidChangeContext(() => {
+        debug('Context changed - might be chat submission');
+      });
+    }
+    
+    // Method 3: Register simple keybinding listener (non-blocking)
+    context.subscriptions.push(
+      vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
+        info('🎯 ENTER DETECTED');
+        recordPrompt('[Prompt sent via Enter]', 'keyboard-enter');
+        // Forward to normal chat submit
+        await vscode.commands.executeCommand('workbench.action.chat.submit');
+      })
+    );
+    
+    context.subscriptions.push(
+      vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
+        info('🎯 CTRL+ENTER DETECTED');
+        recordPrompt('[Prompt sent via Ctrl+Enter]', 'keyboard-ctrl-enter');
+        // Forward to normal chat submit
+        await vscode.commands.executeCommand('workbench.action.chat.submit');
+      })
+    );
+    
+    info('✅ Chat monitoring installed');
   }
 
-  // Removed handleForwardEnter - was interfering with normal chat operation
-
-  // Removed command registration - was blocking mouse functionality
+  // Removed problematic code that was blocking mouse functionality
 
   updateStatusBar();
   await loadExistingPrompts();
@@ -484,7 +503,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Setup detection methods - NO CLIPBOARD MONITORING
   const apiSetupSuccess = await setupProposedChatApi();
-  setupCommandSpy();
+  setupChatMonitoring(context);
 
   // Show notification about API status
   if (proposedApiAvailable) {
