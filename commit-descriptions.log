@@ -206,3 +206,4 @@ v1.1.419 | Fixed Code - OSS launch with proper ELECTRON_DISABLE_SANDBOX environm
 v1.1.420 | Use --no-sandbox parameter directly for Code - OSS
 v1.1.421 | Install extension directly to Code - OSS extensions folder and use --disable-sandbox
 v1.1.422 | ...
+v1.1.423 | Fixed VSIX path and Code - OSS startup with environment variables via batch file

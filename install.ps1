@@ -206,26 +206,21 @@ try {
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
     
+    # Oprav main.js před spuštěním Code - OSS
+    Write-Host "   - Patching Code - OSS main.js to fix sandbox error..." -ForegroundColor Gray
+    $mainJsPath = 'E:\vs\TypeScript_Projects\_\vscode\out\main.js'
+    if (Test-Path $mainJsPath) {
+        $mainContent = Get-Content $mainJsPath -Raw
+        # Zakomentuj řádek s app.enableSandbox()
+        $mainContent = $mainContent -replace '(\s+)(app\.enableSandbox\(\);)', '$1// $2 // Patched by install.ps1'
+        Set-Content $mainJsPath $mainContent -NoNewline
+        Write-Host "   ✅ main.js patched" -ForegroundColor Green
+    }
+    
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
-    
-    # Vytvoř batch soubor pro spuštění s environment variables
-    $batchContent = @"
-@echo off
-set ELECTRON_DISABLE_SANDBOX=1
-set ELECTRON_NO_SANDBOX=1
-set NODE_OPTIONS=--no-force-async-hooks-checks
-start "" "$codeOssPath" E:\vs\TypeScript_Projects\_\vscode
-exit
-"@
-    $tempBatch = Join-Path $env:TEMP "start-code-oss.bat"
-    Set-Content -Path $tempBatch -Value $batchContent -Encoding ASCII
-    
-    # Spusť přes batch soubor
-    Start-Process -FilePath $tempBatch -WindowStyle Hidden
-    Start-Sleep -Seconds 2
-    Remove-Item $tempBatch -Force -ErrorAction SilentlyContinue
+    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
