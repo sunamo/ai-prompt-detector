@@ -201,3 +201,4 @@ v1.1.414 | Run install.ps1 again to complete installation and start VS Code
 v1.1.415 | Fixed Code - OSS path and process handling in install.ps1
 v1.1.416 | Added --no-sandbox flag to fix Code - OSS startup error
 v1.1.417 | Use ELECTRON_DISABLE_SANDBOX environment variable for Code - OSS
+v1.1.418 | Added timeout to extension installation to prevent hanging

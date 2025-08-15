@@ -204,9 +204,9 @@ try {
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
-    # Nastavit environment variable pro vypnutí sandbox
-    $env:ELECTRON_DISABLE_SANDBOX = "1"
-    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    # Spustit s environment variable pomocí cmd.exe
+    $cmdArgs = "/c set ELECTRON_DISABLE_SANDBOX=1 && `"$codeOssPath`" E:\vs\TypeScript_Projects\_\vscode"
+    Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdArgs -WindowStyle Hidden
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
