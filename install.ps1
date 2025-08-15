@@ -114,8 +114,12 @@ try {
     Start-Sleep -Seconds 2
     
     # Spusť VS Code Insiders se složkou C:\Proj_Net\_Water\portal-ui a povoleným API návrhem
-    Write-Host "   - Starting VS Code Insiders with portal-ui and enabled API proposals..." -ForegroundColor Gray
-    Start-Process -FilePath 'code-insiders' -ArgumentList '--enable-proposed-api','sunamocz.ai-prompt-detector','C:\Proj_Net\_Water\portal-ui' -WindowStyle Hidden
+    Write-Host "   - Starting VS Code Insiders with --enable-proposed-api flag..." -ForegroundColor Gray
+    # Nejdřív spustit VS Code s přepínačem bez konkrétní složky, aby se správně inicializoval
+    Start-Process -FilePath 'code-insiders' -ArgumentList '--enable-proposed-api','sunamocz.ai-prompt-detector' -WindowStyle Normal
+    Start-Sleep -Seconds 3
+    # Pak otevřít konkrétní složku
+    Start-Process -FilePath 'code-insiders' -ArgumentList 'C:\Proj_Net\_Water\portal-ui' -WindowStyle Normal
     
     Write-Host "   ✅ VS Code Insiders restarted" -ForegroundColor Green
 } catch {

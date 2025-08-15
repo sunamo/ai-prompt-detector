@@ -325,12 +325,12 @@ export async function activate(context: vscode.ExtensionContext) {
   // Show notification about API status
   if (proposedApiAvailable) {
     vscode.window.showInformationMessage(
-      '✅ AI Prompt Detector: Proposed API enabled - full mouse detection working!',
+      'AI Prompt Detector: Proposed API enabled - full mouse detection working!',
       'OK'
     );
   } else {
     vscode.window.showWarningMessage(
-      '⚠️ AI Prompt Detector: Limited mode - mouse detection not available. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
+      'AI Prompt Detector: Limited mode - mouse detection not available. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
       'Learn More',
       'OK'
     ).then(selection => {
