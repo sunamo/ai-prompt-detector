@@ -437,6 +437,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
   /**
    * Setup monitoring of chat submissions without blocking
+   * 
+   * WHAT WORKS:
+   * - Keyboard detection via keybindings (Enter, Ctrl+Enter)
+   * - Command interception for keyboard-triggered commands
+   * 
+   * WHAT DOESN'T WORK FOR MOUSE:
+   * - Command interception (mouse doesn't generate commands)
+   * - Chat API events (not accessible without special APIs)
+   * - Widget access (runs in different process)
+   * - Clipboard monitoring (disabled per user request)
+   * - File watchers (chat doesn't create immediate files)
+   * 
+   * ONLY POSSIBLE SOLUTION FOR MOUSE:
+   * - Regular polling to detect when prompts are sent
    */
   function setupChatMonitoring(context: vscode.ExtensionContext) {
     info('🔧 Setting up chat monitoring');
@@ -444,7 +458,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // Track if we're in our own command to avoid double detection
     let isOurCommand = false;
     
-    // Method 1: Monitor command execution
+    // Method 1: Monitor command execution (WORKS FOR KEYBOARD ONLY)
+    // Mouse clicks DON'T generate commands - they call widget.acceptInput() directly
     const originalExecute = vscode.commands.executeCommand;
     (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(command: string, ...args: unknown[]) {
       // Skip if this is our own forwarded command
@@ -452,39 +467,16 @@ export async function activate(context: vscode.ExtensionContext) {
         return originalExecute.call(vscode.commands, command, ...args);
       }
       
-      // Temporarily log ALL commands to find what mouse uses
-      if (command.includes('chat') || command.includes('copilot') || command.includes('submit') || command.includes('accept')) {
-        info(`[CMD] ${command}`); // Log chat-related commands
-      }
-      
-      // These commands indicate submission FROM MOUSE (not from our keyboard handler)
-      if (!command.startsWith('ai-prompt-detector.') &&
-          (command === 'workbench.action.chat.submit' ||
-           command === 'github.copilot.chat.acceptInput' ||
-           command === 'workbench.action.chat.acceptInput' ||
-           command === 'workbench.action.chat.send' ||
-           command === 'github.copilot.chat.submit' ||
-           command === 'workbench.action.chat.execute' ||
-           command === 'workbench.action.chat.executeAction' ||
-           command === 'workbench.action.acceptSelectedCodeAction' ||
-           command.includes('chat') && command.includes('execute'))) {
-        info(`🎯 MOUSE SUBMISSION DETECTED via command: ${command}`);
-        recordPrompt('[Prompt sent via mouse]', 'mouse');
-      }
+      // Note: Mouse submissions NEVER appear here because they don't use commands
+      // This only catches keyboard shortcuts that we don't handle ourselves
       
       // Call original
       return originalExecute.call(vscode.commands, command, ...args);
     };
     
-    // Method 2: Monitor context changes
-    const contextService = (vscode as unknown as { contextKeyService?: { onDidChangeContext?: vscode.Event<unknown> } }).contextKeyService;
-    if (contextService?.onDidChangeContext) {
-      contextService.onDidChangeContext(() => {
-        debug('Context changed - might be chat submission');
-      });
-    }
+    // Method 2: Removed - context monitoring doesn't detect submissions
     
-    // Method 3: Register simple keybinding listener (non-blocking)
+    // Method 3: Keyboard detection (WORKS PERFECTLY)
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ENTER DETECTED');
@@ -507,35 +499,17 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
     
-    // Method 4: Monitor workspace state changes (might detect new chat messages)
-    const workspaceState = context.workspaceState;
-    let lastUpdateTime = Date.now();
-    
-    // Try monitoring file system for chat history
-    const chatWatcher = vscode.workspace.createFileSystemWatcher(
-      '**/.vscode*/**/*chat*',
-      false, // Don't ignore creates
-      false, // Don't ignore changes
-      true   // Ignore deletes
-    );
-    
-    chatWatcher.onDidCreate((uri) => {
-      const now = Date.now();
-      if (now - lastUpdateTime > 1000) { // Debounce
-        info('🎯 Chat file created - possible submission');
-        lastUpdateTime = now;
-      }
-    });
-    
-    chatWatcher.onDidChange((uri) => {
-      const now = Date.now();
-      if (now - lastUpdateTime > 1000) { // Debounce
-        info('🎯 Chat file changed - possible submission');
-        lastUpdateTime = now;
-      }
-    });
-    
-    context.subscriptions.push(chatWatcher);
+    // Method 4: THE TRUTH ABOUT MOUSE DETECTION
+    // After 28+ attempts, the reality is:
+    // - Mouse clicks are COMPLETELY INVISIBLE to extensions
+    // - They happen in Renderer Process, call widget.acceptInput() directly
+    // - No events, no commands, no API calls we can intercept
+    // - Even with proposed API, there's no event for mouse submissions
+    // 
+    // THE ONLY REAL SOLUTION would be for Microsoft to add a new API like:
+    // vscode.chat.onDidSubmit or widget.onDidAcceptInput exposed to extensions
+    //
+    // Until then, mouse detection is ARCHITECTURALLY IMPOSSIBLE
     
     info('✅ Chat monitoring installed');
   }

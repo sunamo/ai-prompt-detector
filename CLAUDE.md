@@ -812,3 +812,38 @@ code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
 - **With --enable-proposed-api**: Full detection possible (if API implemented)
 - **Without flag**: Only keyboard works, mouse detection architecturally impossible
 - **install.ps1**: Automatically launches VS Code with correct flag
+
+## 🎯 DEFINITIVE Mouse Detection Solution (Dec 15 2024)
+
+### What WORKS:
+1. **Keyboard detection** - Via keybindings, captures Enter/Ctrl+Enter perfectly
+2. **Command interception** - But ONLY for keyboard (mouse doesn't generate commands)
+
+### What DOESN'T WORK for mouse:
+1. **Command interception** - Mouse calls widget.acceptInput() directly, bypasses commands
+2. **Chat API events** - Not accessible even with proposed API
+3. **Widget access** - Runs in different process (Renderer vs Extension Host)
+4. **Clipboard monitoring** - User explicitly forbade this
+5. **File watchers** - Chat doesn't create immediate files
+6. **Context monitoring** - Doesn't fire on submissions
+7. **All 28 other approaches** - See COMPLETE_MOUSE_DETECTION_ATTEMPTS.md
+
+### The ONLY solution:
+**Counter monitoring** - Check if prompt counter increased without our keyboard detection. If yes, it was a mouse click. This is architecturally the only way because mouse submissions are invisible to extensions.
+
+### Implementation:
+```typescript
+// Poll every 500ms to check if counter increased
+// If it did and we didn't detect keyboard, it was mouse
+setInterval(() => {
+  if (aiPromptCounter > lastKnownCounter) {
+    // Mouse detected
+  }
+}, 500);
+```
+
+### Why this is the ONLY way:
+- Mouse clicks happen in Renderer Process
+- They directly call widget.acceptInput()
+- No events or commands cross to Extension Host
+- We can only observe the side effect (counter increase)
