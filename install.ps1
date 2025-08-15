@@ -179,7 +179,8 @@ if (Test-Path $extensionPath) {
 
 # Rozbalit VSIX (je to ZIP soubor)
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory($vsixName, $extensionPath)
+$vsixFullPath = Join-Path (Get-Location) $vsixName
+[System.IO.Compression.ZipFile]::ExtractToDirectory($vsixFullPath, $extensionPath)
 
 # Přesunout extension soubory do správné složky
 $extractedExtension = Join-Path $extensionPath "extension"
@@ -208,8 +209,23 @@ try {
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
-    # Spustit s --disable-sandbox parametrem (funguje lépe než --no-sandbox)
-    Start-Process -FilePath $codeOssPath -ArgumentList '--disable-sandbox', 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    
+    # Vytvoř batch soubor pro spuštění s environment variables
+    $batchContent = @"
+@echo off
+set ELECTRON_DISABLE_SANDBOX=1
+set ELECTRON_NO_SANDBOX=1
+set NODE_OPTIONS=--no-force-async-hooks-checks
+start "" "$codeOssPath" E:\vs\TypeScript_Projects\_\vscode
+exit
+"@
+    $tempBatch = Join-Path $env:TEMP "start-code-oss.bat"
+    Set-Content -Path $tempBatch -Value $batchContent -Encoding ASCII
+    
+    # Spusť přes batch soubor
+    Start-Process -FilePath $tempBatch -WindowStyle Hidden
+    Start-Sleep -Seconds 2
+    Remove-Item $tempBatch -Force -ErrorAction SilentlyContinue
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
