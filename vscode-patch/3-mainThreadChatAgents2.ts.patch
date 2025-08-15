@@ -1,0 +1,76 @@
+--- a/src/vs/workbench/api/browser/mainThreadChatAgents2.ts
++++ b/src/vs/workbench/api/browser/mainThreadChatAgents2.ts
+@@ -24,7 +24,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/i
+ import { ILogService } from '../../../platform/log/common/log.js';
+ import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
+ import { IChatWidgetService } from '../../contrib/chat/browser/chat.js';
+-import { AddDynamicVariableAction, IAddDynamicVariableContext } from '../../contrib/chat/browser/contrib/chatDynamicVariables.js';
++import { IChatWidget } from '../../contrib/chat/browser/chat.js';
+ import { IChatAgentHistoryEntry, IChatAgentImplementation, IChatAgentRequest, IChatAgentService } from '../../contrib/chat/common/chatAgents.js';
+ import { IChatEditingService, IChatRelatedFileProviderMetadata } from '../../contrib/chat/common/chatEditingService.js';
+ import { ChatRequestAgentPart } from '../../contrib/chat/common/chatParserTypes.js';
+@@ -34,7 +34,7 @@ import { ChatAgentLocation, ChatModeKind } from '../../contrib/chat/common/cons
+ import { IExtHostContext, extHostNamedCustomer } from '../../services/extensions/common/extHostCustomers.js';
+ import { IExtensionService } from '../../services/extensions/common/extensions.js';
+ import { Dto } from '../../services/extensions/common/proxyIdentifier.js';
+-import { ExtHostChatAgentsShape2, ExtHostContext, IChatNotebookEditDto, IChatParticipantMetadata, IChatProgressDto, IDynamicChatAgentProps, IExtensionChatAgentMetadata, MainContext, MainThreadChatAgentsShape2 } from '../common/extHost.protocol.js';
++import { ExtHostChatAgentsShape2, ExtHostContext, IChatNotebookEditDto, IChatParticipantMetadata, IChatProgressDto, IDynamicChatAgentProps, IExtensionChatAgentMetadata, MainContext, MainThreadChatAgentsShape2, IChatSubmitEventDto } from '../common/extHost.protocol.js';
+ import { NotebookDto } from './mainThreadNotebookDto.js';
+ 
+ interface AgentData {
+@@ -98,6 +98,8 @@ export class MainThreadChatAgents2 extends Disposable implements MainThreadChat
+ 
+ 	private readonly _activeTasks = new Map<string, IChatTask>();
+ 
++	private readonly _widgetListeners = new Map<IChatWidget, IDisposable>();
++
+ 	constructor(
+ 		extHostContext: IExtHostContext,
+ 		@IChatAgentService private readonly _chatAgentService: IChatAgentService,
+@@ -111,6 +113,45 @@ export class MainThreadChatAgents2 extends Disposable implements MainThreadChat
+ 		super();
+ 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostChatAgents2);
+ 
++		// Listen for new widgets and attach input submission listeners
++		this._register(this._chatWidgetService.onDidAddWidget(widget => {
++			this._attachWidgetListener(widget);
++		}));
++
++		// Attach to existing widgets
++		const existingWidgets = this._chatWidgetService.getAllWidgets();
++		for (const widget of existingWidgets) {
++			this._attachWidgetListener(widget);
++		}
++	}
++
++	private _attachWidgetListener(widget: IChatWidget): void {
++		if (this._widgetListeners.has(widget)) {
++			return; // Already listening
++		}
++
++		const listener = widget.onDidAcceptInput(() => {
++			// Get the input text before it's cleared
++			const prompt = widget.getInput();
++			const sessionId = widget.viewModel?.model?.sessionId;
++			
++			// Determine if this was keyboard input based on active element
++			const activeElement = widget.domNode.ownerDocument.activeElement;
++			const isKeyboard = activeElement === widget.inputEditor.getDomNode() || 
++							   widget.inputEditor.hasTextFocus();
++
++			const event: IChatSubmitEventDto = {
++				prompt,
++				location: widget.location,
++				sessionId,
++				isKeyboard
++			};
++
++			// Notify extension host
++			this._proxy.$onDidSubmitInput(event);
++		});
++
++		this._widgetListeners.set(widget, listener);
++
+ 		this._register(this._chatService.onDidDisposeSession((e) => {
+ 			this._proxy.$releaseSession(e.sessionId);
+ 		}));

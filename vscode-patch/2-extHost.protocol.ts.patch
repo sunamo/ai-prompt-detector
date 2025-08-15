@@ -1,0 +1,24 @@
+--- a/src/vs/workbench/api/common/extHost.protocol.ts
++++ b/src/vs/workbench/api/common/extHost.protocol.ts
+@@ -1380,6 +1380,14 @@ export type IChatAgentHistoryEntryDto = {
+ 	result: IChatAgentResult;
+ };
+ 
++export interface IChatSubmitEventDto {
++	prompt: string;
++	location: ChatAgentLocation;
++	sessionId?: string;
++	isKeyboard: boolean;
++}
++
+ export interface ExtHostChatAgentsShape2 {
+ 	$invokeAgent(handle: number, request: Dto<IChatAgentRequest>, context: { history: IChatAgentHistoryEntryDto[] }, token: CancellationToken): Promise<IChatAgentResult | undefined>;
+ 	$provideFollowups(request: Dto<IChatAgentRequest>, handle: number, result: IChatAgentResult, context: { history: IChatAgentHistoryEntryDto[] }, token: CancellationToken): Promise<IChatFollowup[]>;
+@@ -1391,6 +1399,7 @@ export interface ExtHostChatAgentsShape2 {
+ 	$releaseSession(sessionId: string): void;
+ 	$detectChatParticipant(handle: number, request: Dto<IChatAgentRequest>, context: { history: IChatAgentHistoryEntryDto[] }, options: { participants: IChatParticipantMetadata[]; location: ChatAgentLocation }, token: CancellationToken): Promise<IChatParticipantDetectionResult | null | undefined>;
+ 	$provideRelatedFiles(handle: number, request: Dto<IChatRequestDraft>, token: CancellationToken): Promise<Dto<IChatRelatedFile>[] | undefined>;
++	$onDidSubmitInput(event: IChatSubmitEventDto): void;
+ }
+ 
+ export interface MainThreadChatAgentsShape2 {

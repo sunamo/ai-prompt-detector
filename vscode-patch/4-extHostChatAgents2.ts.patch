@@ -1,0 +1,51 @@
+--- a/src/vs/workbench/api/common/extHostChatAgents2.ts
++++ b/src/vs/workbench/api/common/extHostChatAgents2.ts
+@@ -3,7 +3,7 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+-import { CancellationToken } from '../../../base/common/cancellation.js';
++import { CancellationToken, Event, Emitter } from '../../../base/common/cancellation.js';
+ import { IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+ import { URI } from '../../../base/common/uri.js';
+ import { ExtensionIdentifier, IExtensionDescription } from '../../../platform/extensions/common/extensions.js';
+@@ -14,7 +14,7 @@ import { ChatAgentLocation, IChatAgentHistoryEntry, IChatAgentRequest, IChatAge
+ import { IExtHostAuthentication } from './extHostAuthentication.js';
+ import { IExtHostTelemetry } from './extHostTelemetry.js';
+ import * as typeConvert from './extHostTypeConverters.js';
+-import { ChatAgentResult, ChatAgentContext, ChatAgentErrorDetails, ChatAgentHistoryEntry, ChatAgentRequest, ChatAgentPartialResult, ChatAgentContentProgress, ChatAgentMarkdownContent, ChatAgentCommandButton, ChatAgentNotebookContent, ChatAgentCommandGroup, ChatAgentDetetectedAgent } from './extHostTypes.js';
++import { ChatAgentResult, ChatAgentContext, ChatAgentErrorDetails, ChatAgentHistoryEntry, ChatAgentRequest, ChatAgentPartialResult, ChatAgentContentProgress, ChatAgentMarkdownContent, ChatAgentCommandButton, ChatAgentNotebookContent, ChatAgentCommandGroup, ChatAgentDetetectedAgent, ChatSubmitEvent } from './extHostTypes.js';
+ import { IUri } from '../../../base/common/uri.js';
+ import { IRelativePatternDto } from './extHost.protocol.js';
+ import { RelativePattern } from './extHostLanguageModelTools.js';
+@@ -140,6 +140,9 @@ export class ExtHostChatAgents2 extends Rpc implements ExtHostChatAgentsShape2
+ 	private readonly _participantDetectionProviders = new Map<number, vscode.ChatParticipantDetectionProvider>();
+ 	private readonly _relatedFilesProviders = new Map<number, vscode.ChatRelatedFilesProvider>();
+ 
++	private readonly _onDidSubmitInput = new Emitter<vscode.ChatSubmitEvent>();
++	public readonly onDidSubmitInput = this._onDidSubmitInput.event;
++
+ 	private static _participantDetectionProviderIdPool = 0;
+ 	private static _relatedFilesProviderIdPool = 0;
+ 	private _chatEditingSessionDisposables = new DisposableMap<string>();
+@@ -620,6 +623,19 @@ export class ExtHostChatAgents2 extends Rpc implements ExtHostChatAgentsShape2
+ 		}
+ 	}
+ 
++	$onDidSubmitInput(event: IChatSubmitEventDto): void {
++		const apiEvent: vscode.ChatSubmitEvent = {
++			prompt: event.prompt,
++			location: typeConvert.ChatLocation.from(event.location),
++			sessionId: event.sessionId,
++			isKeyboard: event.isKeyboard
++		};
++		this._onDidSubmitInput.fire(apiEvent);
++	}
++
++	getOnDidSubmitInputEvent(): Event<vscode.ChatSubmitEvent> {
++		return this.onDidSubmitInput;
++	}
++
+ 	// TODO does this need a veto? Seems better to let the agent return empty follouwps and not make them disappear
+ 	// (non-responsiveness for a second or two might be confusing)
+ 	async $provideFollowups(request: IChatAgentRequest, handle: number, result: IChatAgentResult, context: { history: IChatAgentHistoryEntry[] }, token: CancellationToken): Promise<IChatFollowup[]> {

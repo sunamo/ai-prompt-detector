@@ -546,8 +546,33 @@ export async function activate(context: vscode.ExtensionContext) {
     providerRef,
   );
 
-  // Setup detection methods - NO CLIPBOARD MONITORING
-  const apiSetupSuccess = await setupProposedChatApi();
+  // Try new onDidSubmitInput API first (if VS Code is patched)
+  const tryNewApi = () => {
+    const vscodeExtended = vscode as unknown as ExtendedVSCode;
+    if (vscodeExtended.chat && typeof (vscodeExtended.chat as any).onDidSubmitInput === 'function') {
+      info('🎉 NEW onDidSubmitInput API DETECTED - trying to use it!');
+      try {
+        const disposable = (vscodeExtended.chat as any).onDidSubmitInput((event: any) => {
+          info(`🎯 NEW API EVENT: Chat submitted via ${event.isKeyboard ? 'KEYBOARD' : 'MOUSE'}`);
+          info(`  Prompt: "${event.prompt?.substring(0, 100)}"`);
+          recordPrompt(event.prompt || '[Prompt via new API]', event.isKeyboard ? 'new-api-keyboard' : 'new-api-mouse');
+        });
+        context.subscriptions.push(disposable);
+        info('✅ Successfully subscribed to NEW onDidSubmitInput API!');
+        mouseDetectionWorking = true;
+        return true;
+      } catch (e) {
+        info(`Failed to subscribe to new API: ${e}`);
+      }
+    }
+    return false;
+  };
+
+  // Try new API first
+  const newApiWorking = tryNewApi();
+  
+  // Setup detection methods - NO CLIPBOARD MONITORING  
+  const apiSetupSuccess = !newApiWorking ? await setupProposedChatApi() : true;
   setupChatMonitoring(context);
 
   // Show notification about API status

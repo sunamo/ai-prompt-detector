@@ -1,0 +1,38 @@
+diff --git a/src/vscode-dts/vscode.proposed.chatParticipantPrivate.d.ts b/src/vscode-dts/vscode.proposed.chatParticipantPrivate.d.ts
+index 1234567..abcdefg 100644
+--- a/src/vscode-dts/vscode.proposed.chatParticipantPrivate.d.ts
++++ b/src/vscode-dts/vscode.proposed.chatParticipantPrivate.d.ts
+@@ -251,10 +251,33 @@ declare module 'vscode' {
+ 		provideParticipantDetection(chatRequest: ChatRequest, context: ChatContext, options: { participants?: ChatParticipantMetadata[]; location: ChatLocation }, token: CancellationToken): ProviderResult<ChatParticipantDetectionResult>;
+ 	}
+ 
++	export interface ChatSubmitEvent {
++		/**
++		 * The prompt text that was submitted
++		 */
++		readonly prompt: string;
++		
++		/**
++		 * The location where the submission occurred
++		 */
++		readonly location: ChatLocation;
++		
++		/**
++		 * The session ID if available
++		 */
++		readonly sessionId?: string;
++		
++		/**
++		 * Whether this was submitted via keyboard (true) or mouse/button (false)
++		 */
++		readonly isKeyboard: boolean;
++	}
++
+ 	export namespace chat {
+ 		export function registerChatParticipantDetectionProvider(participantDetectionProvider: ChatParticipantDetectionProvider): Disposable;
+ 
+ 		export const onDidDisposeChatSession: Event<string>;
++		export const onDidSubmitInput: Event<ChatSubmitEvent>;
+ 	}
+ 
+ 	// #endregion

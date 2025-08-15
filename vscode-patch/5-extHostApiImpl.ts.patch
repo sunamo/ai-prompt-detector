@@ -1,0 +1,13 @@
+--- a/src/vs/workbench/api/common/extHostApiImpl.ts
++++ b/src/vs/workbench/api/common/extHostApiImpl.ts
+@@ -1234,6 +1234,10 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor):
+ 				checkProposedApiEnabled(extension, 'chatParticipantPrivate');
+ 				return extHostChat.onDidDisposeChatSession;
+ 			},
++			get onDidSubmitInput() {
++				checkProposedApiEnabled(extension, 'chatParticipantPrivate');
++				return extHostChat.getOnDidSubmitInputEvent();
++			},
+ 			registerChatSessionItemProvider(id: string, provider: vscode.ChatSessionItemProvider) {
+ 				checkProposedApiEnabled(extension, 'chatSessionsProvider');
+ 				return extHostChat.registerChatSessionItemProvider(extension, id, provider);
