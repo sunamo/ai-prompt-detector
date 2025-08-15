@@ -195,3 +195,4 @@ v1.1.407 | Added mouse detection via counter monitoring
 v1.1.409 | Add support for new onDidSubmitInput API
 v1.1.410 | Add support for patched VS Code onDidSubmitInput API
 v1.1.411 | Removed alternative test scripts - only install.ps1 allowed
+v1.1.412 | Updated install.ps1 to handle Code - OSS.exe process lifecycle
