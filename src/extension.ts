@@ -190,35 +190,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return true;
   };
 
-  /**
-   * Try to get chat widget using commands or other methods
-   */
-  async function tryGetChatWidget(): Promise<unknown | undefined> {
-    try {
-      // Try to get widgets through command (if available)
-      const widgets = await vscode.commands.executeCommand('_getChatWidgets');
-      if (widgets && Array.isArray(widgets) && widgets.length > 0) {
-        info(`Found ${widgets.length} chat widgets via command`);
-        return widgets[0];
-      }
-    } catch (e) {
-      debug(`getChatWidgets command failed: ${e}`);
-    }
-
-    // Try to get last focused widget through service
-    try {
-      // This might be available in proposed API mode
-      const chatService = (vscode as unknown as { chatWidgetService?: { lastFocusedWidget?: unknown } }).chatWidgetService;
-      if (chatService?.lastFocusedWidget) {
-        info('Found chat widget via service');
-        return chatService.lastFocusedWidget;
-      }
-    } catch (e) {
-      debug(`Chat service access failed: ${e}`);
-    }
-
-    return undefined;
-  }
+  // Removed tryGetChatWidget - it may interfere with normal chat functionality
 
   /**
    * Setup proposed Chat API if available
@@ -234,32 +206,33 @@ export async function activate(context: vscode.ExtensionContext) {
       // Try different APIs based on what's available
       
       // Option 0: Try to get widget and listen to onDidAcceptInput
-      const widget = await tryGetChatWidget();
-      if (widget) {
-        const w = widget as { onDidAcceptInput?: vscode.Event<void> };
-        if (w.onDidAcceptInput) {
-          const disposable = w.onDidAcceptInput(() => {
-            info('🎯 MOUSE/KEYBOARD DETECTED via widget.onDidAcceptInput!');
-            // Try to get input text from widget
-            const wInput = widget as { input?: { getValue?: () => string }; getInput?: () => string };
-            let text = '';
-            if (wInput.getInput && typeof wInput.getInput === 'function') {
-              text = wInput.getInput();
-            } else if (wInput.input?.getValue && typeof wInput.input.getValue === 'function') {
-              text = wInput.input.getValue();
-            }
-            if (text) {
-              recordPrompt(text, 'widget-accept');
-            } else {
-              recordPrompt('[Prompt sent - text capture failed]', 'widget-accept');
-            }
-          });
-          context.subscriptions.push(disposable);
-          info('✅ Widget onDidAcceptInput listener registered - MOUSE DETECTION SHOULD WORK!');
-          mouseDetectionWorking = true;
-          return true;
-        }
-      }
+      // DISABLED: This approach may interfere with normal mouse functionality
+      // const widget = await tryGetChatWidget();
+      // if (widget) {
+      //   const w = widget as { onDidAcceptInput?: vscode.Event<void> };
+      //   if (w.onDidAcceptInput) {
+      //     const disposable = w.onDidAcceptInput(() => {
+      //       info('🎯 MOUSE/KEYBOARD DETECTED via widget.onDidAcceptInput!');
+      //       // Try to get input text from widget
+      //       const wInput = widget as { input?: { getValue?: () => string }; getInput?: () => string };
+      //       let text = '';
+      //       if (wInput.getInput && typeof wInput.getInput === 'function') {
+      //         text = wInput.getInput();
+      //       } else if (wInput.input?.getValue && typeof wInput.input.getValue === 'function') {
+      //         text = wInput.input.getValue();
+      //       }
+      //       if (text) {
+      //         recordPrompt(text, 'widget-accept');
+      //       } else {
+      //         recordPrompt('[Prompt sent - text capture failed]', 'widget-accept');
+      //       }
+      //     });
+      //     context.subscriptions.push(disposable);
+      //     info('✅ Widget onDidAcceptInput listener registered - MOUSE DETECTION SHOULD WORK!');
+      //     mouseDetectionWorking = true;
+      //     return true;
+      //   }
+      // }
       
       // Option 1: onDidSubmitRequest (if available)
       if (vscodeExtended.chat?.onDidSubmitRequest) {

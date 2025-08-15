@@ -164,6 +164,14 @@ Mouse clicks in Copilot Chat DO NOT trigger any events accessible to VS Code ext
 - **Evidence:** No detection logs when submitting via mouse
 - **Why it fails:** Only analyzes text for @mention candidates, not submissions
 
+### 28. ❌ Widget.onDidAcceptInput Event (v1.1.393)
+- **Attempt:** Get chat widget and listen to onDidAcceptInput event
+- **Code:** `tryGetChatWidget()` then `widget.onDidAcceptInput()`
+- **Result:** BROKE MOUSE FUNCTIONALITY - mouse clicks don't submit at all
+- **Evidence:** Text stays in input box when clicking submit button
+- **Why it fails:** Interferes with normal chat operation, possibly blocks event propagation
+- **Side effect:** CRITICAL - makes chat unusable with mouse
+
 ## Architecture Analysis
 
 ### Process Separation
