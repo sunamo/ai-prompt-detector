@@ -197,3 +197,4 @@ v1.1.410 | Add support for patched VS Code onDidSubmitInput API
 v1.1.411 | Removed alternative test scripts - only install.ps1 allowed
 v1.1.412 | Updated install.ps1 to handle Code - OSS.exe process lifecycle
 v1.1.413 | Test run of updated install.ps1 script
+v1.1.414 | Run install.ps1 again to complete installation and start VS Code

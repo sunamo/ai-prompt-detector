@@ -177,9 +177,8 @@ Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundC
 # --- Restart Code - OSS to load the new extension version ---
 Write-Host "7. Restarting Code - OSS..." -ForegroundColor Yellow
 try {
-    # Zavři všechny instance VS Code a Code - OSS
-    Write-Host "   - Closing all VS Code and Code - OSS instances..." -ForegroundColor Gray
-    Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Zavři všechny instance Code - OSS
+    Write-Host "   - Closing all Code - OSS instances..." -ForegroundColor Gray
     Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     
     # Krátké čekání pro dokončení ukončení procesů
@@ -188,7 +187,8 @@ try {
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     # Otevřít náš VS Code projekt v Code - OSS
-    Start-Process -FilePath 'Code - OSS.exe' -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
+    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
