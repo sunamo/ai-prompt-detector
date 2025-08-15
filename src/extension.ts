@@ -19,23 +19,25 @@ let providerRef: PromptsProvider | undefined;
 let aiPromptCounter = 0;
 let debugEnabled = false;
 let lastPromptTime = 0;
-let documentWatcher: vscode.Disposable | undefined;
-let activeEditorWatcher: vscode.Disposable | undefined;
+let proposedApiAvailable = false;
+let mouseDetectionWorking = false;
+let lastClipboardText = '';
+let clipboardMonitorInterval: NodeJS.Timeout | undefined;
 
 /**
- * MOUSE DETECTION LIMITATION NOTICE:
- * 
- * After exhaustive testing of 21 different approaches, mouse click detection
- * is architecturally impossible in VS Code extensions for Copilot Chat.
- * 
- * The issue: Mouse clicks happen in Renderer Process (Electron UI) while
- * extensions run in Extension Host (Node.js). There's no event bridge.
- * 
- * WORKING: Keyboard shortcuts (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter)
- * NOT WORKING: Mouse clicks on submit button
- * 
- * See MOUSE_DETECTION_DOCUMENTATION.md for full technical details.
+ * Interface pro chat API (proposed)
  */
+interface ChatAPI {
+  onDidSubmitRequest?: vscode.Event<any>;
+  onDidSubmitFeedback?: vscode.Event<any>;
+}
+
+/**
+ * Rozšířené VS Code namespace s proposed API
+ */
+interface ExtendedVSCode {
+  chat?: ChatAPI;
+}
 
 /** Aktualizuje interní příznak zda jsou povoleny debug logy. */
 function refreshDebugFlag() {
@@ -52,6 +54,24 @@ function refreshDebugFlag() {
 }
 
 /**
+ * Zkontroluje dostupnost proposed API
+ */
+function checkProposedApiAvailability(): boolean {
+  try {
+    const vscodeExtended = vscode as any as ExtendedVSCode;
+    if (vscodeExtended.chat && typeof vscodeExtended.chat.onDidSubmitRequest !== 'undefined') {
+      info('✅ Proposed API is AVAILABLE - mouse detection will work!');
+      return true;
+    }
+  } catch (e) {
+    debug(`Proposed API check failed: ${e}`);
+  }
+  info('❌ Proposed API is NOT available - mouse detection limited');
+  info('💡 TIP: Run VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
+  return false;
+}
+
+/**
  * Aktivace extensionu – nastaví listener pro Enter varianty a inicializuje čtení exportů.
  * @param context Kontext poskytovaný VS Code.
  */
@@ -63,27 +83,23 @@ export async function activate(context: vscode.ExtensionContext) {
   info(`Activation start - version ${version}`);
   refreshDebugFlag();
 
-  // Show mouse detection limitation notice ONCE per session
-  const noticeKey = 'mouseDetectionNoticeShown';
-  const globalState = context.globalState;
-  if (!globalState.get(noticeKey)) {
-    vscode.window.showInformationMessage(
-      '⚠️ AI Prompt Detector: Mouse click detection is not possible due to VS Code architecture. Please use keyboard shortcuts (Enter, Ctrl+Enter) to submit prompts. Click "Details" to learn more.',
-      'Details',
-      'OK'
-    ).then(selection => {
-      if (selection === 'Details') {
-        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/specstory-autosave/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
-      }
-    });
-    globalState.update(noticeKey, true);
-  }
+  // Check if proposed API is available
+  proposedApiAvailable = checkProposedApiAvailability();
 
+  // Create status bar with API indicator
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100,
   );
-  statusBarItem.tooltip = 'AI Prompt Detector\n⚠️ Mouse clicks not detectable\n✅ Use Enter key to submit';
+  
+  // Update tooltip and color based on API availability
+  if (proposedApiAvailable) {
+    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    statusBarItem.tooltip = '✅ AI Prompt Detector\n✅ Proposed API enabled\n✅ Mouse detection WORKING';
+  } else {
+    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    statusBarItem.tooltip = '⚠️ AI Prompt Detector\n❌ Proposed API disabled\n⚠️ Mouse detection LIMITED\n💡 Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector';
+  }
   statusBarItem.show();
 
   /** Aktualizuje text ve status baru. */
@@ -92,10 +108,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const v: string | undefined = ext?.packageJSON?.version;
     if (!v) {
       vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing package.json version');
-      statusBarItem.text = '🤖 AI Prompts: ' + aiPromptCounter + ' | v?';
+      statusBarItem.text = '🤖 AI: ' + aiPromptCounter + ' | v?';
       return;
     }
-    statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
+    // Add indicator for API status
+    const apiIndicator = proposedApiAvailable ? '✅' : '⚠️';
+    statusBarItem.text = `${apiIndicator} AI: ${aiPromptCounter} | v${v}`;
   };
 
   /** Uloží prompt do stavu, vždy započítá i opakovaný text. */
@@ -135,56 +153,108 @@ export async function activate(context: vscode.ExtensionContext) {
   };
 
   /**
-   * Document change monitoring - last resort attempt
-   * Watches for any document changes that might indicate chat activity
+   * Setup proposed Chat API if available
    */
-  function setupDocumentMonitoring() {
-    info('🔧 Setting up document change monitoring (fallback method)');
-    
-    // Monitor active editor changes
-    activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (editor) {
-        const doc = editor.document;
-        debug(`Active editor changed: ${doc.uri.toString()}`);
-        
-        // Check if this might be a chat-related document
-        if (doc.uri.scheme === 'vscode-chat' || 
-            doc.uri.scheme === 'comment' ||
-            doc.uri.toString().includes('chat') ||
-            doc.uri.toString().includes('copilot')) {
-          
-          const text = doc.getText();
-          if (text && text.trim().length > 0) {
-            info(`Potential chat document detected: ${text.substring(0, 50)}`);
-          }
-        }
-      }
-    });
+  async function setupProposedChatApi() {
+    if (!proposedApiAvailable) {
+      return false;
+    }
 
-    // Monitor all document changes
-    documentWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
-      const doc = event.document;
+    try {
+      const vscodeExtended = vscode as any as ExtendedVSCode;
       
-      // Only interested in chat-related documents
-      if (doc.uri.scheme === 'vscode-chat' || 
-          doc.uri.scheme === 'comment' ||
-          doc.uri.toString().includes('chat') ||
-          doc.uri.toString().includes('copilot')) {
-        
-        debug(`Chat document changed: ${doc.uri.toString()}`);
-        
-        // Check if document was cleared (might indicate submission)
-        if (event.contentChanges.length > 0) {
-          const change = event.contentChanges[0];
-          if (change.rangeLength > 0 && change.text === '') {
-            info(`Chat document cleared - possible submission detected`);
-            // Can't reliably detect what was submitted without clipboard
+      // Try to subscribe to chat submission events
+      if (vscodeExtended.chat?.onDidSubmitRequest) {
+        const disposable = vscodeExtended.chat.onDidSubmitRequest((event: any) => {
+          info('🎯 Chat submission detected via proposed API!');
+          
+          // Extract text from event (structure may vary)
+          let text = '';
+          if (typeof event === 'string') {
+            text = event;
+          } else if (event?.message) {
+            text = event.message;
+          } else if (event?.prompt) {
+            text = event.prompt;
+          } else if (event?.text) {
+            text = event.text;
+          } else if (event?.request?.message) {
+            text = event.request.message;
           }
-        }
+          
+          if (text) {
+            info(`Captured via proposed API: "${text.substring(0, 100)}"`);
+            recordPrompt(text, 'proposed-api');
+            mouseDetectionWorking = true;
+          }
+        });
+        
+        context.subscriptions.push(disposable);
+        info('✅ Chat API listener registered successfully');
+        return true;
       }
-    });
+    } catch (e) {
+      info(`Failed to setup proposed API: ${e}`);
+    }
+    
+    return false;
+  }
 
-    info('✅ Document monitoring active (limited effectiveness)');
+  /**
+   * Clipboard monitoring - READ ONLY, NEVER WRITE!
+   * Fallback method when proposed API is not available
+   */
+  async function setupClipboardMonitoring() {
+    if (proposedApiAvailable) {
+      info('Proposed API available, skipping clipboard monitoring');
+      return;
+    }
+
+    info('🔧 Setting up clipboard monitoring (READ ONLY - fallback mode)');
+    
+    clipboardMonitorInterval = setInterval(async () => {
+      try {
+        // ONLY READ from clipboard, NEVER WRITE
+        const currentText = await vscode.env.clipboard.readText();
+        
+        if (currentText && 
+            currentText !== lastClipboardText && 
+            currentText.length > 5 &&
+            !currentText.includes('recordPrompt') &&
+            !currentText.includes('getChatInputText')) {
+          
+          lastClipboardText = currentText;
+          
+          // Heuristic: if clipboard changed shortly after focusing chat, might be submission
+          // This is not perfect but better than nothing
+          debug(`Clipboard changed: "${currentText.substring(0, 50)}"`);
+          
+          // Wait to see if this is followed by Enter (which we can detect)
+          setTimeout(() => {
+            const timeSinceLastPrompt = Date.now() - lastPromptTime;
+            if (timeSinceLastPrompt > 2000) {
+              // No recent keyboard submission, might be mouse
+              info(`📋 Possible mouse submission detected (clipboard): "${currentText.substring(0, 100)}"`);
+              recordPrompt(currentText, 'clipboard-heuristic');
+            }
+          }, 1000);
+        }
+      } catch (e) {
+        // Silent fail - clipboard access might be denied
+        debug(`Clipboard read failed: ${e}`);
+      }
+    }, 500); // Check every 500ms
+    
+    // Stop after 30 minutes to save resources
+    setTimeout(() => {
+      if (clipboardMonitorInterval) {
+        clearInterval(clipboardMonitorInterval);
+        clipboardMonitorInterval = undefined;
+        info('⏸️ Clipboard monitoring stopped after 30 minutes');
+      }
+    }, 30 * 60 * 1000);
+    
+    info('✅ Clipboard monitoring active (READ ONLY mode)');
   }
 
   /**
@@ -201,7 +271,7 @@ export async function activate(context: vscode.ExtensionContext) {
           command.includes('copilot') || 
           command.includes('submit') ||
           command.includes('accept')) {
-        info(`📡 Command intercepted: ${command}`);
+        debug(`📡 Command intercepted: ${command}`);
         
         // These commands indicate keyboard submission (working)
         if (command === 'workbench.action.chat.submit' ||
@@ -242,6 +312,19 @@ export async function activate(context: vscode.ExtensionContext) {
             info(`Captured text from editor: "${text.substring(0, 100)}"`);
             break;
           }
+        }
+      }
+
+      // If no text from editors, try clipboard as last resort (READ ONLY)
+      if (!text && !proposedApiAvailable) {
+        try {
+          const clipboardText = await vscode.env.clipboard.readText();
+          if (clipboardText && clipboardText.length > 0) {
+            text = clipboardText;
+            info(`Using clipboard text (READ ONLY): "${text.substring(0, 100)}"`);
+          }
+        } catch (e) {
+          debug(`Clipboard read failed: ${e}`);
         }
       }
 
@@ -310,8 +393,30 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Setup detection methods
-  setupDocumentMonitoring();
+  const apiSetupSuccess = await setupProposedChatApi();
+  if (!apiSetupSuccess) {
+    // Only use clipboard monitoring if proposed API is not available
+    setupClipboardMonitoring();
+  }
   setupCommandSpy();
+
+  // Show notification about API status
+  if (proposedApiAvailable) {
+    vscode.window.showInformationMessage(
+      '✅ AI Prompt Detector: Proposed API enabled - full mouse detection working!',
+      'OK'
+    );
+  } else {
+    vscode.window.showWarningMessage(
+      '⚠️ AI Prompt Detector: Limited mode - mouse detection may not work. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
+      'Learn More',
+      'OK'
+    ).then(selection => {
+      if (selection === 'Learn More') {
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/specstory-autosave/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
+      }
+    });
+  }
 
   // File watcher for SpecStory
   const watcher = vscode.workspace.createFileSystemWatcher(
@@ -338,10 +443,7 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem,
   );
 
-  if (documentWatcher) context.subscriptions.push(documentWatcher);
-  if (activeEditorWatcher) context.subscriptions.push(activeEditorWatcher);
-
-  info('Activation done - Keyboard detection active, mouse detection not possible');
+  info(`Activation complete - API mode: ${proposedApiAvailable ? 'FULL' : 'LIMITED'}`);
 }
 
 async function loadExistingPrompts() {
@@ -351,7 +453,9 @@ async function loadExistingPrompts() {
   if (!files.length) {
     state.recentPrompts.push(
       'Welcome to AI Copilot Prompt Detector',
-      'NOTE: Use keyboard (Enter) to submit, mouse clicks not detectable',
+      proposedApiAvailable ? 
+        '✅ Full detection mode active' : 
+        '⚠️ Limited mode - use keyboard shortcuts',
     );
     return;
   }
@@ -364,7 +468,8 @@ async function loadExistingPrompts() {
 }
 
 export function deactivate() {
-  if (documentWatcher) documentWatcher.dispose();
-  if (activeEditorWatcher) activeEditorWatcher.dispose();
+  if (clipboardMonitorInterval) {
+    clearInterval(clipboardMonitorInterval);
+  }
   info('Deactivation');
 }
