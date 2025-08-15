@@ -163,30 +163,34 @@ try {
     Write-Host "   ⚠️ Code - OSS was not running or couldn't be closed" -ForegroundColor Yellow
 }
 
-# --- Uninstall previous & install new (with timeout) ---
-Write-Host "6. Reinstalling extension in VS Code..." -ForegroundColor Yellow
-# Uninstall old version (with 10 second timeout)
-$uninstallJob = Start-Job -ScriptBlock {
-    Start-Process -FilePath 'code' -ArgumentList '--uninstall-extension','sunamocz.ai-prompt-detector' -WindowStyle Hidden -Wait
+# --- Install extension to Code - OSS extensions folder ---
+Write-Host "6. Installing extension to Code - OSS..." -ForegroundColor Yellow
+# Najít Code - OSS extensions složku
+$codeOssExtensionsPath = "$env:USERPROFILE\.vscode-oss-dev\extensions"
+if (-not (Test-Path $codeOssExtensionsPath)) {
+    New-Item -ItemType Directory -Path $codeOssExtensionsPath -Force | Out-Null
 }
-Wait-Job $uninstallJob -Timeout 10 | Out-Null
-Remove-Job $uninstallJob -Force 2>$null | Out-Null
 
-Start-Sleep -Seconds 2
-
-# Install new version (with 15 second timeout)
-$installJob = Start-Job -ScriptBlock {
-    param($vsix)
-    Start-Process -FilePath 'code' -ArgumentList '--install-extension',$vsix,'--force' -WindowStyle Hidden -Wait
-} -ArgumentList $vsixName
-
-if (Wait-Job $installJob -Timeout 15) {
-    $jobResult = Receive-Job $installJob
-    Write-Host "   ✅ Extension installed (version $newVersion)" -ForegroundColor Green
-} else {
-    Write-Host "   ⚠️ Extension installation timed out - may still be installing in background" -ForegroundColor Yellow
+# Rozbalit VSIX do extensions složky
+$extensionPath = Join-Path $codeOssExtensionsPath "sunamocz.ai-prompt-detector-$newVersion"
+if (Test-Path $extensionPath) {
+    Remove-Item $extensionPath -Recurse -Force
 }
-Remove-Job $installJob -Force 2>$null | Out-Null
+
+# Rozbalit VSIX (je to ZIP soubor)
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory($vsixName, $extensionPath)
+
+# Přesunout extension soubory do správné složky
+$extractedExtension = Join-Path $extensionPath "extension"
+if (Test-Path $extractedExtension) {
+    $tempPath = "$extensionPath-temp"
+    Move-Item $extractedExtension $tempPath -Force
+    Remove-Item $extensionPath -Recurse -Force
+    Move-Item $tempPath $extensionPath -Force
+}
+
+Write-Host "   ✅ Extension installed to Code - OSS (version $newVersion)" -ForegroundColor Green
 
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
@@ -204,8 +208,8 @@ try {
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
-    # Spustit s --no-sandbox parametrem přímo
-    Start-Process -FilePath $codeOssPath -ArgumentList '--no-sandbox', 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    # Spustit s --disable-sandbox parametrem (funguje lépe než --no-sandbox)
+    Start-Process -FilePath $codeOssPath -ArgumentList '--disable-sandbox', 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
