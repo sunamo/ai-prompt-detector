@@ -7,149 +7,37 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as http from 'http';
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
-import { focusChatInput, forwardToChatAccept, getChatInputText } from './chatHelpers';
-
-/**
- * Interface pro webview panel s možností message handling.
- */
-interface ExtendedWebviewPanel extends vscode.WebviewPanel {
-  webview: vscode.Webview & {
-    onDidReceiveMessage: (listener: (message: WebviewMessage) => void) => vscode.Disposable;
-  };
-}
-
-/**
- * Interface pro zprávy z webview.
- */
-interface WebviewMessage {
-  type?: string;
-  text?: string;
-  command?: string;
-  [key: string]: unknown;
-}
-
-/**
- * Interface pro chat události.
- */
-interface ChatEvent {
-  message?: string;
-  prompt?: string;
-  chatSessionId?: string;
-  request?: {
-    message?: string;
-    prompt?: string;
-  };
-  command?: {
-    message?: string;
-    prompt?: string;
-  };
-  text?: string;
-  [key: string]: unknown;
-}
-
-/**
- * Interface pro VS Code globální objekty.
- */
-interface VSCodeGlobal {
-  workbench?: {
-    getViews?: () => Array<{ id: string; webview?: { onDidReceiveMessage: Function } }>;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-/**
- * Interface pro VS Code chat namespace rozšíření.
- */
-interface ChatNamespace {
-  onDidSubmitRequest?: (listener: (event: ChatEvent) => void) => vscode.Disposable;
-  onDidDisposeChatSession?: (listener: (sessionId: string) => void) => vscode.Disposable;
-  getChatSession?: (sessionId: string) => Promise<{
-    requests?: Array<{ message?: string; prompt?: string }>;
-    [key: string]: unknown;
-  }>;
-  [key: string]: Function | unknown;
-}
-
-/**
- * Interface pro VS Code rozšířené o chat.
- */
-interface ExtendedVSCode {
-  chat?: ChatNamespace;
-  workbench?: {
-    getViews?: () => Array<{ id: string; webview?: { onDidReceiveMessage: Function } }>;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-/**
- * Interface pro network target z DevTools.
- */
-interface DevToolsTarget {
-  id: string;
-  type: string;
-  title: string;
-  url: string;
-  webSocketDebuggerUrl?: string;
-}
-
-/**
- * Interface pro WebSocket zprávy z DevTools.
- */
-interface DevToolsMessage {
-  id?: number;
-  method?: string;
-  params?: {
-    args?: Array<{ value: unknown }>;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-/**
- * Interface pro Node.js ChildProcess error.
- */
-interface ProcessError extends Error {
-  code?: string | number;
-}
-
-/**
- * Interface pro VS Code události s dokumentem.
- */
-interface DocumentEvent {
-  document?: {
-    uri: {
-      toString(): string;
-    };
-  };
-  [key: string]: unknown;
-}
+import { focusChatInput, forwardToChatAccept } from './chatHelpers';
 
 // --- Stav ---
 let statusBarItem: vscode.StatusBarItem;
 let providerRef: PromptsProvider | undefined;
 let aiPromptCounter = 0;
-let typingBuffer = '';
-let lastSnapshot = '';
-// odstraněno nepoužívané lastTypingChangeAt (REGRESE prevence: nesahat bez důvodu)
-let dynamicSendCommands = new Set<string>();
 let debugEnabled = false;
-let snapshotTimer: NodeJS.Timeout | undefined;
+let lastPromptTime = 0;
+let documentWatcher: vscode.Disposable | undefined;
+let activeEditorWatcher: vscode.Disposable | undefined;
 
-// Global state for mouse detection
-let globalLastText = '';
-let pollingInterval: NodeJS.Timeout | undefined;
-let lastTextClearTime = 0;
-
-/** Aktualizuje interní příznak zda jsou povoleny debug logy.
- * INVARIANT: Žádný druhý parametr u get() – pokud undefined => debugEnabled=false + notifikace (jen 1x).
+/**
+ * MOUSE DETECTION LIMITATION NOTICE:
+ * 
+ * After exhaustive testing of 21 different approaches, mouse click detection
+ * is architecturally impossible in VS Code extensions for Copilot Chat.
+ * 
+ * The issue: Mouse clicks happen in Renderer Process (Electron UI) while
+ * extensions run in Extension Host (Node.js). There's no event bridge.
+ * 
+ * WORKING: Keyboard shortcuts (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter)
+ * NOT WORKING: Mouse clicks on submit button
+ * 
+ * See MOUSE_DETECTION_DOCUMENTATION.md for full technical details.
  */
+
+/** Aktualizuje interní příznak zda jsou povoleny debug logy. */
 function refreshDebugFlag() {
   const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
   const val = cfg.get<boolean>('enableDebugLogs');
@@ -164,88 +52,6 @@ function refreshDebugFlag() {
 }
 
 /**
- * DOKUMENTACE POKUSŮ O DETEKCI MYŠI (kompletní historie):
- * 
- * ✅ FUNGUJÍCÍ PŘÍSTUPY:
- * 1. Enter detekce - spolehlivě přes command interception
- * 2. Polling (25ms) - detekuje zmizení textu s malým zpožděním
- * 
- * ❌ SELHANÉ POKUSY (všechny testovány a zdokumentovány):
- * 1. Chat API (vscode.chat.onDidSubmitRequest) - vyžaduje --enable-proposed-api flag
- * 2. Command interception pro mouse - mouse clicks negenerují příkazy
- * 3. Webview panel monitoring - Copilot nepoužívá createWebviewPanel
- * 4. DOM monitoring - window is not defined (extension běží v Node.js)
- * 5. DevTools Protocol - porty 9229,9230,9222,9221,5858 nejsou otevřené
- * 6. Extension Host process monitoring - nedostupné z extension contextu
- * 7. Workspace document changes - detekuje jen změny souborů, ne UI události
- * 8. Console injection - nelze injektovat do renderer procesu
- * 9. Widget service access (IChatWidget) - interní VS Code služby nejsou exposed
- * 10. Extension module hooks - chat moduly se nenačítají přes require()
- * 11. Network monitoring - žádná GitHub API aktivita během lokálního chatu
- * 12. VS Code state monitoring - viditelné jen změny focus okna
- * 13. Filesystem monitoring - žádné chat soubory se nevytvářejí při odeslání
- * 14. Deep API reflection - nalezeno 65+ API ale žádné neposkytuje submit události
- * 15. Memory/heap monitoring - vyžaduje nativní moduly (blokováno security)
- * 16. System-level input monitoring - vyžaduje OS-level oprávnění
- * 17. IPC message monitoring - extension sandbox brání IPC přístupu
- * 
- * ARCHITEKTONICKÝ PROBLÉM:
- * - Extension Host: Node.js context kde běží naše extension
- * - Renderer Process: Electron UI kde běží chat interface
- * - Žádný most: Mouse clicks negenerují příkazy ani API volání přes hranici procesů
- * 
- * SOUČASNÉ ŘEŠENÍ: Jediný polling loop (25ms) - optimální kompromis mezi
- * rychlostí detekce a využitím zdrojů. Detekuje odeslání myší s ~25-50ms zpožděním.
- */
-async function setupAdvancedSubmissionDetection(
-  recordPrompt: (raw: string, src: string) => boolean,
-): Promise<void> {
-  info('🔧 Setting up optimized mouse click detection');
-  
-  // JEDINÝ POLLING MECHANISMUS - 25ms interval pro rychlou detekci
-  pollingInterval = setInterval(async () => {
-    try {
-      const currentText = await getChatInputText(false, false);
-      const now = Date.now();
-      
-      if (currentText && currentText.trim()) {
-        // Text nalezen
-        if (currentText !== globalLastText) {
-          globalLastText = currentText;
-          lastTextClearTime = 0;
-          debug(`Polling: New text detected: "${currentText.substring(0, 50)}"`);
-        }
-      } else if (globalLastText && globalLastText.trim() && !currentText) {
-        // Text zmizel - pravděpodobně odeslán myší
-        if (lastTextClearTime === 0) {
-          lastTextClearTime = now;
-          info(`🖱️ MOUSE CLICK DETECTED - immediate notification for: "${globalLastText.substring(0, 100)}"`);
-          recordPrompt(globalLastText, 'mouse-click');
-          globalLastText = '';
-        }
-      } else if (!currentText && !globalLastText) {
-        // Reset state když není žádný text
-        lastTextClearTime = 0;
-      }
-    } catch (e) {
-      // Silent fail - polling continues
-      debug(`Polling error (silent): ${e}`);
-    }
-  }, 25); // 25ms pro rychlou odezvu
-  
-  // Zastavit polling po 30 minutách
-  setTimeout(() => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      pollingInterval = undefined;
-      info('⏸️ Mouse detection polling stopped after 30 minutes');
-    }
-  }, 30 * 60 * 1000);
-  
-  info('✅ Mouse click detection active (25ms polling)')
-}
-
-/**
  * Aktivace extensionu – nastaví listener pro Enter varianty a inicializuje čtení exportů.
  * @param context Kontext poskytovaný VS Code.
  */
@@ -257,13 +63,30 @@ export async function activate(context: vscode.ExtensionContext) {
   info(`Activation start - version ${version}`);
   refreshDebugFlag();
 
+  // Show mouse detection limitation notice ONCE per session
+  const noticeKey = 'mouseDetectionNoticeShown';
+  const globalState = context.globalState;
+  if (!globalState.get(noticeKey)) {
+    vscode.window.showInformationMessage(
+      '⚠️ AI Prompt Detector: Mouse click detection is not possible due to VS Code architecture. Please use keyboard shortcuts (Enter, Ctrl+Enter) to submit prompts. Click "Details" to learn more.',
+      'Details',
+      'OK'
+    ).then(selection => {
+      if (selection === 'Details') {
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/specstory-autosave/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
+      }
+    });
+    globalState.update(noticeKey, true);
+  }
+
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100,
   );
+  statusBarItem.tooltip = 'AI Prompt Detector\n⚠️ Mouse clicks not detectable\n✅ Use Enter key to submit';
   statusBarItem.show();
 
-  /** Aktualizuje text ve status baru. (NESMÍ používat fallback verze) */
+  /** Aktualizuje text ve status baru. */
   const updateStatusBar = () => {
     const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
     const v: string | undefined = ext?.packageJSON?.version;
@@ -275,120 +98,163 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
   };
 
-  /** Vyčistí typing buffer a snapshot - zavolá se jen z určitých zdrojů */
-  const clearBuffers = (reason: string) => {
-    debug(`clearBuffers called: ${reason}, typingBuffer was="${typingBuffer.substring(0, 50)}"`);
-    typingBuffer = '';
-    lastSnapshot = '';
-  };
-
-  /** Uloží prompt do stavu, vždy započítá i opakovaný text.
-   * INVARIANT: Žádný default parametr v get(); pokud customMessage chybí → notifikace.
-   */
-  const recordPrompt = (raw: string, source: string, shouldClearBuffers = true): boolean => {
+  /** Uloží prompt do stavu, vždy započítá i opakovaný text. */
+  const recordPrompt = (raw: string, source: string): boolean => {
     const text = (raw || '').trim();
-    info(`recordPrompt called: source=${source}, text="${text.substring(0, 100)}", clearBuffers=${shouldClearBuffers}`);
-    debug(`recordPrompt called: raw="${raw.substring(0, 100)}", source=${source}, trimmed="${text}", clearBuffers=${shouldClearBuffers}"`);
+    info(`recordPrompt called: source=${source}, text="${text.substring(0, 100)}"`);
+    
     if (!text) {
       info('recordPrompt: empty text, returning false');
-      debug('recordPrompt: empty text, returning false');
       return false;
     }
+    
+    // Prevent duplicate recordings within 500ms
+    const now = Date.now();
+    if (now - lastPromptTime < 500 && text === state.recentPrompts[0]) {
+      info('recordPrompt: Skipping duplicate within 500ms');
+      return false;
+    }
+    lastPromptTime = now;
+    
     state.recentPrompts.unshift(text);
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     aiPromptCounter++;
     providerRef?.refresh();
     updateStatusBar();
-    if (shouldClearBuffers) {
-      clearBuffers(`recordPrompt source: ${source}`);
-    }
+    
     const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
     let customMsg = cfg.get<string>('customMessage');
     if (customMsg === undefined) {
       vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting customMessage');
-      customMsg = ''; // pokračujeme bez textu – politika: žádný druhý parametr fallback
+      customMsg = '';
     }
-    const notify = () => vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
-    // Show notification immediately for all sources
-    notify();
     
-    debug(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
+    vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
+    info(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
     return true;
   };
 
-  // Removed duplicate polling - already handled in setupAdvancedSubmissionDetection
+  /**
+   * Document change monitoring - last resort attempt
+   * Watches for any document changes that might indicate chat activity
+   */
+  function setupDocumentMonitoring() {
+    info('🔧 Setting up document change monitoring (fallback method)');
+    
+    // Monitor active editor changes
+    activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor) {
+        const doc = editor.document;
+        debug(`Active editor changed: ${doc.uri.toString()}`);
+        
+        // Check if this might be a chat-related document
+        if (doc.uri.scheme === 'vscode-chat' || 
+            doc.uri.scheme === 'comment' ||
+            doc.uri.toString().includes('chat') ||
+            doc.uri.toString().includes('copilot')) {
+          
+          const text = doc.getText();
+          if (text && text.trim().length > 0) {
+            info(`Potential chat document detected: ${text.substring(0, 50)}`);
+          }
+        }
+      }
+    });
 
-  updateStatusBar();
+    // Monitor all document changes
+    documentWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
+      const doc = event.document;
+      
+      // Only interested in chat-related documents
+      if (doc.uri.scheme === 'vscode-chat' || 
+          doc.uri.scheme === 'comment' ||
+          doc.uri.toString().includes('chat') ||
+          doc.uri.toString().includes('copilot')) {
+        
+        debug(`Chat document changed: ${doc.uri.toString()}`);
+        
+        // Check if document was cleared (might indicate submission)
+        if (event.contentChanges.length > 0) {
+          const change = event.contentChanges[0];
+          if (change.rangeLength > 0 && change.text === '') {
+            info(`Chat document cleared - possible submission detected`);
+            // Can't reliably detect what was submitted without clipboard
+          }
+        }
+      }
+    });
 
-  await loadExistingPrompts();
-  providerRef = new PromptsProvider();
-  const registration = vscode.window.registerWebviewViewProvider(
-    PromptsProvider.viewType,
-    providerRef,
-  );
-
-  // Auto-open activity bar after activation
-  setTimeout(async () => {
-    try {
-      await vscode.commands.executeCommand('workbench.view.extension.specstory-activity');
-      debug('Activity bar auto-opened');
-    } catch (e) {
-      debug('Failed to auto-open activity bar: ' + e);
-    }
-  }, 1000);
-
-  setupAdvancedSubmissionDetection(recordPrompt);
-
-  // Webview monitoring removed - Copilot doesn't use createWebviewPanel
-  
-  // Chat API removed - requires --enable-proposed-api flag which is not available
-
+    info('✅ Document monitoring active (limited effectiveness)');
+  }
 
   /**
-   * Obslouží všechny varianty Enter (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter).
-   * INVARIANT pořadí kroků (NEUPRAVOVAT bez změny instrukcí):
-   * 1) focusChatInput()
-   * 2) getChatInputText()
-   * 3) fallback typingBuffer / lastSnapshot
-   * 4) krátký retry po 35ms
-   * 5) recordPrompt jen pokud neprázdné
-   * 6) forwardToChatAccept + fallback IDs
-   * 7) debug log pokud text nezachycen (bez ukládání prázdného promptu)
-   * @param variant Identifikátor varianty (plain|ctrl|ctrl-shift|ctrl-alt)
+   * Command spy - monitors all commands for chat-related activity
+   */
+  function setupCommandSpy() {
+    info('🔧 Setting up command spy for chat commands');
+    
+    // Monitor command execution
+    const originalExecute = vscode.commands.executeCommand;
+    (vscode.commands as any).executeCommand = async function(command: string, ...args: any[]) {
+      // Log chat-related commands
+      if (command.includes('chat') || 
+          command.includes('copilot') || 
+          command.includes('submit') ||
+          command.includes('accept')) {
+        info(`📡 Command intercepted: ${command}`);
+        
+        // These commands indicate keyboard submission (working)
+        if (command === 'workbench.action.chat.submit' ||
+            command === 'github.copilot.chat.acceptInput' ||
+            command === 'workbench.action.chat.acceptInput') {
+          debug('Keyboard submission command detected');
+        }
+      }
+      
+      // Call original
+      return originalExecute.call(vscode.commands, command, ...args);
+    };
+    
+    info('✅ Command spy installed');
+  }
+
+  /**
+   * Obslouží všechny varianty Enter.
    */
   const handleForwardEnter = async (variant: string) => {
     try {
       info(`=== ENTER ${variant} START ===`);
       
-      // Reset global text state při Enter
-      globalLastText = '';
-
-      // 1) Zaměří vstupní pole
+      // Focus chat input
       await focusChatInput();
       await new Promise((r) => setTimeout(r, 100));
 
-      // 2) Zkusí získat text z input boxu PŘED odesláním (s keyboard simulation pro Enter events)
-      let text = await getChatInputText(true, true);
-      info(`getChatInputText returned: "${text.substring(0, 100)}"`);
-      
-      // 3) Pokud se nepodařilo, zkusí znovu s delším čekáním
+      // Try to capture text from visible editors
+      let text = '';
+      for (const editor of vscode.window.visibleTextEditors) {
+        const doc = editor.document;
+        if (doc.uri.scheme === 'vscode-chat' || 
+            doc.uri.scheme === 'comment' ||
+            doc.uri.toString().includes('chat') ||
+            doc.uri.toString().includes('copilot')) {
+          text = doc.getText();
+          if (text) {
+            info(`Captured text from editor: "${text.substring(0, 100)}"`);
+            break;
+          }
+        }
+      }
+
+      // Fallback message if no text captured
       if (!text) {
-        info('First attempt failed, trying again...');
-        await new Promise((r) => setTimeout(r, 200));
-        text = await getChatInputText(true, true);
-        info(`Second attempt returned: "${text.substring(0, 100)}"`);
+        text = `[Prompt sent via ${variant} - text capture failed]`;
+        info('Unable to capture actual text');
       }
 
-      // 4) Zaznamenat prompt - skutečný text nebo fallback zprávu
-      if (text) {
-        info(`RECORDING REAL PROMPT: "${text.substring(0, 100)}"`);
-        recordPrompt(text, 'enter-' + variant, false);
-      } else {
-        info('NO TEXT CAPTURED - recording fallback message');
-        recordPrompt(`[No text captured for Enter ${variant}]`, 'enter-' + variant, false);
-      }
+      // Record prompt
+      recordPrompt(text, 'keyboard-' + variant);
 
-      // 5) Pošle příkaz do Copilotu
+      // Forward to Copilot
       let ok = await forwardToChatAccept();
       if (!ok) {
         const fallbackCommands = [
@@ -408,31 +274,46 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
       
-      info(`=== ENTER ${variant} END === SUCCESS`);
+      info(`=== ENTER ${variant} END ===`);
     } catch (e) {
       info(`=== ENTER ${variant} ERROR === ${e}`);
     }
   };
 
+  // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'ai-prompt-detector.forwardEnterToChat',
-      () => handleForwardEnter('ctrl'),
+      () => handleForwardEnter('ctrl-enter'),
     ),
     vscode.commands.registerCommand(
       'ai-prompt-detector.forwardEnterPlain',
-      () => handleForwardEnter('plain'),
+      () => handleForwardEnter('enter'),
     ),
     vscode.commands.registerCommand(
       'ai-prompt-detector.forwardEnterCtrlShift',
-      () => handleForwardEnter('ctrl-shift'),
+      () => handleForwardEnter('ctrl-shift-enter'),
     ),
     vscode.commands.registerCommand(
       'ai-prompt-detector.forwardEnterCtrlAlt',
-      () => handleForwardEnter('ctrl-alt'),
+      () => handleForwardEnter('ctrl-alt-enter'),
     ),
   );
 
+  updateStatusBar();
+  await loadExistingPrompts();
+  
+  providerRef = new PromptsProvider();
+  const registration = vscode.window.registerWebviewViewProvider(
+    PromptsProvider.viewType,
+    providerRef,
+  );
+
+  // Setup detection methods
+  setupDocumentMonitoring();
+  setupCommandSpy();
+
+  // File watcher for SpecStory
   const watcher = vscode.workspace.createFileSystemWatcher(
     '**/.specstory/history/*.md',
   );
@@ -442,6 +323,7 @@ export async function activate(context: vscode.ExtensionContext) {
       providerRef?.refresh();
     }
   });
+
   const configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('ai-prompt-detector.maxPrompts'))
       providerRef?.refresh();
@@ -456,7 +338,10 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem,
   );
 
-  info('Activation done');
+  if (documentWatcher) context.subscriptions.push(documentWatcher);
+  if (activeEditorWatcher) context.subscriptions.push(activeEditorWatcher);
+
+  info('Activation done - Keyboard detection active, mouse detection not possible');
 }
 
 async function loadExistingPrompts() {
@@ -466,7 +351,7 @@ async function loadExistingPrompts() {
   if (!files.length) {
     state.recentPrompts.push(
       'Welcome to AI Copilot Prompt Detector',
-      'TEST: Dummy prompt for demonstration',
+      'NOTE: Use keyboard (Enter) to submit, mouse clicks not detectable',
     );
     return;
   }
@@ -478,4 +363,8 @@ async function loadExistingPrompts() {
       loadPromptsFromFile(f.fsPath, state.recentPrompts);
 }
 
-export function deactivate() { info('Deactivation'); }
+export function deactivate() {
+  if (documentWatcher) documentWatcher.dispose();
+  if (activeEditorWatcher) activeEditorWatcher.dispose();
+  info('Deactivation');
+}
