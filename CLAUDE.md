@@ -768,3 +768,10 @@ Run VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag to acc
 - **Root Cause**: Internal VS Code APIs (`_getChatWidgets`, workbench services) are not exposed to extensions
 - **Source Code Insight**: Found that `chatWidget.ts:1779` fires `this._onDidAcceptInput.fire()` for all submissions (keyboard+mouse)
 - **Limitation**: Extension sandbox prevents direct access to internal widget services
+
+## 📊 Status Bar Display Policy (Added Dec 15 2024)
+- **ALWAYS use "AI Prompts:"** in status bar, never just "AI:"
+- Format: `[icon] AI Prompts: [count] | v[version]`
+- Icon indicates API status: ✅ = proposed API enabled, ⚠️ = limited mode
+- **NO red background** on status bar - icon is sufficient for status indication
+- Tooltip shows detailed status information

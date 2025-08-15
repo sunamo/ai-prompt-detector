@@ -21,8 +21,6 @@ let debugEnabled = false;
 let lastPromptTime = 0;
 let proposedApiAvailable = false;
 let mouseDetectionWorking = false;
-let lastClipboardText = '';
-let clipboardMonitorInterval: NodeJS.Timeout | undefined;
 
 /**
  * Interface pro chat API (proposed)
@@ -86,34 +84,32 @@ export async function activate(context: vscode.ExtensionContext) {
   // Check if proposed API is available
   proposedApiAvailable = checkProposedApiAvailability();
 
-  // Create status bar with API indicator
+  // Create status bar with API indicator (NO background color)
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100,
   );
   
-  // Update tooltip and color based on API availability
+  // Update tooltip based on API availability (no backgroundColor)
   if (proposedApiAvailable) {
-    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     statusBarItem.tooltip = '✅ AI Prompt Detector\n✅ Proposed API enabled\n✅ Mouse detection WORKING';
   } else {
-    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     statusBarItem.tooltip = '⚠️ AI Prompt Detector\n❌ Proposed API disabled\n⚠️ Mouse detection LIMITED\n💡 Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector';
   }
   statusBarItem.show();
 
-  /** Aktualizuje text ve status baru. */
+  /** Aktualizuje text ve status baru. ALWAYS use "AI Prompts:" */
   const updateStatusBar = () => {
     const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
     const v: string | undefined = ext?.packageJSON?.version;
     if (!v) {
       vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing package.json version');
-      statusBarItem.text = '🤖 AI: ' + aiPromptCounter + ' | v?';
+      statusBarItem.text = '🤖 AI Prompts: ' + aiPromptCounter + ' | v?';
       return;
     }
-    // Add indicator for API status
+    // Add indicator for API status - ALWAYS use "AI Prompts:" not "AI:"
     const apiIndicator = proposedApiAvailable ? '✅' : '⚠️';
-    statusBarItem.text = `${apiIndicator} AI: ${aiPromptCounter} | v${v}`;
+    statusBarItem.text = `${apiIndicator} AI Prompts: ${aiPromptCounter} | v${v}`;
   };
 
   /** Uloží prompt do stavu, vždy započítá i opakovaný text. */
@@ -201,63 +197,6 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   /**
-   * Clipboard monitoring - READ ONLY, NEVER WRITE!
-   * Fallback method when proposed API is not available
-   */
-  async function setupClipboardMonitoring() {
-    if (proposedApiAvailable) {
-      info('Proposed API available, skipping clipboard monitoring');
-      return;
-    }
-
-    info('🔧 Setting up clipboard monitoring (READ ONLY - fallback mode)');
-    
-    clipboardMonitorInterval = setInterval(async () => {
-      try {
-        // ONLY READ from clipboard, NEVER WRITE
-        const currentText = await vscode.env.clipboard.readText();
-        
-        if (currentText && 
-            currentText !== lastClipboardText && 
-            currentText.length > 5 &&
-            !currentText.includes('recordPrompt') &&
-            !currentText.includes('getChatInputText')) {
-          
-          lastClipboardText = currentText;
-          
-          // Heuristic: if clipboard changed shortly after focusing chat, might be submission
-          // This is not perfect but better than nothing
-          debug(`Clipboard changed: "${currentText.substring(0, 50)}"`);
-          
-          // Wait to see if this is followed by Enter (which we can detect)
-          setTimeout(() => {
-            const timeSinceLastPrompt = Date.now() - lastPromptTime;
-            if (timeSinceLastPrompt > 2000) {
-              // No recent keyboard submission, might be mouse
-              info(`📋 Possible mouse submission detected (clipboard): "${currentText.substring(0, 100)}"`);
-              recordPrompt(currentText, 'clipboard-heuristic');
-            }
-          }, 1000);
-        }
-      } catch (e) {
-        // Silent fail - clipboard access might be denied
-        debug(`Clipboard read failed: ${e}`);
-      }
-    }, 500); // Check every 500ms
-    
-    // Stop after 30 minutes to save resources
-    setTimeout(() => {
-      if (clipboardMonitorInterval) {
-        clearInterval(clipboardMonitorInterval);
-        clipboardMonitorInterval = undefined;
-        info('⏸️ Clipboard monitoring stopped after 30 minutes');
-      }
-    }, 30 * 60 * 1000);
-    
-    info('✅ Clipboard monitoring active (READ ONLY mode)');
-  }
-
-  /**
    * Command spy - monitors all commands for chat-related activity
    */
   function setupCommandSpy() {
@@ -312,19 +251,6 @@ export async function activate(context: vscode.ExtensionContext) {
             info(`Captured text from editor: "${text.substring(0, 100)}"`);
             break;
           }
-        }
-      }
-
-      // If no text from editors, try clipboard as last resort (READ ONLY)
-      if (!text && !proposedApiAvailable) {
-        try {
-          const clipboardText = await vscode.env.clipboard.readText();
-          if (clipboardText && clipboardText.length > 0) {
-            text = clipboardText;
-            info(`Using clipboard text (READ ONLY): "${text.substring(0, 100)}"`);
-          }
-        } catch (e) {
-          debug(`Clipboard read failed: ${e}`);
         }
       }
 
@@ -392,12 +318,8 @@ export async function activate(context: vscode.ExtensionContext) {
     providerRef,
   );
 
-  // Setup detection methods
+  // Setup detection methods - NO CLIPBOARD MONITORING
   const apiSetupSuccess = await setupProposedChatApi();
-  if (!apiSetupSuccess) {
-    // Only use clipboard monitoring if proposed API is not available
-    setupClipboardMonitoring();
-  }
   setupCommandSpy();
 
   // Show notification about API status
@@ -408,7 +330,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   } else {
     vscode.window.showWarningMessage(
-      '⚠️ AI Prompt Detector: Limited mode - mouse detection may not work. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
+      '⚠️ AI Prompt Detector: Limited mode - mouse detection not available. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
       'Learn More',
       'OK'
     ).then(selection => {
@@ -451,12 +373,8 @@ async function loadExistingPrompts() {
     '**/.specstory/history/*.md',
   );
   if (!files.length) {
-    state.recentPrompts.push(
-      'Welcome to AI Copilot Prompt Detector',
-      proposedApiAvailable ? 
-        '✅ Full detection mode active' : 
-        '⚠️ Limited mode - use keyboard shortcuts',
-    );
+    // Don't add dummy prompts that increase counter
+    state.recentPrompts = [];
     return;
   }
   const sorted = files.sort((a, b) =>
@@ -468,8 +386,5 @@ async function loadExistingPrompts() {
 }
 
 export function deactivate() {
-  if (clipboardMonitorInterval) {
-    clearInterval(clipboardMonitorInterval);
-  }
   info('Deactivation');
 }

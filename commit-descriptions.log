@@ -178,3 +178,4 @@ v1.1.380 | Optimized mouse detection - single 25ms polling with immediate notifi
 v1.1.381 | Complete documentation of all mouse detection attempts - final optimized single polling solution
 v1.1.382 | Fix mouse click detection - improved text capture and removed auto-install loop
 v1.1.383 | Document mouse detection limitation - keyboard works, mouse architecturally impossible
+v1.1.384 | Add proposed API detection with status bar indicator - clipboard READ ONLY fallback
