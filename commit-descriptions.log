@@ -187,3 +187,4 @@ v1.1.391 | Fixed TypeScript types - removed all any types for type safety
 v1.1.393 | New approach - widget.onDidAcceptInput event discovered in VS Code source
 v1.1.395 | CRITICAL FIX - removed widget detection that broke mouse submission
 v1.1.397 | MAJOR FIX - removed ALL keybinding blocks that prevented mouse from working
+v1.1.399 | Restored keyboard detection + added command monitoring for mouse

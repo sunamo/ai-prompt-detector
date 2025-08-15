@@ -441,19 +441,28 @@ export async function activate(context: vscode.ExtensionContext) {
   function setupChatMonitoring(context: vscode.ExtensionContext) {
     info('🔧 Setting up chat monitoring');
     
+    // Track if we're in our own command to avoid double detection
+    let isOurCommand = false;
+    
     // Method 1: Monitor command execution
     const originalExecute = vscode.commands.executeCommand;
     (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(command: string, ...args: unknown[]) {
-      info(`[CMD] ${command}`); // Log ALL commands for debugging
+      // Skip if this is our own forwarded command
+      if (isOurCommand) {
+        return originalExecute.call(vscode.commands, command, ...args);
+      }
       
-      // These commands indicate submission
-      if (command === 'workbench.action.chat.submit' ||
-          command === 'github.copilot.chat.acceptInput' ||
-          command === 'workbench.action.chat.acceptInput' ||
-          command === 'workbench.action.chat.send' ||
-          command === 'github.copilot.chat.submit') {
-        info(`🎯 SUBMISSION DETECTED via command: ${command}`);
-        recordPrompt('[Prompt sent via ' + command.split('.').pop() + ']', 'command');
+      debug(`[CMD] ${command}`); // Log commands for debugging (use debug not info)
+      
+      // These commands indicate submission FROM MOUSE (not from our keyboard handler)
+      if (!command.startsWith('ai-prompt-detector.') &&
+          (command === 'workbench.action.chat.submit' ||
+           command === 'github.copilot.chat.acceptInput' ||
+           command === 'workbench.action.chat.acceptInput' ||
+           command === 'workbench.action.chat.send' ||
+           command === 'github.copilot.chat.submit')) {
+        info(`🎯 MOUSE SUBMISSION DETECTED via command: ${command}`);
+        recordPrompt('[Prompt sent via mouse]', 'mouse');
       }
       
       // Call original
@@ -473,8 +482,10 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ENTER DETECTED');
         recordPrompt('[Prompt sent via Enter]', 'keyboard-enter');
-        // Forward to normal chat submit
+        // Forward to normal chat submit (set flag to avoid double detection)
+        isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');
+        isOurCommand = false;
       })
     );
     
@@ -482,8 +493,10 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
         info('🎯 CTRL+ENTER DETECTED');
         recordPrompt('[Prompt sent via Ctrl+Enter]', 'keyboard-ctrl-enter');
-        // Forward to normal chat submit
+        // Forward to normal chat submit (set flag to avoid double detection)
+        isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');
+        isOurCommand = false;
       })
     );
     
