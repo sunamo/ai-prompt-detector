@@ -245,7 +245,8 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 - `./install.ps1`
 - `git add .`
 - `git commit -m "..."`
-- `git push`
+- `git push`=´
+,m 
 - `vsce package`
 - `Remove-Item`
 - `code --install-extension`
@@ -775,3 +776,39 @@ Run VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag to acc
 - Icon indicates API status: ✅ = proposed API enabled, ⚠️ = limited mode
 - **NO red background** on status bar - icon is sufficient for status indication
 - Tooltip shows detailed status information
+
+## 🚨 CRITICAL: Proposed API Requirements for Mouse Detection (Dec 15 2024)
+**FUNDAMENTAL REQUIREMENT**: Mouse click detection REQUIRES VS Code to be launched with proposed API flag:
+```bash
+code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
+```
+
+### Why Proposed APIs are Essential:
+- **Architecture Limitation**: VS Code extensions run in Extension Host (Node.js), chat UI runs in Renderer Process (Electron)
+- **No Event Bridge**: Mouse clicks in chat UI generate NO events accessible to Extension Host
+- **Only Solution**: Proposed APIs like `vscode.chat.onDidSubmitRequest` can capture all submissions
+- **Without Flag**: Only keyboard detection works (generates commands), mouse detection is IMPOSSIBLE
+
+### Technologies Critical for Mouse Detection:
+1. **Chat Submit Action** (chatExecuteActions.ts:154) - Handles mouse clicks in Renderer Process
+2. **IChatWidget.onDidAcceptInput** (chatWidget.ts:1779) - Fires for all submissions but not accessible to extensions
+3. **Chat Service** - Internal VS Code service that manages chat, inaccessible without proposed API
+4. **IPC Communication** - Inter-process messages between Renderer and Extension Host, not interceptable
+5. **Command System** - Only keyboard generates commands, mouse clicks bypass command system entirely
+
+### Failed Approaches to Remember (27 total documented):
+- Chat participants only work for @mentions, not general submissions
+- Session providers are retrospective, not real-time
+- DevTools Protocol requires debug mode
+- Clipboard monitoring causes false positives
+- DOM injection impossible from Node.js context
+- Network monitoring shows no immediate activity
+- File system has no real-time chat files
+- Memory monitoring blocked by security
+- Extension module hooks can't access chat modules
+- Widget service not exposed to extensions
+
+### Current Status:
+- **With --enable-proposed-api**: Full detection possible (if API implemented)
+- **Without flag**: Only keyboard works, mouse detection architecturally impossible
+- **install.ps1**: Automatically launches VS Code with correct flag
