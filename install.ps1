@@ -184,10 +184,12 @@ try {
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
     
-    # Spusť Code - OSS s projektem (s --no-sandbox flag kvůli app.enableSandbox() chybě)
+    # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
     $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
-    Start-Process -FilePath $codeOssPath -ArgumentList '--no-sandbox','E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
+    # Nastavit environment variable pro vypnutí sandbox
+    $env:ELECTRON_DISABLE_SANDBOX = "1"
+    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
 } catch {
