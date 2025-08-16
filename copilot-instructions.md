@@ -1,5 +1,12 @@
 # AI Copilot Prompt Detector - Development Instructions
 
+## Communication Language Policy - CRITICAL RULE
+**IMPORTANT**: GitHub Copilot MUST communicate with users STRICTLY in Czech language only.
+- All responses, explanations, and communications with users must be in Czech
+- Never respond in English when communicating with users
+- Code comments and documentation can remain in English, but user communication must be Czech
+- This applies to all interactions, regardless of the language used in the user's request
+
 ## Code - OSS Configuration
 **IMPORTANT**: This project uses Code - OSS for development and testing, NOT regular VS Code or VS Code Insiders.
 
