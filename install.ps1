@@ -232,7 +232,7 @@ $1
     
     # Spusť Code - OSS s projektem
     Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
-    $codeOssPath = 'E:\vs\TypeScript_Projects\_\vscode\.build\electron\Code - OSS.exe'
+    $codeOssPath = 'E:\vs\TypeScript_Projects\_\VSCode-win32-x64\Code - OSS.exe'
     Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\_\vscode' -WindowStyle Normal
     
     Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
