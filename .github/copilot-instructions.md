@@ -1,8 +1,8 @@
-# AI Assistant Instructions - SpecStory AutoSave Extension
+# AI Assistant Instructions - AI Prompt Detector Extension
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
-Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.ssssssssssssssssss
+Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.
 
 ## ⚠️ CRITICAL RULES - STRICTLY FOLLOW!
 
@@ -15,7 +15,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
-- **ALL OUTPUT MUST BE IN ENGLISH ONLY** - no exceptions for any files, comments, or messages
+- **Communication with the copilot and comments in the code are in Czech. Everything else is in English. Without exception.**
 - **ONLY cs.json localization file** is allowed to contain non-English text
 - **ALL code comments in English**
 - **ALL commit messages in English**
@@ -257,12 +257,12 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-For the app name, use SpecStory AutoSave + AI Copilot Prompt Detection everywhere, no shorter or other versions
+For the app name, use AI Prompt Detector everywhere, no shorter or other versions
 
 Create files as small as possible, no more than 200 lines each.
 
 distinguish between those that are always displayed and debug logs. Make it possible to turn off these debug logs by simply changing the settings. Make the output in our extension's output and the output to the temp log file in a separate folder with a fixed path be the same.
 
-I added the folder C:\temp\specstory-autosave-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
+I added the folder C:\temp\ai-prompt-detector-logs to your workspace. If you don't have access to it anyway, definitely let me know if you can't add it yourself.
 
 enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.

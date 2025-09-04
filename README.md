@@ -1,4 +1,4 @@
-# AI Prompt Detector
+# SpecStory AutoSave
 
 
 IMPORTANT: This plugin requires [SpecStory](https://marketplace.visualstudio.com/items?itemName=SpecStory.specstory-vscode) to be installed separately.
@@ -22,9 +22,9 @@ VS Code extension pro automatické ukládání souborů a správu příběhů.
 
 Rozšíření lze konfigurovat přes VS Code Settings:
 
-- `ai-prompt-detector.enabled`: Povolit automatické ukládání
-- `ai-prompt-detector.interval`: Interval ukládání v milisekundách
-- `ai-prompt-detector.filePatterns`: Vzory souborů pro automatické ukládání
+- `specstory-autosave.enabled`: Povolit automatické ukládání
+- `specstory-autosave.interval`: Interval ukládání v milisekundách
+- `specstory-autosave.filePatterns`: Vzory souborů pro automatické ukládání
 
 ## Příkazy
 

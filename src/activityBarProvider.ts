@@ -3,24 +3,13 @@ import { writeLog } from './logger';
 import { state } from './state';
 
 export class PromptsProvider implements vscode.WebviewViewProvider {
-	// Statický identifikátor webview panelu (aktivita v postranním panelu)
 	public static readonly viewType = 'ai-prompt-detector-view';
-	private _view?: vscode.WebviewView; // Uchování reference na webview pro pozdější aktualizace
+	private _view?: vscode.WebviewView;
 
-	/**
-	 * Konstruktor poskytovatele – inicializační log a příprava instance.
-	 */
 	constructor() {
 		writeLog('🎯 PROMPTS: Provider created', true);
 	}
 
-	/**
-	 * Metoda VS Code API volaná při vytvoření / zobrazení webview panelu.
-	 * Nastaví možnosti webview a naplní jej HTML obsahem s prompty.
-	 * @param webviewView Instance webview hostu
-	 * @param context Kontext řešení webview (nevyužito)
-	 * @param _token Token pro zrušení (nevyužito)
-	 */
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
@@ -35,16 +24,10 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 		writeLog(`🎯 PROMPTS: Number of prompts to display: ${state.recentPrompts.length}`, false);
 	}
 
-	/**
-	 * Veřejná metoda pro obnovu obsahu webview z aktuálních promptů.
-	 */
 	public refresh(): void {
 		if (this._view) this.updateWebview();
 	}
 
-	/**
-	 * Interní aktualizace webview – generuje HTML a nastaví jej do webview instance.
-	 */
 	private updateWebview(): void {
 		if (!this._view) { writeLog('🎯 PROMPTS: Webview not ready yet', true); return; }
 		const html = this.createPromptsHtml();
@@ -52,10 +35,6 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
 		writeLog(`🎯 PROMPTS: HTML set, displaying ${state.recentPrompts.length} prompts`, true);
 	}
 
-	/**
-	 * Vytvoří HTML reprezentaci seznamu promptů pro zobrazení v postranním panelu.
-	 * @returns Hotové HTML jako string.
-	 */
 	private createPromptsHtml(): string {
 		let promptsHtml = '';
 		const recentPrompts = state.recentPrompts;

@@ -2,18 +2,10 @@ import * as vscode from 'vscode';
 import { runtime } from './runtime';
 import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
 
-/**
- * Dokončí (finalizuje) detekovaný prompt: uloží jej do historie, zvýší čítač,
- * zobrazí notifikaci a aktualizuje UI. Obsah je získán z přímého parametru
- * nebo z runtime bufferů a snapshotů.
- * @param source Zdroj / typ heuristiky která prompt zachytila
- * @param directText Volitelný text promptu pokud již byl extrahován
- */
 export async function finalizePrompt(source: string, directText?: string) {
 	try {
 		let txt = (directText || runtime.chatInputBuffer || runtime.lastNonEmptySnapshot).trim();
-		if (!txt) return; // nic ke zpracování
-		// Rychlá filtrace duplicit těsně po sobě
+		if (!txt) return;
 		if (txt === runtime.lastSubmittedText && Date.now() - runtime.lastFinalizeAt < 300) { runtime.outputChannel?.appendLine(`ℹ️ Skip duplicate finalize (${source})`); return; }
 		runtime.lastSubmittedText = txt;
 		runtime.recentPrompts.unshift(txt);
