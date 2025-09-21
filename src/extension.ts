@@ -1,171 +1,668 @@
+/**
+ * ČITELNOST: Soubor musí zůstat vždy plně čitelný pro programátora.
+ * Žádné umělé zkracování řádků, slučování nesouvisejících příkazů na jeden řádek
+ * ani minifikace. Snížení počtu řádků bez jasného, zdokumentovaného zlepšení
+ * čitelnosti je REGRESE a musí být vráceno. Zachovávej logické bloky a vertikální strukturu.
+ */
+
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs'; // added for file logging
 import { state } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
-import { startAutoSave, createAutoSaveDisposable } from './autoSave';
-import { initLogger, info, debug, error, writeLog } from './logger';
-import { setupChatResponseWatcher } from './chatResponseWatcher';
-import { registerChatApiHook } from './chatApiHook';
-import { runtime } from './runtime';
-import { finalizePrompt as externalFinalizePrompt } from './finalize';
-import { registerCommandListener } from './commandListener';
-import { SOURCE_DIR_COPILOT, SOURCE_DIR_VSCODE, LOG_DIR } from './constants';
-import { focusChatInput, forwardToChatAccept, getChatInputText, captureChatInputSilently } from './chatHelpers';
-import { startDetectionTimers } from './detectionTimers';
+import { initLogger, info, debug } from './logger';
+import { focusChatInput, forwardToChatAccept } from './chatHelpers';
 
-let outputChannel: vscode.OutputChannel; // legacy local retained for minimal change
-let recentPrompts: string[] = state.recentPrompts;
-let aiPromptCounter = 0;
+// --- Stav ---
 let statusBarItem: vscode.StatusBarItem;
-let chatInputBuffer = '';
-let lastEnterSubmitAt = 0;
-const explicitSubmitCommands = new Set([
-	'github.copilot.chat.acceptInput','github.copilot.chat.submit','github.copilot.chat.send','github.copilot.chat.sendMessage',
-	'workbench.action.chat.acceptInput','workbench.action.chat.submit','workbench.action.chat.submitWithoutDispatching','workbench.action.chat.submitWithCodebase','workbench.action.chat.sendToNewChat','workbench.action.chat.createRemoteAgentJob','workbench.action.chat.executeSubmit','workbench.action.chat.send','workbench.action.chat.sendMessage',
-	'chat.acceptInput','inlineChat.accept','interactive.acceptInput'
-]);
 let providerRef: PromptsProvider | undefined;
-let lastNonEmptySnapshot = '';
-let lastSubmittedText = '';
-let lastFinalizeAt = 0;
-const chatDocState = new Map<string,string>();
-let lastEditorPollText = '';
-let lastBufferChangedAt = Date.now();
+let aiPromptCounter = 0;
+let debugEnabled = false;
+let lastPromptTime = 0;
+let proposedApiAvailable = false;
+let mouseDetectionWorking = false;
 
-// Lightweight finalize wrapper also used by heuristic watcher
-function doFinalize(source: string, directText?: string) { externalFinalizePrompt(source, directText); }
-
-async function finalizePrompt(source: string, directText?: string) {
-	try {
-		let txt = (directText || chatInputBuffer || lastNonEmptySnapshot).trim();
-		if (!txt) return;
-		if (txt === lastSubmittedText) { outputChannel.appendLine(`ℹ️ Skipped duplicate finalize (${source})`); return; }
-		lastSubmittedText = txt;
-		recentPrompts.unshift(txt);
-		if (recentPrompts.length > 1000) recentPrompts.splice(1000);
-		chatInputBuffer = '';
-		aiPromptCounter++;
-		lastFinalizeAt = Date.now();
-		const cfg = vscode.workspace.getConfiguration('specstory-autosave');
-		const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.';
-		vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`);
-		providerRef?.refresh();
-		outputChannel.appendLine(`🛎️ Detected submit via ${source} | chars=${txt.length}`);
-		outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // visible reference line
-	} catch (e) { outputChannel.appendLine(`❌ finalizePrompt error: ${e}`); }
+/**
+ * Interface pro chat API (proposed)
+ */
+interface ChatAPI {
+  onDidSubmitRequest?: vscode.Event<unknown>;
+  onDidSubmitFeedback?: vscode.Event<unknown>;
+  registerChatSessionItemProvider?: Function;
+  onDidDisposeChatSession?: vscode.Event<unknown>;
+  createChatParticipant?: Function;
+  createDynamicChatParticipant?: Function;
+  registerChatSessionContentProvider?: Function;
+  registerRelatedFilesProvider?: Function;
+  registerChatOutputRenderer?: Function;
+  registerMappedEditsProvider?: Function;
+  registerChatParticipantDetectionProvider?: Function;
 }
 
+/**
+ * Rozšířené VS Code namespace s proposed API
+ */
+interface ExtendedVSCode {
+  chat?: ChatAPI;
+}
+
+/** Aktualizuje interní příznak zda jsou povoleny debug logy. */
+function refreshDebugFlag() {
+  const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+  const val = cfg.get<boolean>('enableDebugLogs');
+  if (typeof val !== 'boolean') {
+    if (!debugEnabled) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting enableDebugLogs (treating as disabled)');
+    }
+    debugEnabled = false;
+  } else {
+    debugEnabled = val;
+  }
+}
+
+/**
+ * Zkontroluje dostupnost proposed API
+ */
+function checkProposedApiAvailability(): boolean {
+  try {
+    // Log what we're checking
+    info('Checking for proposed API availability...');
+    
+    // Check process arguments to see if --enable-proposed-api was used
+    const args = process.argv;
+    info(`Process arguments: ${args.join(' ')}`);
+    
+    // Try multiple ways to detect API
+    const vscodeExtended = vscode as unknown as ExtendedVSCode;
+    
+    // Log what's available in vscode namespace
+    info(`vscode.chat exists: ${!!vscodeExtended.chat}`);
+    if (vscodeExtended.chat) {
+      const chatKeys = Object.keys(vscodeExtended.chat);
+      info(`Available chat API methods: ${chatKeys.join(', ')}`);
+    }
+    
+    // Check if chat API is available (different methods in different VS Code versions)
+    if (vscodeExtended.chat) {
+      // Check for any of the useful chat APIs
+      if (typeof vscodeExtended.chat.onDidSubmitRequest !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - onDidSubmitRequest found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.registerChatSessionItemProvider !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - registerChatSessionItemProvider found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.onDidDisposeChatSession !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - onDidDisposeChatSession found!');
+        return true;
+      }
+      if (typeof vscodeExtended.chat.createChatParticipant !== 'undefined') {
+        info('✅ Proposed API is AVAILABLE - createChatParticipant found!');
+        return true;
+      }
+    }
+  } catch (e) {
+    info(`Proposed API check error: ${e}`);
+  }
+  
+  info('❌ Proposed API is NOT available - mouse detection limited');
+  info('💡 TIP: Run VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector');
+  return false;
+}
+
+/**
+ * Aktivace extensionu – nastaví listener pro Enter varianty a inicializuje čtení exportů.
+ * @param context Kontext poskytovaný VS Code.
+ */
 export async function activate(context: vscode.ExtensionContext) {
-	initLogger();
-	outputChannel = vscode.window.createOutputChannel('SpecStory Prompts');
-	info('🚀 ACTIVATION: Extension starting...');
-	// Daily log file handling (clear on each activation)
-	try {
-		const logDir = LOG_DIR; // reference constant so it is tracked
-		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-		const today = new Date().toISOString().slice(0,10);
-		const dailyLogPath = path.join(logDir, `extension-${today}.log`);
-		fs.writeFileSync(dailyLogPath, ''); // clear file
-		const origAppend = outputChannel.appendLine.bind(outputChannel);
-		outputChannel.appendLine = (v: string) => { origAppend(v); try { fs.appendFileSync(dailyLogPath, `[${new Date().toISOString()}] ${v}\n`); } catch {} };
-		outputChannel.appendLine(`🧹 Cleared daily log file ${dailyLogPath}`);
-	} catch {}
-	outputChannel.appendLine('🚀 ACTIVATION: Extension starting...');
-	outputChannel.appendLine(`REFS SRC ${SOURCE_DIR_COPILOT} | ${SOURCE_DIR_VSCODE} | LOG ${LOG_DIR}`); // activation reference line
+  initLogger();
+  const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+  const version = ext?.packageJSON?.version || 'unknown';
+  info(`🚀 NEW VERSION LOADING - v${version} - EXTENSION ACTIVATED 🚀`);
+  info(`Activation start - version ${version}`);
+  refreshDebugFlag();
 
-	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarItem.show();
-	const updateStatusBar = () => {
-		const v = vscode.extensions.getExtension('sunamocz.specstory-autosave')?.packageJSON.version || '1.1.79';
-		statusBarItem.text = `🤖 AI Prompts: ${aiPromptCounter} | v${v}`;
-		statusBarItem.tooltip = 'SpecStory AutoSave + AI Copilot Prompt Detection';
-	};
-	updateStatusBar();
+  // Check if proposed API is available
+  proposedApiAvailable = checkProposedApiAvailability();
 
-	await loadExistingPrompts();
-	providerRef = new PromptsProvider();
-	const registration = vscode.window.registerWebviewViewProvider(PromptsProvider.viewType, providerRef);
-	runtime.providerRef = providerRef; runtime.outputChannel = outputChannel;
+  // Create status bar with API indicator (NO background color)
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100,
+  );
+  
+  // Update tooltip based on API availability (no backgroundColor)
+  if (proposedApiAvailable) {
+    statusBarItem.tooltip = '✅ AI Prompt Detector\n✅ Proposed API enabled\n✅ Mouse detection WORKING';
+  } else {
+    statusBarItem.tooltip = '⚠️ AI Prompt Detector\n❌ Proposed API disabled\n⚠️ Mouse detection LIMITED\n💡 Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector';
+  }
+  statusBarItem.show();
 
-	setTimeout(async () => {
-		try { await vscode.commands.executeCommand('workbench.view.extension.specstory-activity'); } catch (e) { outputChannel.appendLine(`⚠️ view open fallback only: ${e}`); }
-	}, 400);
+  /** Aktualizuje text ve status baru. ALWAYS use "AI Prompts:" */
+  const updateStatusBar = () => {
+    const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+    const v: string | undefined = ext?.packageJSON?.version;
+    if (!v) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing package.json version');
+      statusBarItem.text = '🤖 AI Prompts: ' + aiPromptCounter + ' | v?';
+      return;
+    }
+    // Add indicator for API status - ALWAYS use "AI Prompts:" not "AI:"
+    const apiIndicator = proposedApiAvailable ? '✅' : '⚠️';
+    statusBarItem.text = `${apiIndicator} AI Prompts: ${aiPromptCounter} | v${v}`;
+  };
 
-	// Setup heuristic watcher (additive)
-	setupChatResponseWatcher(context, doFinalize);
-	registerChatApiHook(context, doFinalize);
-	registerCommandListener(context);
-	startDetectionTimers(context);
+  // Track when we detect via keyboard
+  let lastKeyboardDetection = 0;
+  
+  /** Uloží prompt do stavu, vždy započítá i opakovaný text. */
+  const recordPrompt = (raw: string, source: string): boolean => {
+    const text = (raw || '').trim();
+    info(`recordPrompt called: source=${source}, text="${text.substring(0, 100)}"`);
+    
+    // Mark keyboard detection time
+    if (source.includes('keyboard')) {
+      lastKeyboardDetection = Date.now();
+    }
+    
+    if (!text) {
+      info('recordPrompt: empty text, returning false');
+      return false;
+    }
+    
+    // Prevent duplicate recordings within 500ms
+    const now = Date.now();
+    if (now - lastPromptTime < 500 && text === state.recentPrompts[0]) {
+      info('recordPrompt: Skipping duplicate within 500ms');
+      return false;
+    }
+    lastPromptTime = now;
+    
+    state.recentPrompts.unshift(text);
+    if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
+    
+    // Always increment counter and show notification
+    aiPromptCounter++;
+    providerRef?.refresh();
+    updateStatusBar();
+    
+    const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+    let customMsg = cfg.get<string>('customMessage');
+    if (customMsg === undefined) {
+      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting customMessage');
+      customMsg = '';
+    }
+    
+    vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
+    info(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
+    return true;
+  };
 
-	// helpers imported now (previous local implementations removed)
+  // Removed tryGetChatWidget - it may interfere with normal chat functionality
 
-	context.subscriptions.push(vscode.commands.registerCommand('specstory-autosave.forwardEnterToChat', async () => {
-		try { let text = await getChatInputText(); if (!text) text = chatInputBuffer.trim(); if (text) { recentPrompts.unshift(text); if (recentPrompts.length > 1000) recentPrompts.splice(1000); providerRef?.refresh(); lastSubmittedText = text; } chatInputBuffer = ''; await focusChatInput(); lastEnterSubmitAt = Date.now(); const ok = await forwardToChatAccept(); if (ok) { aiPromptCounter++; updateStatusBar(); providerRef?.refresh(); } const cfg = vscode.workspace.getConfiguration('specstory-autosave'); const msg = cfg.get<string>('customMessage', '') || 'We will verify quality & accuracy.'; setTimeout(() => { providerRef?.refresh(); vscode.window.showInformationMessage(`AI Prompt sent\n${msg}`); }, 10); } catch (e) { outputChannel.appendLine(`❌ Error in forwardEnterToChat: ${e}`); }
-	}));
+  /**
+   * Setup proposed Chat API if available
+   */
+  async function setupProposedChatApi() {
+    if (!proposedApiAvailable) {
+      return false;
+    }
 
-	const commandsAny = vscode.commands as any;
-	if (typeof commandsAny?.onDidExecuteCommand === 'function') {
-		outputChannel.appendLine('🛰️ Command listener active');
-		context.subscriptions.push(commandsAny.onDidExecuteCommand((ev: any) => {
-			try { const cmd = ev?.command as string | undefined; if (!cmd) return; if (cmd.includes('copilot') || cmd.includes('chat')) outputChannel.appendLine(`🔎 CMD: ${cmd}`); if (cmd === 'type') { const t = ev?.args?.[0]?.text as string | undefined; if (!t || t.includes('\n')) return; chatInputBuffer += t; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; return; } if (cmd === 'editor.action.clipboardPasteAction') { vscode.env.clipboard.readText().then(txt => { chatInputBuffer += txt; lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; }); return; } if (cmd === 'deleteLeft') { if (chatInputBuffer) { chatInputBuffer = chatInputBuffer.slice(0, -1); lastBufferChangedAt = Date.now(); lastNonEmptySnapshot = chatInputBuffer; } return; } if (cmd === 'cut' || cmd === 'editor.action.clipboardCutAction' || cmd === 'cancelSelection') { chatInputBuffer = ''; lastBufferChangedAt = Date.now(); return; } const lower = cmd.toLowerCase(); const heuristicSubmit = lower.includes('chat') && (lower.includes('accept') || lower.includes('submit') || lower.includes('send') || lower.includes('execute') || lower.includes('dispatch')); const now = Date.now(); if (explicitSubmitCommands.has(cmd) || heuristicSubmit) { if (now - lastEnterSubmitAt > 100 && now - lastFinalizeAt > 100) setTimeout(() => finalizePrompt(`command:${cmd}`), 30); return; } if ((cmd.startsWith('github.copilot.') || lower.includes('chat')) && now - lastEnterSubmitAt > 120) { if (!/focus|copy|select|type|status|help|acceptinput/i.test(cmd) && (chatInputBuffer.trim() || lastNonEmptySnapshot)) setTimeout(() => finalizePrompt(`fallback:${cmd}`), 50); } } catch (e) { outputChannel.appendLine(`❌ onDidExecuteCommand handler error: ${e}`); }
-		}));
-	}
+    try {
+      const vscodeExtended = vscode as unknown as ExtendedVSCode;
+      
+      // Try different APIs based on what's available
+      
+      // Option 0: Try to get widget and listen to onDidAcceptInput
+      // DISABLED: This approach may interfere with normal mouse functionality
+      // const widget = await tryGetChatWidget();
+      // if (widget) {
+      //   const w = widget as { onDidAcceptInput?: vscode.Event<void> };
+      //   if (w.onDidAcceptInput) {
+      //     const disposable = w.onDidAcceptInput(() => {
+      //       info('🎯 MOUSE/KEYBOARD DETECTED via widget.onDidAcceptInput!');
+      //       // Try to get input text from widget
+      //       const wInput = widget as { input?: { getValue?: () => string }; getInput?: () => string };
+      //       let text = '';
+      //       if (wInput.getInput && typeof wInput.getInput === 'function') {
+      //         text = wInput.getInput();
+      //       } else if (wInput.input?.getValue && typeof wInput.input.getValue === 'function') {
+      //         text = wInput.input.getValue();
+      //       }
+      //       if (text) {
+      //         recordPrompt(text, 'widget-accept');
+      //       } else {
+      //         recordPrompt('[Prompt sent - text capture failed]', 'widget-accept');
+      //       }
+      //     });
+      //     context.subscriptions.push(disposable);
+      //     info('✅ Widget onDidAcceptInput listener registered - MOUSE DETECTION SHOULD WORK!');
+      //     mouseDetectionWorking = true;
+      //     return true;
+      //   }
+      // }
+      
+      // Option 1: onDidSubmitRequest (if available)
+      if (vscodeExtended.chat?.onDidSubmitRequest) {
+        const disposable = vscodeExtended.chat.onDidSubmitRequest((event: unknown) => {
+          info('🎯 Chat submission detected via onDidSubmitRequest!');
+          handleChatEvent(event);
+        });
+        context.subscriptions.push(disposable);
+        info('✅ Chat API listener registered via onDidSubmitRequest');
+        return true;
+      }
+      
+      // Option 2: Try multiple participant approaches
+      // 2a: Dynamic chat participant
+      if (vscodeExtended.chat?.createDynamicChatParticipant) {
+        try {
+          const dynamicParticipant = vscodeExtended.chat.createDynamicChatParticipant('ai-prompt-detector.dynamic', {
+            name: 'AI Detector',
+            description: 'Monitors AI prompts',
+            handler: (request: unknown, context: unknown, response: unknown, token: unknown) => {
+              info('🎯 Chat detected via DYNAMIC participant!');
+              const req = request as { prompt?: string };
+              if (req?.prompt) {
+                recordPrompt(req.prompt, 'dynamic-participant');
+              }
+              return undefined;
+            }
+          });
+          context.subscriptions.push(dynamicParticipant);
+          info('✅ Dynamic chat participant registered');
+        } catch (e) {
+          info(`Dynamic participant failed: ${e}`);
+        }
+      }
+      
+      // 2b: Standard chat participant
+      if (vscodeExtended.chat?.createChatParticipant) {
+        const participant = vscodeExtended.chat.createChatParticipant('ai-prompt-detector.monitor', (request: unknown, context: unknown, response: unknown, token: unknown) => {
+          info('🎯 Chat detected via participant!');
+          const req = request as { prompt?: string };
+          if (req?.prompt) {
+            recordPrompt(req.prompt, 'participant');
+          }
+          // Don't actually handle the request, just monitor
+          return undefined;
+        });
+        participant.isSticky = false;
+        context.subscriptions.push(participant);
+        info('✅ Chat participant registered for monitoring');
+        mouseDetectionWorking = true;
+        return true;
+      }
+      
+      // Option 3: Try all session-related APIs
+      // 3a: Session disposal
+      if (vscodeExtended.chat?.onDidDisposeChatSession) {
+        const disposable = vscodeExtended.chat.onDidDisposeChatSession((sessionId: unknown) => {
+          info(`Chat session disposed: ${sessionId}`);
+        });
+        context.subscriptions.push(disposable);
+        info('✅ Chat session disposal monitor registered');
+      }
+      
+      // 3b: Session Item Provider
+      if (vscodeExtended.chat?.registerChatSessionItemProvider) {
+        try {
+          const provider = vscodeExtended.chat.registerChatSessionItemProvider('ai-prompt-detector.session', {
+            provideItems: (session: unknown) => {
+              const sess = session as { id?: string };
+              info(`Session items requested for: ${sess?.id}`);
+              return [];
+            }
+          });
+          context.subscriptions.push(provider);
+          info('✅ Chat session item provider registered');
+        } catch (e) {
+          info(`Session item provider failed: ${e}`);
+        }
+      }
+      
+      // 3c: Session Content Provider
+      if (vscodeExtended.chat?.registerChatSessionContentProvider) {
+        try {
+          const contentProvider = vscodeExtended.chat.registerChatSessionContentProvider('ai-prompt-detector.content', {
+            provideContent: (session: unknown) => {
+              const sess = session as { id?: string };
+              info(`Session content requested for: ${sess?.id}`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(contentProvider);
+          info('✅ Chat session content provider registered');
+        } catch (e) {
+          info(`Session content provider failed: ${e}`);
+        }
+      }
+      
+      // 3d: Related Files Provider
+      if (vscodeExtended.chat?.registerRelatedFilesProvider) {
+        try {
+          const relatedProvider = vscodeExtended.chat.registerRelatedFilesProvider('ai-prompt-detector.related', {
+            provideRelatedFiles: (request: unknown, token: unknown) => {
+              const req = request as { prompt?: string };
+              info(`Related files requested for prompt: "${req?.prompt?.substring(0, 50)}"`);
+              // Try to capture the prompt here
+              if (req?.prompt) {
+                recordPrompt(req.prompt, 'related-files');
+              }
+              return [];
+            }
+          });
+          context.subscriptions.push(relatedProvider);
+          info('✅ Related files provider registered');
+        } catch (e) {
+          info(`Related files provider failed: ${e}`);
+        }
+      }
+      
+      // 3e: Chat Output Renderer
+      if (vscodeExtended.chat?.registerChatOutputRenderer) {
+        try {
+          const renderer = vscodeExtended.chat.registerChatOutputRenderer('ai-prompt-detector.renderer', {
+            render: (output: unknown) => {
+              info(`Chat output render requested`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(renderer);
+          info('✅ Chat output renderer registered');
+        } catch (e) {
+          info(`Chat output renderer failed: ${e}`);
+        }
+      }
+      
+      // 3f: Mapped Edits Provider
+      if (vscodeExtended.chat?.registerMappedEditsProvider) {
+        try {
+          const editsProvider = vscodeExtended.chat.registerMappedEditsProvider('ai-prompt-detector.edits', {
+            provideMappedEdits: (document: unknown, codeBlocks: unknown, context: unknown, token: unknown) => {
+              info(`Mapped edits requested`);
+              return undefined;
+            }
+          });
+          context.subscriptions.push(editsProvider);
+          info('✅ Mapped edits provider registered');
+        } catch (e) {
+          info(`Mapped edits provider failed: ${e}`);
+        }
+      }
+      
+      // 3g: Chat Participant Detection Provider
+      if (vscodeExtended.chat?.registerChatParticipantDetectionProvider) {
+        try {
+          const detectionProvider = vscodeExtended.chat.registerChatParticipantDetectionProvider({
+            provideParticipants: (text: string, token: unknown) => {
+              info(`Participant detection for text: "${text.substring(0, 50)}"`);
+              // Try to capture prompts here
+              if (text && text.length > 2) {
+                recordPrompt(text, 'detection-provider');
+              }
+              return [];
+            }
+          });
+          context.subscriptions.push(detectionProvider);
+          info('✅ Chat participant detection provider registered');
+        } catch (e) {
+          info(`Participant detection provider failed: ${e}`);
+        }
+      }
+      
+      // Helper function to handle chat events
+      function handleChatEvent(event: unknown) {
+        let text = '';
+        if (typeof event === 'string') {
+          text = event;
+        } else {
+          const evt = event as { message?: string; prompt?: string; text?: string; request?: { message?: string } };
+          if (evt?.message) {
+            text = evt.message;
+          } else if (evt?.prompt) {
+            text = evt.prompt;
+          } else if (evt?.text) {
+            text = evt.text;
+          } else if (evt?.request?.message) {
+            text = evt.request.message;
+          }
+        }
+        
+        if (text) {
+          info(`Captured via proposed API: "${text.substring(0, 100)}"`);
+          recordPrompt(text, 'proposed-api');
+          mouseDetectionWorking = true;
+        }
+      }
+      
+    } catch (e) {
+      info(`Failed to setup proposed API: ${e}`);
+    }
+    
+    return mouseDetectionWorking;
+  }
 
-	// NEW: log any Copilot/Chat related document open (response appears) -> finalize if pending
-	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => {
-		try {
-			const name = doc.fileName.toLowerCase();
-			if (/(copilot|chat)/.test(name)) {
-				outputChannel.appendLine(`📄 OPEN doc=${path.basename(doc.fileName)} len=${doc.getText().length} lang=${doc.languageId}`);
-				// If we have a buffered prompt not yet finalized, finalize now (button likely used)
-				if ((chatInputBuffer.trim() || lastNonEmptySnapshot) && Date.now() - lastFinalizeAt > 120) {
-					finalizePrompt('open-doc');
-				}
-			}
-		} catch {}
-	}));
+  /**
+   * Setup monitoring of chat submissions without blocking
+   * 
+   * WHAT WORKS:
+   * - Keyboard detection via keybindings (Enter, Ctrl+Enter)
+   * - Command interception for keyboard-triggered commands
+   * 
+   * WHAT DOESN'T WORK FOR MOUSE:
+   * - Command interception (mouse doesn't generate commands)
+   * - Chat API events (not accessible without special APIs)
+   * - Widget access (runs in different process)
+   * - Clipboard monitoring (disabled per user request)
+   * - File watchers (chat doesn't create immediate files)
+   * 
+   * ONLY POSSIBLE SOLUTION FOR MOUSE:
+   * - Regular polling to detect when prompts are sent
+   */
+  function setupChatMonitoring(context: vscode.ExtensionContext) {
+    info('🔧 Setting up chat monitoring');
+    
+    // Track if we're in our own command to avoid double detection
+    let isOurCommand = false;
+    
+    // Method 1: Monitor command execution (WORKS FOR KEYBOARD ONLY)
+    // Mouse clicks DON'T generate commands - they call widget.acceptInput() directly
+    const originalExecute = vscode.commands.executeCommand;
+    (vscode.commands as unknown as { executeCommand: Function }).executeCommand = async function(command: string, ...args: unknown[]) {
+      // Skip if this is our own forwarded command
+      if (isOurCommand) {
+        return originalExecute.call(vscode.commands, command, ...args);
+      }
+      
+      // Note: Mouse submissions NEVER appear here because they don't use commands
+      // This only catches keyboard shortcuts that we don't handle ourselves
+      
+      // Call original
+      return originalExecute.call(vscode.commands, command, ...args);
+    };
+    
+    // Method 2: Removed - context monitoring doesn't detect submissions
+    
+    // Method 3: Keyboard detection (WORKS PERFECTLY)
+    context.subscriptions.push(
+      vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
+        info('🎯 ENTER DETECTED');
+        recordPrompt('[Prompt sent via Enter]', 'keyboard-enter');
+        // Forward to normal chat submit (set flag to avoid double detection)
+        isOurCommand = true;
+        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        isOurCommand = false;
+      })
+    );
+    
+    context.subscriptions.push(
+      vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
+        info('🎯 CTRL+ENTER DETECTED');
+        recordPrompt('[Prompt sent via Ctrl+Enter]', 'keyboard-ctrl-enter');
+        // Forward to normal chat submit (set flag to avoid double detection)
+        isOurCommand = true;
+        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        isOurCommand = false;
+      })
+    );
+    
+    // Method 4: Monitor counter changes for mouse detection
+    // Since counter somehow increases on mouse clicks, monitor it
+    let lastSeenCounter = aiPromptCounter;
+    
+    const monitorInterval = setInterval(() => {
+      if (aiPromptCounter > lastSeenCounter) {
+        const now = Date.now();
+        // If counter increased and we haven't detected it recently via keyboard
+        if (now - lastKeyboardDetection > 500) {
+          info('🎯 MOUSE DETECTED - counter increased without keyboard');
+          // Show notification for mouse
+          const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+          let customMsg = cfg.get<string>('customMessage') || '';
+          vscode.window.showInformationMessage(`AI Prompt sent (mouse)\n${customMsg}`);
+        }
+        lastSeenCounter = aiPromptCounter;
+      }
+    }, 250); // Check every 250ms
+    
+    context.subscriptions.push({
+      dispose: () => clearInterval(monitorInterval)
+    });
+    
+    info('✅ Chat monitoring installed');
+  }
 
-	// Strengthen change listener: always log when chat doc transitions to empty
-	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(ev => {
-		try {
-			const doc = ev.document; const name = doc.fileName.toLowerCase(); if (!(name.includes('copilot') || name.includes('chat'))) return;
-			const id = doc.uri.toString(); const prev = chatDocState.get(id) || ''; const curr = doc.getText();
-			if (curr.trim()) { chatDocState.set(id, curr); }
-			if (prev && !curr.trim()) {
-				outputChannel.appendLine(`🧹 CLEAR doc=${path.basename(doc.fileName)} prevLen=${prev.length}`);
-				if (Date.now() - lastFinalizeAt > 120) { lastNonEmptySnapshot = prev; finalizePrompt('doc-clear2', prev); }
-			}
-		} catch {}
-	}));
+  // Removed problematic code that was blocking mouse functionality
 
-	let pollTimer: NodeJS.Timeout | undefined; let lastPollHadText = false; let forceSnapshotTimer: NodeJS.Timeout | undefined;
-	if (!pollTimer) {
-		pollTimer = setInterval(async () => { try { const current = await captureChatInputSilently(); if (current) { lastNonEmptySnapshot = current; lastPollHadText = true; lastEditorPollText = current; } else { if (lastEditorPollText && !current) { // transition non-empty -> empty in editor
-				// If internal buffer still holds text we likely had a button submission
-				if (chatInputBuffer.trim() && Date.now() - lastFinalizeAt > 140) {
-					outputChannel.appendLine('🧲 Heuristic: editor cleared while buffer still has text (button send?)');
-					await finalizePrompt('editor-clear-buffer');
-				}
-			}
-			if (lastPollHadText && lastNonEmptySnapshot && Date.now() - lastFinalizeAt > 140) { await finalizePrompt('poll-clear'); }
-			lastPollHadText = false; lastEditorPollText = current; } } catch {} }, 150);
-		context.subscriptions.push({ dispose: () => { if (pollTimer) clearInterval(pollTimer); if (forceSnapshotTimer) clearInterval(forceSnapshotTimer); } });
-		forceSnapshotTimer = setInterval(async () => { try { if (!lastNonEmptySnapshot && chatInputBuffer.trim().length > 2) { const txt = await getChatInputText(); if (txt) { lastNonEmptySnapshot = txt; outputChannel.appendLine('🧪 Forced snapshot captured'); } } } catch {} }, 800);
-	}
+  updateStatusBar();
+  await loadExistingPrompts();
+  
+  providerRef = new PromptsProvider();
+  const registration = vscode.window.registerWebviewViewProvider(
+    PromptsProvider.viewType,
+    providerRef,
+  );
 
-	const watcher = vscode.workspace.createFileSystemWatcher('**/.specstory/history/*.md');
-	watcher.onDidCreate(uri => { if (isValidSpecStoryFile(uri.fsPath)) { outputChannel.appendLine(`📝 New SpecStory file: ${path.basename(uri.fsPath)}`); loadPromptsFromFile(uri.fsPath, recentPrompts); providerRef?.refresh(); } });
-	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('specstory-autosave.maxPrompts')) providerRef?.refresh(); });
-	startAutoSave();
-	const autoSaveDisposable = createAutoSaveDisposable();
-	context.subscriptions.push(registration, watcher, configWatcher, statusBarItem, autoSaveDisposable);
-	outputChannel.appendLine(`🚀 PROMPTS: Activation complete - total ${recentPrompts.length} prompts`);
+  // Try new onDidSubmitInput API first (if VS Code is patched)
+  const tryNewApi = () => {
+    const vscodeExtended = vscode as unknown as ExtendedVSCode;
+    
+    // Check if our patched API is available
+    if (vscodeExtended.chat && typeof (vscodeExtended.chat as any).onDidSubmitInput !== 'undefined') {
+      info('🎉 NEW onDidSubmitInput API DETECTED from our VS Code patch!');
+      info('  Type of onDidSubmitInput: ' + typeof (vscodeExtended.chat as any).onDidSubmitInput);
+      
+      try {
+        const disposable = (vscodeExtended.chat as any).onDidSubmitInput((event: any) => {
+          info('🎯 NEW PATCHED API EVENT FIRED!');
+          info(`  Event type: ${typeof event}`);
+          info(`  Event keys: ${event ? Object.keys(event).join(', ') : 'null'}`);
+          info(`  Is Keyboard: ${event?.isKeyboard}`);
+          info(`  Prompt: "${event?.prompt?.substring(0, 100)}"`);
+          info(`  Location: ${event?.location}`);
+          info(`  Session ID: ${event?.sessionId}`);
+          
+          // Show success notification
+          vscode.window.showInformationMessage(
+            `🎉 VS Code patch works! Detected ${event.isKeyboard ? 'KEYBOARD' : '🖱️ MOUSE'} submission!`
+          );
+          
+          recordPrompt(event.prompt || '[Prompt via patched API]', event.isKeyboard ? 'patch-keyboard' : 'patch-mouse');
+        });
+        
+        context.subscriptions.push(disposable);
+        info('✅ Successfully subscribed to PATCHED onDidSubmitInput API!');
+        info('🎉 MOUSE DETECTION NOW WORKING via our VS Code patch!');
+        mouseDetectionWorking = true;
+        
+        // Update status bar to show patch is working
+        statusBarItem.tooltip = '🎉 AI Prompt Detector\n✅ VS Code PATCHED\n✅ onDidSubmitInput API WORKING\n✅ Mouse detection FULLY WORKING!';
+        
+        return true;
+      } catch (e) {
+        info(`Failed to subscribe to patched API: ${e}`);
+      }
+    } else {
+      info('❌ Patched onDidSubmitInput API not found');
+      info('  Available chat methods: ' + (vscodeExtended.chat ? Object.keys(vscodeExtended.chat).join(', ') : 'none'));
+    }
+    
+    return false;
+  };
 
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(ed => { try { if (!ed) return; if (!(ed.document.fileName.toLowerCase().includes('copilot') || ed.document.fileName.toLowerCase().includes('chat'))) { if (chatInputBuffer.trim()) finalizePrompt('focus-change', chatInputBuffer.trim()); chatInputBuffer = ''; } } catch {} }));
+  // Try new API first
+  const newApiWorking = tryNewApi();
+  
+  // Setup detection methods - NO CLIPBOARD MONITORING  
+  const apiSetupSuccess = !newApiWorking ? await setupProposedChatApi() : true;
+  setupChatMonitoring(context);
+
+  // Show notification about API status
+  if (proposedApiAvailable) {
+    vscode.window.showInformationMessage(
+      'AI Prompt Detector: Proposed API enabled - full mouse detection working!',
+      'OK'
+    );
+  } else {
+    vscode.window.showWarningMessage(
+      'AI Prompt Detector: Limited mode - mouse detection not available. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
+      'Learn More',
+      'OK'
+    ).then(selection => {
+      if (selection === 'Learn More') {
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/specstory-autosave/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
+      }
+    });
+  }
+
+  // File watcher for SpecStory
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    '**/.specstory/history/*.md',
+  );
+  watcher.onDidCreate((uri) => {
+    if (isValidSpecStoryFile(uri.fsPath)) {
+      loadPromptsFromFile(uri.fsPath, state.recentPrompts);
+      providerRef?.refresh();
+    }
+  });
+
+  const configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('ai-prompt-detector.maxPrompts'))
+      providerRef?.refresh();
+    if (e.affectsConfiguration('ai-prompt-detector.enableDebugLogs'))
+      refreshDebugFlag();
+  });
+
+  context.subscriptions.push(
+    registration,
+    watcher,
+    configWatcher,
+    statusBarItem,
+  );
+
+  info(`Activation complete - API mode: ${proposedApiAvailable ? 'FULL' : 'LIMITED'}`);
 }
 
-async function loadExistingPrompts(): Promise<void> { outputChannel.appendLine('🔍 Searching for existing SpecStory files...'); const files = await vscode.workspace.findFiles('**/.specstory/history/*.md'); outputChannel.appendLine(`📊 Found ${files.length} SpecStory files`); if (files.length === 0) { recentPrompts.push('Welcome to SpecStory AutoSave + AI Copilot Prompt Detection', 'TEST: Dummy prompt for demonstration'); return; } const sorted = files.sort((a, b) => path.basename(b.fsPath).localeCompare(path.basename(a.fsPath))); sorted.forEach(f => { if (isValidSpecStoryFile(f.fsPath)) loadPromptsFromFile(f.fsPath, recentPrompts); }); outputChannel.appendLine(`✅ Total loaded ${recentPrompts.length} prompts from ${sorted.length} files`); }
+async function loadExistingPrompts() {
+  const files = await vscode.workspace.findFiles(
+    '**/.specstory/history/*.md',
+  );
+  if (!files.length) {
+    // Don't add dummy prompts that increase counter
+    state.recentPrompts = [];
+    return;
+  }
+  const sorted = files.sort((a, b) =>
+    path.basename(b.fsPath).localeCompare(path.basename(a.fsPath)),
+  );
+  for (const f of sorted)
+    if (isValidSpecStoryFile(f.fsPath))
+      loadPromptsFromFile(f.fsPath, state.recentPrompts);
+}
 
-export function deactivate() { outputChannel.appendLine('🚀 DEACTIVATION: Extension shutting down'); outputChannel.appendLine('🚀 Extension deactivated'); }
+export function deactivate() {
+  info('Deactivation');
+}

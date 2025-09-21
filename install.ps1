@@ -1,107 +1,243 @@
-# AI Prompt Detector - Build, Release & Install Script
-Write-Host "AI Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
+<#
+.SYNOPSIS
+    Hlavní build a deploy skript pro AI Copilot Prompt Detector rozšíření.
+    Tento skript je JEDINÝ podporovaný způsob pro nasazení nových verzí rozšíření.
+
+.DESCRIPTION
+    Skript provádí kompletní automatizovaný release proces zahrnující kompilaci TypeScript kódu,
+    automatickou inkrementaci PATCH verze (např. 1.1.410 → 1.1.411), vytvoření VSIX balíčku,
+    commit změn do Gitu s verzí jako message, push na GitHub a instalaci do VS Code.
+
+    Workflow postupuje v tomto pořadí:
+    1. Kontrola přítomnosti všech potřebných nástrojů (pnpm, git, code, vsce)
+    2. Načtení aktuální verze z package.json a automatická inkrementace PATCH čísla
+    3. Aktualizace verze v package.json pomocí string replace (zachovává formátování)
+    4. Kontrola a případná instalace dependencies (pouze pokud chybí TypeScript compiler)
+    5. Vyčištění starých VSIX souborů z předchozích buildů
+    6. Kompilace TypeScript kódu pomocí pnpm run compile
+    7. Git add všech změn, commit s verzí jako hlavní message a popisem jako druhý -m parametr
+    8. Push na origin/master branch
+    9. Vytvoření VSIX balíčku pomocí vsce s --allow-star-activation a --no-dependencies flagy
+    10. Odinstalace staré verze rozšíření z VS Code
+    11. Instalace nové verze rozšíření s --force flagem
+    12. Restart VS Code s otevřením projektu
+
+.PARAMETER CommitDescription
+    [POVINNÝ] Textový popis změn provedených v této verzi.
+    Tento popis se ukládá do commit-descriptions.log pro audit trail a jako druhý -m parametr v git commit.
+    Není součástí hlavní commit message (ta obsahuje pouze verzi, např. "v1.1.411").
+
+.EXAMPLE
+    ./install.ps1 "Fixed mouse detection and improved logging"
+
+    Provede kompletní release s popisem "Fixed mouse detection and improved logging".
+    Verze se automaticky zvýší např. z 1.1.410 na 1.1.411.
+
+.EXAMPLE
+    ./install.ps1 "Added support for multiple VS Code instances"
+
+    Build, verzování, commit, push a instalace s daným popisem změn.
+
+.NOTES
+    - NIKDY ručně neinkrementujte verzi v package.json - skript to dělá automaticky
+    - MAJOR a MINOR verze se nemění automaticky, pouze PATCH
+    - Pro publikaci na marketplace (MINOR increment) použijte jiný proces
+    - Skript vyžaduje, aby všechny nástroje byly dostupné v PATH
+    - Po úspěšné instalaci automaticky restartuje VS Code
+
+.PREREQUISITES
+    - pnpm (package manager)
+    - git (verzovací systém)
+    - code (VS Code CLI)
+    - vsce (Visual Studio Code Extension manager)
+    - Node.js a TypeScript (pro kompilaci)
+
+.OUTPUTS
+    - Nová verze v package.json
+    - Zkompilovaný JavaScript kód v out/ složce
+    - VSIX balíček (např. ai-prompt-detector-1.1.411.vsix)
+    - Git commit a push na GitHub
+    - Nainstalované rozšíření ve VS Code
+    - Zápis do commit-descriptions.log
+#>
+param(
+    [Parameter(Mandatory = $false, Position = 0)]
+    [string]$CommitDescription
+)
+
+# =============================
+# AI Copilot Prompt Detector
+# install.ps1 – build → version patch → commit → push → package → install
+# =============================
+
+# --- Helper: Fail fast ----------------------------------------------
+function Fail($msg) {
+    Write-Host "❌ $msg" -ForegroundColor Red
+    exit 1
+}
+
+# --- Validate commit description (policy: always required, no prompt) ---
+if ([string]::IsNullOrWhiteSpace($CommitDescription)) {
+    Fail "Commit description is required. Usage: ./install.ps1 'your description'"
+}
+
+Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Green
+Write-Host "Commit description (not stored in commit message body beyond second -m to preserve policy semantics): $CommitDescription" -ForegroundColor Cyan
 
-# Get current version from package.json and increment it
-$packageJson = Get-Content "package.json" | ConvertFrom-Json
+# --- Tool presence checks (non-fatal warning if missing vsce; we will fail when used) ---
+$required = @('pnpm','git','code')
+foreach ($t in $required) { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Fail "Required tool '$t' not found in PATH" } }
+if (-not (Get-Command vsce -ErrorAction SilentlyContinue)) { Fail "Required tool 'vsce' not found in PATH" }
+
+# --- Read & bump version (PATCH only) ---
+$packageJson = Get-Content './package.json' | ConvertFrom-Json
 $currentVersion = $packageJson.version
-Write-Host "Current version: $currentVersion" -ForegroundColor Cyan
+if (-not $currentVersion) { Fail "Version field missing in package.json" }
 
-# Parse version and increment patch number
-$versionParts = $currentVersion.Split('.')
-$major = [int]$versionParts[0]
-$minor = [int]$versionParts[1]
-$patch = [int]$versionParts[2]
+$parts = $currentVersion.Split('.')
+if ($parts.Length -ne 3) { Fail "Version '$currentVersion' not in MAJOR.MINOR.PATCH format" }
+$major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
 $patch++
 $newVersion = "$major.$minor.$patch"
+Write-Host "Incrementing version: $currentVersion → $newVersion" -ForegroundColor Yellow
 
-Write-Host "Incrementing version to: $newVersion" -ForegroundColor Yellow
+# Update package.json (string replace to avoid reformat drift)
+$raw = Get-Content './package.json' -Raw
+$raw = $raw -replace "`"version`"\s*:\s*`"$currentVersion`"", "`"version`": `"$newVersion`""
+Set-Content './package.json' $raw -NoNewline
+Write-Host "✅ package.json updated" -ForegroundColor Green
 
-# Update package.json with new version
-$packageContent = Get-Content "package.json" -Raw
-$packageContent = $packageContent -replace "`"version`": `"$currentVersion`"", "`"version`": `"$newVersion`""
-Set-Content "package.json" $packageContent -NoNewline
-
-Write-Host "✅ Version updated in package.json" -ForegroundColor Green
-
-# Clean up old VSIX files first
-Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
-$vsixFiles = Get-ChildItem -Path "." -Filter "*.vsix" -ErrorAction SilentlyContinue
-if ($vsixFiles.Count -gt 0) {
-    Write-Host "   Found $($vsixFiles.Count) old VSIX files to remove:" -ForegroundColor Cyan
-    foreach ($file in $vsixFiles) {
-        Write-Host "   - Removing: $($file.Name)" -ForegroundColor Gray
-        Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
-    }
-    Write-Host "   ✅ Old VSIX files cleaned" -ForegroundColor Green
+# --- Ensure dependencies (auto-install only if tsc missing) ---
+$tscPath = Join-Path (Get-Location) 'node_modules/.bin/tsc'
+if (-not (Test-Path $tscPath)) {
+    Write-Host "Dependencies missing (tsc not found) – running pnpm install..." -ForegroundColor Yellow
+    pnpm install
+    if ($LASTEXITCODE -ne 0) { Fail "Dependency install failed" }
+    Write-Host "   ✅ Dependencies installed" -ForegroundColor Green
 } else {
-    Write-Host "   No old VSIX files found" -ForegroundColor Gray
+    Write-Host "Dependencies present (tsc found) – skipping install" -ForegroundColor Green
 }
 
-# Build the extension FIRST
-Write-Host "2. Building extension..." -ForegroundColor Yellow
-npx tsc -p ./
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Build failed!" -ForegroundColor Red
-    exit 1
-}
+# --- Remove old VSIX artifacts ---
+Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
+Get-ChildItem -Path '.' -Filter '*.vsix' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "   - Removing: $($_.Name)" -ForegroundColor Gray; Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+Write-Host "   ✅ Cleanup done" -ForegroundColor Green
+
+# --- Build (compile) ---
+Write-Host "2. Building (pnpm run compile)..." -ForegroundColor Yellow
+pnpm run compile
+if ($LASTEXITCODE -ne 0) { Fail "Build failed" }
 Write-Host "   ✅ Build successful" -ForegroundColor Green
 
-# Git commit and push AFTER successful build
-Write-Host "3. Git commit and push..." -ForegroundColor Yellow
-git add .
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Git add failed!" -ForegroundColor Red
-    exit 1
-}
+# --- Git commit & push (after successful build only) ---
+Write-Host "3. Git commit & push..." -ForegroundColor Yellow
+git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
+# Persist description externally (audit trail) – additive
+$descLog = 'commit-descriptions.log'
+try { Add-Content -Path $descLog -Value "v$newVersion | $CommitDescription" -ErrorAction SilentlyContinue } catch {}
 
-git commit -m "v$newVersion"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Git commit failed!" -ForegroundColor Red
-    exit 1
-}
+git commit -m "v$newVersion" -m "$CommitDescription"
+if ($LASTEXITCODE -ne 0) { Fail "git commit failed" }
 
 git push origin master
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Git push failed!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "   ✅ Git commit and push completed" -ForegroundColor Green
+if ($LASTEXITCODE -ne 0) { Fail "git push failed" }
+Write-Host "   ✅ Git push complete" -ForegroundColor Green
 
-# Create VSIX package with current version name
-Write-Host "4. Creating VSIX package..." -ForegroundColor Yellow
+# --- Package (vsce) ---
+Write-Host "4. Packaging VSIX..." -ForegroundColor Yellow
+$env:VSCE_INTERACTIVE = '0'
 $vsixName = "ai-prompt-detector-$newVersion.vsix"
-Write-Host "   Running: vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies" -ForegroundColor Gray
-$env:VSCE_INTERACTIVE = "0"
-$output = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ VSIX creation failed!" -ForegroundColor Red
-    Write-Host "Error output:" -ForegroundColor Red
-    Write-Host $output -ForegroundColor Red
-    exit 1
+$vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VSIX packaging failed" }
+Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
+
+# --- Close Code - OSS before installation ---
+Write-Host "5. Closing Code - OSS before installation..." -ForegroundColor Yellow
+try {
+    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Write-Host "   ✅ Code - OSS closed" -ForegroundColor Green
+} catch {
+    Write-Host "   ⚠️ Code - OSS was not running or couldn't be closed" -ForegroundColor Yellow
 }
-Write-Host "   ✅ Created: $vsixName" -ForegroundColor Green
 
-# Clean old extensions (completely silent)
-Write-Host "5. Cleaning old extensions..." -ForegroundColor Yellow
-Start-Process -FilePath "code-insiders" -ArgumentList "--uninstall-extension", "sunamocz.ai-prompt-detector" -WindowStyle Hidden -Wait 2>$null
+# --- Install extension to Code - OSS extensions folder ---
+Write-Host "6. Installing extension to Code - OSS..." -ForegroundColor Yellow
+# Najít Code - OSS extensions složku
+$codeOssExtensionsPath = "$env:USERPROFILE\.vscode-oss-dev\extensions"
+if (-not (Test-Path $codeOssExtensionsPath)) {
+    New-Item -ItemType Directory -Path $codeOssExtensionsPath -Force | Out-Null
+}
 
-# Wait a moment
-Start-Sleep -Seconds 2
+# Rozbalit VSIX do extensions složky
+$extensionPath = Join-Path $codeOssExtensionsPath "sunamocz.ai-prompt-detector-$newVersion"
+if (Test-Path $extensionPath) {
+    Remove-Item $extensionPath -Recurse -Force
+}
 
-# Install new extension (no new window)
-Write-Host "6. Installing new extension..." -ForegroundColor Yellow
-$result = Start-Process -FilePath "code-insiders" -ArgumentList "--install-extension", $vsixName, "--force" -WindowStyle Hidden -Wait -PassThru
+# Rozbalit VSIX (je to ZIP soubor)
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$vsixFullPath = Join-Path (Get-Location) $vsixName
+[System.IO.Compression.ZipFile]::ExtractToDirectory($vsixFullPath, $extensionPath)
 
-if ($result.ExitCode -eq 0) {
-    Write-Host "Extension installed successfully!" -ForegroundColor Green
-    Write-Host "Please restart VS Code Insiders to see the new version" -ForegroundColor Cyan
-    Write-Host "Status bar will show extension info" -ForegroundColor Cyan
-    Write-Host "Test with Ctrl+Shift+A or Enter in Copilot Chat" -ForegroundColor Cyan
-    Write-Host "Version: $newVersion" -ForegroundColor Cyan
-} else {
-    Write-Host "Installation failed!" -ForegroundColor Red
+# Přesunout extension soubory do správné složky
+$extractedExtension = Join-Path $extensionPath "extension"
+if (Test-Path $extractedExtension) {
+    $tempPath = "$extensionPath-temp"
+    Move-Item $extractedExtension $tempPath -Force
+    Remove-Item $extensionPath -Recurse -Force
+    Move-Item $tempPath $extensionPath -Force
+}
+
+Write-Host "   ✅ Extension installed to Code - OSS (version $newVersion)" -ForegroundColor Green
+
+Write-Host "===================================================" -ForegroundColor Green
+Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
+
+# --- Restart Code - OSS to load the new extension version ---
+Write-Host "7. Restarting Code - OSS..." -ForegroundColor Yellow
+try {
+    # Zavři všechny instance Code - OSS
+    Write-Host "   - Closing all Code - OSS instances..." -ForegroundColor Gray
+    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    
+    # Krátké čekání pro dokončení ukončení procesů
+    Start-Sleep -Seconds 2
+    
+    # Oprav main.js před spuštěním Code - OSS
+    Write-Host "   - Patching Code - OSS main.js to fix startup errors..." -ForegroundColor Gray
+    $mainJsPath = 'E:\vs\TypeScript_Projects\_\vscode\out\main.js'
+    if (Test-Path $mainJsPath) {
+        $mainContent = Get-Content $mainJsPath -Raw
+        
+        # Zakomentuj problematické řádky
+        # 1. app.enableSandbox()
+        if ($mainContent -notmatch '// app\.enableSandbox\(\)') {
+            $mainContent = $mainContent -replace '(\s+)(app\.enableSandbox\(\);)', '$1// $2 // Patched by install.ps1'
+        }
+        
+        # 2. protocol.registerSchemesAsPrivileged - jednoduše to zakomentujeme
+        if ($mainContent -notmatch '// protocol\.registerSchemesAsPrivileged') {
+            # Najdeme celý blok a zakomentujeme ho
+            $mainContent = $mainContent -replace '(protocol\.registerSchemesAsPrivileged\(\[[\s\S]*?\]\);)', '/* Patched by install.ps1 - moved to whenReady
+$1
+*/'
+        }
+        
+        Set-Content $mainJsPath $mainContent -NoNewline
+        Write-Host "   ✅ main.js patched" -ForegroundColor Green
+    }
+    
+    # Spusť Code - OSS s projektem
+    Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
+    $codeOssPath = 'E:\vs\TypeScript_Projects\_\VSCode-win32-x64\Code - OSS.exe'
+    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\specstory-autosave' -WindowStyle Normal
+    
+    Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
+} catch {
+    Write-Host "   ⚠️ Code - OSS restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Build, Release and Installation complete!" -ForegroundColor Green
+Write-Host "Extension v$newVersion installed and Code - OSS restarted!" -ForegroundColor Green

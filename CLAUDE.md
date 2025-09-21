@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# AI Assistant Instructions - AI Prompt Detector Extension
-=======
 # AI Assistant Instructions - AI Copilot Prompt Detector Extension
 
 ## ✅ Formatting Policy (Human Readable Output)
@@ -12,7 +9,6 @@
 - Avoid excessively long lines (>140 chars) where reasonable.
 - Always keep the final code below per‑file length limits already defined in these instructions.
 - This policy is mandatory for every response containing code or documentation.
->>>>>>> refs/remotes/origin/master
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
@@ -29,11 +25,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
-<<<<<<< HEAD
-- **Communication with the copilot and comments in the code are in Czech. Everything else is in English. Without exception.**
-=======
 - **Communication with the copilot and comments in the code are in Czech. Everything else is in English. Without exceptions.**
->>>>>>> refs/remotes/origin/master
 - **ONLY cs.json localization file** is allowed to contain non-English text
 - **ALL code comments in English**
 - **ALL commit messages in English**
@@ -60,13 +52,32 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
+- **NEVER create any alternative installation scripts** like setup.ps1, test-extension.ps1, etc.
+- **install.ps1 is the ONLY supported way** to build, test and deploy the extension
+- Any other scripts for testing/development are FORBIDDEN
 
 ### 📊 VERSION MANAGEMENT - CRITICAL RULE!
-- **ALWAYS increment only PATCH version** (e.g. 1.1.2 → 1.1.3)
+- **NEVER manually change version in package.json** - install.ps1 handles version increments automatically
+- **install.ps1 always increments PATCH version** (e.g. 1.1.2 → 1.1.3) automatically
 - **NEVER increment MINOR** (1.1.x → 1.2.0) without explicit command
 - **Increment MINOR version ONLY when user says "compile for marketplace"**
 - **NEVER change MAJOR version** without explicit command
+- **Just run ./install.ps1** - it will increment version, build, commit, push, package and install automatically
 - Format: MAJOR.MINOR.PATCH (e.g. 1.1.15, 1.1.16, 1.1.17...)
+
+## 📝 PowerShell Script Documentation Policy
+- **EVERY PowerShell script (.ps1) MUST start with a detailed, comprehensive comment block**
+- **Comment block must be in Czech language and explain:**
+  - Primary purpose of the script (minimum 3-5 sentences)
+  - Detailed functionality description (what it does step by step)
+  - All input parameters with their purpose and allowed values
+  - Expected output and side effects
+  - When to use this script vs other scripts
+  - Prerequisites and dependencies
+  - Example usage with real commands
+- **Format:** Use PowerShell block comment `<# ... #>` at the very beginning
+- **Length:** Minimum 15-20 lines of descriptive text
+- **Update requirement:** When modifying script functionality, ALWAYS update the comment block
 
 ## 🎯 TARGET FUNCTIONALITY - SPECSTORY INTEGRATION
 
@@ -148,6 +159,9 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - This script performs: build → commit → push → package → install
 - Automatically creates new version and installs it
 - User always has the latest version of the extension
+- **NEVER create any alternative installation scripts** like setup.ps1, test-extension.ps1, etc.
+- **install.ps1 is the ONLY supported way** to build, test and deploy the extension
+- Any other scripts for testing/development are FORBIDDEN
 
 ### 📝 Git commit workflow
 - Order: 1) Code change → 2) Build test → 3) `./install.ps1` (automatically: commit → push → package)
@@ -251,14 +265,15 @@ Remove-Item "%TEMP%" -Recurse -Force -ErrorAction SilentlyContinue
 - `./install.ps1`
 - `git add .`
 - `git commit -m "..."`
-- `git push`
+- `git push`=´
+,m 
 - `vsce package`
 - `Remove-Item`
 - `code --install-extension`
 
 User wants everything to run automatically without waiting for confirmation!
 
-follow the sources for a better solution to my requirements. I have attached the folders C:_\vscode-copilot-chat\ and C:_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
+follow the sources for a better solution to my requirements. I have attached the folders E:\vs\TypeScript_Projects\_\vscode-copilot-chat\ and E:\vs\TypeScript_Projects\_\vscode-main\ where you will find the complete sources of github copilot chat and vscode. They are images of the online repositories https://github.com/microsoft/vscode-copilot-chat and https://github.com/microsoft/vscode, if you prefer the online version
 
 Use only the copilot-instructions.md file to write instructions. Not ai-instructions.md as you keep trying to create. Write all instructions in English.
 
@@ -276,11 +291,7 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-<<<<<<< HEAD
-For the app name, use AI Prompt Detector everywhere, no shorter or other versions
-=======
 For the app name, use AI Copilot Prompt Detector  everywhere, no shorter or other versions
->>>>>>> refs/remotes/origin/master
 
 Create files as small as possible, no more than 200 lines each.
 
@@ -450,7 +461,7 @@ Persist forever. Append refinements only; never delete this section.
 - Do NOT remove blank line separation between logical sections and their JSDoc – aids scanning.
 - Converting an existing multi-line JSDoc to single-line is a readability regression.
 - When adding parameters, update JSDoc in same commit; missing tag after parameter addition is a regression.
-- If a JSDoc becomes outdated, update text – never delete to “fix” mismatch.
+- If a JSDoc becomes outdated, update text – never delete to "fix" mismatch.
 - Automated tooling (future) may re-expand single-line JSDoc into multi-line; such commits are valid maintenance.
 
 ### ✅ JSDoc Enforcement Checklist
@@ -549,3 +560,310 @@ Violation = immediate regression. Fix before proceeding.
 - **EXAMPLE VIOLATION**: Conditions like `text.includes(":")` or `text.includes("sunamo:")` or `text.length > 200` without additional context checks.
 - **CORRECT APPROACH**: `(text.includes("user:") && text.includes("assistant:") && text.length > 100)` - multiple indicators required.
 - This section is PERMANENT and MUST NOT be removed or weakened. Append refinements only with dated notes.
+
+## 🚫 Text Selection Policy - NEVER Interfere with User Interface (Aug 10 2025 Addendum)
+- **CRITICAL RULE**: Text capture mechanisms MUST NEVER visually interfere with the user's interaction in Copilot Chat.
+- **FORBIDDEN COMMANDS**: Never use `editor.action.selectAll` or any selection commands that cause visible text highlighting in the UI.
+- **ALLOWED APPROACH**: Only use dedicated copyInput commands (`workbench.action.chat.copyInput`, `github.copilot.chat.copyInput`, etc.).
+- **NO FALLBACK SELECTION**: If copyInput commands fail, do NOT fall back to selectAll+copy - accept that text cannot be captured.
+- **USER EXPERIENCE PRIORITY**: Preserving smooth user interaction is more important than capturing every prompt.
+- **REGRESSION DEFINITION**: Any code that causes visible text selection or highlighting in Copilot Chat is a CRITICAL UI REGRESSION.
+- **EXAMPLE VIOLATION**: Using `editor.action.selectAll` followed by `editor.action.clipboardCopyAction` as fallback.
+- **CORRECT APPROACH**: Rely exclusively on non-invasive copyInput commands, accept capture failures gracefully.
+- This section is PERMANENT and MUST NOT be removed or weakened. Never compromise user interface smoothness for data capture.
+
+## 🔔 Core Functionality Preservation Policy (Aug 10 2025 Addendum)
+- **CRITICAL RULE**: Before any code changes, ALWAYS verify that core functionality remains intact after modifications.
+- **CORE FUNCTIONALITY DEFINITION**: Notifications showing when prompts are sent AND prompts appearing in Activity Bar are ESSENTIAL features.
+- **TESTING MANDATE**: After any change to text capture, keybinding, or recordPrompt logic, MUST verify:
+  1. Notifications appear when Enter variants are pressed
+  2. Actual prompt text appears in Activity Bar (not empty or missing)
+  3. Status bar counter increments
+  4. All four Enter variants (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter) work
+- **REGRESSION DEFINITION**: Loss of notifications OR Activity Bar prompt display is a CRITICAL REGRESSION equal to keybinding failure.
+- **ROLLBACK POLICY**: If core functionality breaks, immediately rollback to last working state before attempting fixes.
+- **PREVENTION APPROACH**: Make small, incremental changes and test each step rather than large refactors.
+- **DEBUG REQUIREMENT**: When core functionality fails, enable debug logs and trace exactly why recordPrompt is not being called.
+- This section is PERMANENT and MUST NOT be removed or weakened. Core user-visible functionality takes absolute priority.
+
+## 🚫 Clipboard Usage Policy (Aug 11 2025 Addendum)  
+- **ABSOLUTE PROHIBITION**: NEVER use clipboard (vscode.env.clipboard) for any purpose in this extension.
+- **FORBIDDEN OPERATIONS**: vscode.env.clipboard.readText(), vscode.env.clipboard.writeText(), any clipboard manipulation.
+- **FORBIDDEN COMMANDS**: editor.action.selectAll, editor.action.clipboardCopyAction, any selection-based text capture.
+- **REASON**: Clipboard usage causes interference with user workflow and adds random clipboard content to Activity Bar.
+- **TEXT CAPTURE APPROACH**: Only rely on VS Code API commands that don't involve clipboard manipulation.
+- **MOUSE DETECTION REQUIREMENT**: Must detect mouse submissions without clipboard access or text selection.
+- **REGRESSION DEFINITION**: Any clipboard usage is a CRITICAL REGRESSION that must be removed immediately.
+- **ENFORCEMENT**: Search codebase for "clipboard" and remove all occurrences before any commit.
+- This section is PERMANENT and MUST NOT be removed or weakened. Clipboard interference is unacceptable.
+
+## 🔧 TypeScript Type Safety Policy (Aug 11 2025 Addendum)
+- **CRITICAL RULE**: ALL code must be written with proper TypeScript types - NEVER use `any` type.
+- **ABSOLUTE PROHIBITION**: The `any` type is FORBIDDEN in all code generation and modifications.
+- **ALLOWED EXCEPTION**: Only `unknown` type is permitted when `any` would otherwise be required and no other solution exists.
+- **TYPE REQUIREMENTS**: 
+  - All function parameters must have explicit types
+  - All function return values must have explicit types  
+  - All variables must have explicit types or proper type inference
+  - All object properties must be typed
+  - All array elements must be typed
+- **INTERFACE DEFINITIONS**: Create proper interfaces for complex objects instead of using `any`
+- **TYPE GUARDS**: Use type guards with `unknown` when dealing with external APIs or uncertain data
+- **REGRESSION DEFINITION**: Any use of `any` type is a CRITICAL TYPE SAFETY REGRESSION
+- **ENFORCEMENT**: Search codebase for `: any` and `as any` before any commit and replace with proper types
+- **EXAMPLES**:
+  - ❌ FORBIDDEN: `function process(data: any): any`
+  - ✅ CORRECT: `function process(data: ChatSubmissionData): Promise<string>`
+  - ❌ FORBIDDEN: `const result = obj as any`
+  - ✅ CORRECT: `const result = obj as ChatWidget | undefined`
+  - ❌ FORBIDDEN: `let items: any[]`
+  - ✅ CORRECT: `let items: string[]` or `let items: ChatMessage[]`
+- This section is PERMANENT and MUST NOT be removed or weakened. Type safety is mandatory.
+
+## 📁 Workspace Structure (Aug 11 2025)
+**IMPORTANT**: The root folder `E:\vs\TypeScript_Projects\_\` is ONLY a container with these subfolders:
+
+1. **ai-prompt-detector** - Our extension project (main working directory)
+2. **vscode-main** - VS Code source code for understanding internal APIs
+3. **vscode-copilot-chat-main** - GitHub Copilot Chat source code for reference
+4. **logs** - Extension log files directory
+
+**NEVER** look for `package.json` or any project files in `E:\vs\TypeScript_Projects\_\` root directory.
+**ALWAYS** work from `E:\vs\TypeScript_Projects\_\ai-prompt-detector\` for our extension.
+
+## 🐛 Mouse Click Detection Problems Analysis (Aug 11 2025)
+**CRITICAL ISSUE**: Mouse clicks are completely invisible to all detection mechanisms.
+
+### Failed Approaches:
+1. **Chat API onDidSubmitRequest**: Not available in current VS Code version
+2. **Chat Participant Registration**: Creates participant but doesn't intercept existing submissions  
+3. **WebView Panel Monitoring**: Copilot doesn't use createWebviewPanel
+4. **DOM Monitoring**: `window is not defined` - extension runs in Node.js, not browser
+5. **Command Monitoring**: Only catches Enter key events, not mouse clicks
+6. **Workspace Document Changes**: Only detects file modifications, not UI interactions
+7. **Extension Module Hooks**: Chat modules don't load through require()
+
+### Root Problem:
+VS Code extensions run in **Extension Host (Node.js)** while chat UI runs in **Renderer Process (Electron)**. 
+Mouse clicks happen in renderer, but extension can't directly access renderer DOM or UI events.
+
+### Evidence from Logs:
+- Enter key works: generates command events that extension can intercept
+- Mouse clicks: generate NO events visible to extension host
+- All webview/DOM hooks fail: extension has no direct UI access
+
+### Failed Attempts - Additional Analysis (v1.1.353):
+8. **VS Code Internal Service Hook**: `VS Code services not accessible` - extension can't access internal service locator
+9. **DOM-based approach**: `window is not defined` spam - repeated every 500ms, shows extension is in Node.js context
+
+### Next Approaches to Try:
+1. **Filesystem monitoring**: Watch for chat history/temp files that VS Code might create
+2. **Memory/process monitoring**: Look for patterns in VS Code's memory usage during chat
+3. **Network monitoring**: Monitor HTTP requests to Copilot API endpoints  
+4. **Extension host IPC**: Try to intercept inter-process communication
+5. **Chat storage monitoring**: Watch VS Code's chat storage/indexedDB files
+6. **Deep API reflection**: Enumerate all available VS Code APIs at runtime
+
+### FAILED APPROACHES SUMMARY (Aug 11 2025)
+
+#### 1. ❌ Widget acceptInput Method Interception (v1.1.354)
+- **Problem**: `chatWidgetService` not accessible from extension context
+- **Result**: Widget never found, interception never activated
+- **Evidence**: No "Found chat widget" logs, polling disabled after 60s
+
+#### 2. ❌ Combined Multi-Method Detection (v1.1.356)
+- **Command Interception**: No chat submit commands intercepted
+- **Network Monitoring**: No GitHub API activity detected
+- **VS Code State Monitoring**: Only window focus changes, no chat-related state
+- **Extension Events**: Only onDidChangeWindowState triggered by focus, no chat events
+- **Evidence**: Commands `workbench.action.chat.submit`, `github.copilot.chat.acceptInput` never called
+
+#### 3. ❌ Previous Failed Approaches (v1.1.353 and earlier)
+- **Chat API onDidSubmitRequest**: Not available in current VS Code version
+- **Chat Participant Registration**: Creates participant but doesn't intercept existing submissions  
+- **WebView Panel Monitoring**: Copilot doesn't use createWebviewPanel
+- **DOM Monitoring**: `window is not defined` - extension runs in Node.js, not browser
+- **Extension Module Hooks**: Chat modules don't load through require()
+- **VS Code Internal Service Hook**: Services not accessible from extension host
+- **Workspace Document Changes**: Only detects file modifications, not UI interactions
+- **Filesystem Monitoring**: No chat-related files created during submission
+- **Deep API Reflection**: Found 65+ APIs but none provide submission events
+
+### ROOT CAUSE ANALYSIS
+**FUNDAMENTAL ISSUE**: Mouse clicks in Copilot Chat happen entirely within the Renderer Process (Electron UI) and generate NO events that are accessible to Extension Host (Node.js context).
+
+**Architecture Gap**:
+- **Extension Host**: Node.js context where our extension runs - can intercept commands, API calls
+- **Renderer Process**: Electron UI where chat interface runs - handles mouse clicks, UI events  
+- **No Bridge**: Mouse clicks don't trigger commands or API calls that cross to Extension Host
+
+### SOLUTION: API Proposal Access Required (Aug 11 2025)
+
+#### ❌ L. API Proposal Permission Issue (v1.1.364)
+- **Problem**: Extension cannot access advanced Chat APIs (chatSessionsProvider, chatParticipantPrivate, etc.)
+- **Evidence**: "Extension 'sunamocz.ai-prompt-detector' CANNOT use API proposal: chatSessionsProvider"
+- **Root Cause**: VS Code blocks access to experimental APIs unless specifically enabled
+- **Solution Required**: Start VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag
+
+#### ✅ RECOMMENDED SOLUTION: Enable Proposed APIs
+Two approaches to fix the API access issue:
+
+**Method 1: Command Line Flag (Immediate Fix)**
+```bash
+code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
+```
+
+**Method 2: Development Mode**
+- Start VS Code in extension development mode (F5 from extension project)
+- Development mode automatically enables API proposals for the extension being developed
+
+**Available APIs After Enabling:**
+- `vscode.chat.onDidSubmitRequest` - Direct chat submission events
+- `vscode.chat.registerChatSessionItemProvider` - Session monitoring
+- `vscode.chat.registerChatSessionContentProvider` - Content access
+- `vscode.chat.onDidDisposeChatSession` - Session lifecycle events
+
+**Expected Result:**
+Mouse click detection should work through proper Chat API access instead of complex workarounds.
+
+### 📊 FINAL STATUS - Why Mouse Detection is Limited (Dec 2024)
+
+**Root Cause Analysis from VS Code Source Code:**
+- VS Code chat UI runs in **Renderer Process** (Electron browser context)
+- Extensions run in **Extension Host** (Node.js context)
+- Mouse clicks in chat UI trigger `ChatSubmitAction` (found in chatExecuteActions.ts:154)
+- This action runs entirely in Renderer Process
+- No command or API event crosses to Extension Host for mouse clicks
+- Enter key works because it triggers commands that DO cross process boundary
+
+**The Only Real Solution:**
+Run VS Code with `--enable-proposed-api sunamocz.ai-prompt-detector` flag to access `vscode.chat.onDidSubmitRequest` API
+
+**Current Workaround:**
+25ms polling - detects text disappearance with minimal delay, shows notification immediately
+
+### UNTRIED APPROACHES TO EXPLORE (Backup Options)
+
+#### A. Inter-Process Communication (IPC) Monitoring
+- Monitor IPC messages between Extension Host and Renderer Process
+- Hook into VS Code's internal message bus system
+- Implementation: Override IPC communication channels
+
+#### B. Memory/Heap Monitoring
+- Monitor VS Code process memory for chat-related data structures
+- Watch for memory allocation patterns during chat submissions
+- Implementation: Native modules or process inspection
+
+#### C. System-Level Input Monitoring  
+- Monitor system mouse/keyboard events using OS APIs
+- Correlate with VS Code window focus and chat panel visibility
+- Implementation: Native Node.js modules (ffi-napi, win32 APIs)
+
+### NEW APPROACHES BASED ON CONSOLE ANALYSIS (Aug 11 2025)
+
+#### G. ❌ Extension-Level DevTools Protocol (v1.1.358)
+- **Attempt**: Connect to VS Code's Electron debugging ports (9229, 9230, 9222, 9221, 5858)
+- **Result**: All ports tested but none were open - VS Code not running with debug enabled
+- **Evidence**: DevTools connection attempts logged but no successful connections
+
+#### H. Console.log Renderer Process Injection 
+- **Insight**: VS Code dev console shows internal warnings and API proposals
+- **Approach**: Inject console monitoring script directly into VS Code renderer process
+- **Implementation**: Use executeCommand to inject JavaScript into webview context
+
+#### I. Extension Host Process Monitoring
+- **Insight**: Console shows Extension Host runs as separate process (pid 18704)
+- **Approach**: Monitor Extension Host process communication and IPC messages
+- **Implementation**: Attach to Extension Host process and monitor stdout/stderr
+
+#### J. Product.json API Proposal Override
+- **Insight**: Copilot has many enabled API proposals: `chatParticipantPrivate`, `chatProvider`, `chatEditing`
+- **Approach**: Temporarily enable same API proposals for our extension
+- **Implementation**: Modify package.json enabledApiProposals to match Copilot's permissions
+
+#### K. ❌ Direct Chat Widget API Access (v1.1.361)
+- **Approach**: Based on VS Code source code analysis, tried to access `IChatWidget.onDidAcceptInput` event
+- **Implementation**: Attempted to use `_getChatWidgets` command and workbench services to get chat widgets
+- **Result**: VS Code internal services not accessible from extension context
+- **Evidence**: "Chat Widget Service not accessible - mouse detection will be limited"
+- **Root Cause**: Internal VS Code APIs (`_getChatWidgets`, workbench services) are not exposed to extensions
+- **Source Code Insight**: Found that `chatWidget.ts:1779` fires `this._onDidAcceptInput.fire()` for all submissions (keyboard+mouse)
+- **Limitation**: Extension sandbox prevents direct access to internal widget services
+
+## 📊 Status Bar Display Policy (Added Dec 15 2024)
+- **ALWAYS use "AI Prompts:"** in status bar, never just "AI:"
+- Format: `[icon] AI Prompts: [count] | v[version]`
+- Icon indicates API status: ✅ = proposed API enabled, ⚠️ = limited mode
+- **NO red background** on status bar - icon is sufficient for status indication
+- Tooltip shows detailed status information
+
+## 🚨 CRITICAL: Proposed API Requirements for Mouse Detection (Dec 15 2024)
+**FUNDAMENTAL REQUIREMENT**: Mouse click detection REQUIRES VS Code to be launched with proposed API flag:
+```bash
+code-insiders --enable-proposed-api sunamocz.ai-prompt-detector
+```
+
+### Why Proposed APIs are Essential:
+- **Architecture Limitation**: VS Code extensions run in Extension Host (Node.js), chat UI runs in Renderer Process (Electron)
+- **No Event Bridge**: Mouse clicks in chat UI generate NO events accessible to Extension Host
+- **Only Solution**: Proposed APIs like `vscode.chat.onDidSubmitRequest` can capture all submissions
+- **Without Flag**: Only keyboard detection works (generates commands), mouse detection is IMPOSSIBLE
+
+### Technologies Critical for Mouse Detection:
+1. **Chat Submit Action** (chatExecuteActions.ts:154) - Handles mouse clicks in Renderer Process
+2. **IChatWidget.onDidAcceptInput** (chatWidget.ts:1779) - Fires for all submissions but not accessible to extensions
+3. **Chat Service** - Internal VS Code service that manages chat, inaccessible without proposed API
+4. **IPC Communication** - Inter-process messages between Renderer and Extension Host, not interceptable
+5. **Command System** - Only keyboard generates commands, mouse clicks bypass command system entirely
+
+### Failed Approaches to Remember (27 total documented):
+- Chat participants only work for @mentions, not general submissions
+- Session providers are retrospective, not real-time
+- DevTools Protocol requires debug mode
+- Clipboard monitoring causes false positives
+- DOM injection impossible from Node.js context
+- Network monitoring shows no immediate activity
+- File system has no real-time chat files
+- Memory monitoring blocked by security
+- Extension module hooks can't access chat modules
+- Widget service not exposed to extensions
+
+### Current Status:
+- **With --enable-proposed-api**: Full detection possible (if API implemented)
+- **Without flag**: Only keyboard works, mouse detection architecturally impossible
+- **install.ps1**: Automatically launches VS Code with correct flag
+
+## 🎯 DEFINITIVE Mouse Detection Solution (Dec 15 2024)
+
+### What WORKS:
+1. **Keyboard detection** - Via keybindings, captures Enter/Ctrl+Enter perfectly
+2. **Command interception** - But ONLY for keyboard (mouse doesn't generate commands)
+
+### What DOESN'T WORK for mouse:
+1. **Command interception** - Mouse calls widget.acceptInput() directly, bypasses commands
+2. **Chat API events** - Not accessible even with proposed API
+3. **Widget access** - Runs in different process (Renderer vs Extension Host)
+4. **Clipboard monitoring** - User explicitly forbade this
+5. **File watchers** - Chat doesn't create immediate files
+6. **Context monitoring** - Doesn't fire on submissions
+7. **All 28 other approaches** - See COMPLETE_MOUSE_DETECTION_ATTEMPTS.md
+
+### The ONLY solution:
+**Counter monitoring** - Check if prompt counter increased without our keyboard detection. If yes, it was a mouse click. This is architecturally the only way because mouse submissions are invisible to extensions.
+
+### Implementation:
+```typescript
+// Poll every 500ms to check if counter increased
+// If it did and we didn't detect keyboard, it was mouse
+setInterval(() => {
+  if (aiPromptCounter > lastKnownCounter) {
+    // Mouse detected
+  }
+}, 500);
+```
+
+### Why this is the ONLY way:
+- Mouse clicks happen in Renderer Process
+- They directly call widget.acceptInput()
+- No events or commands cross to Extension Host
+- We can only observe the side effect (counter increase)

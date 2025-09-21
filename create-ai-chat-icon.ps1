@@ -1,3 +1,64 @@
+<#
+.SYNOPSIS
+    Generátor ikony pro AI Copilot Prompt Detector rozšíření.
+    Vytváří 128x128 PNG ikonu s chat bubble a transparentní hvězdou pomocí .NET System.Drawing.
+
+.DESCRIPTION
+    Tento skript programaticky generuje ikonu rozšíření bez potřeby externích grafických nástrojů.
+    Využívá .NET Framework System.Drawing knihovny pro vytvoření vektorové grafiky, která je
+    následně rasterizována do PNG formátu s plnou podporou transparence (alpha kanál).
+    
+    Design ikony obsahuje následující prvky:
+    1. Transparentní pozadí (128x128 pixelů)
+    2. Modrý kruhový rámeček kolem celé ikony (#007ACC - oficiální VS Code modrá)
+    3. Centrovaný chat bubble (zaoblený obdélník) ve stejné modré barvě
+    4. Tmavý obrys chat bubble (#252526 - VS Code tmavá)
+    5. Transparentní 5-cípá hvězda uprostřed (vyříznutá díra v chat bubble)
+    
+    Technické detaily implementace:
+    - Anti-aliasing pro hladké hrany všech tvarů
+    - GraphicsPath pro vytvoření komplexních tvarů (bubble, hvězda)
+    - CompositingMode.SourceCopy pro vytvoření skutečné transparentní díry
+    - Zachování 32-bit ARGB formátu pro plnou podporu průhlednosti
+    - Matematický výpočet bodů hvězdy pomocí trigonometrických funkcí
+    
+    Design filosofie:
+    - Minimalistický čistý vzhled odpovídající VS Code estetice
+    - Chat bubble symbolizuje komunikaci s AI asistentem
+    - Transparentní hvězda reprezentuje AI/inteligenci
+    - Modrá barva zachovává konzistenci s VS Code brandingem
+    
+    Parametry grafiky:
+    - Velikost ikony: 128x128 pixelů
+    - Rámeček: 8px margin, 4px tloušťka
+    - Chat bubble: 85x60 pixelů, zaoblení 15px
+    - Hvězda: vnější radius 18px, vnitřní radius 7px
+    - Outline: 3px tloušťka
+
+.PARAMETER None
+    Skript nemá žádné parametry. Všechny hodnoty jsou pevně dané pro konzistenci.
+
+.EXAMPLE
+    ./create-ai-chat-icon.ps1
+    
+    Vytvoří soubor icon.png v aktuálním adresáři.
+
+.NOTES
+    - Vyžaduje .NET Framework s System.Drawing assembly
+    - Výstupní soubor je vždy icon.png v kořenovém adresáři
+    - Přepíše existující icon.png bez varování
+    - Ikona je optimalizována pro zobrazení ve VS Code Activity Bar
+    - PNG formát zajišťuje kompatibilitu napříč platformami
+
+.PREREQUISITES
+    - Windows s .NET Framework (System.Drawing assembly)
+    - PowerShell 5.0 nebo novější
+    - Práva pro zápis do aktuálního adresáře
+
+.OUTPUTS
+    - icon.png: 128x128 PNG ikona s transparentním pozadím
+    - Konzolový výstup s potvrzením vytvoření a popisem designu
+#>
 # Create new AI chat icon - larger chat bubble with transparent star in center
 Add-Type -AssemblyName System.Drawing
 

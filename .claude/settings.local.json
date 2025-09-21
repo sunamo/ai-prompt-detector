@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.install.ps1)",
+      "Bash(powershell:*)",
+      "Bash(./install.ps1)"
+    ],
+    "deny": []
+  }
+}
