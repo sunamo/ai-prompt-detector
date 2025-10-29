@@ -193,9 +193,9 @@ try {
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
 
-    # Spusť VS Code Insiders s projektem
+    # Spusť VS Code Insiders s projektem (bez čekání na dokončení)
     Write-Host "   - Starting VS Code Insiders..." -ForegroundColor Gray
-    Start-Process -FilePath "code-insiders" -ArgumentList $PSScriptRoot -WindowStyle Normal
+    Start-Process -FilePath "code-insiders" -ArgumentList $PSScriptRoot -WindowStyle Hidden
 
     Write-Host "   ✅ VS Code Insiders restarted" -ForegroundColor Green
 } catch {

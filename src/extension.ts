@@ -498,30 +498,68 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ENTER DETECTED');
-        // Get actual text from chat input BEFORE submitting
-        const { getChatInputText } = await import('./chatHelpers');
-        const actualText = await getChatInputText(false);
-        const promptText = actualText || '[Prompt sent via Enter]';
-        recordPrompt(promptText, 'keyboard-enter');
-        // Forward to normal chat submit (set flag to avoid double detection)
+
+        // Forward to normal chat submit first
         isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');
         isOurCommand = false;
+
+        // Wait a bit for SpecStory to create export and for us to load it
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Show notification with the most recent prompt from state (loaded by SpecStory)
+        const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Enter';
+        const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+
+        const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+        let customMsg = cfg.get<string>('customMessage') || '';
+
+        const notificationText = customMsg
+          ? `AI Prompt sent (keyboard-enter)\n${customMsg}\n\nPrompt: ${displayText}`
+          : `AI Prompt sent (keyboard-enter)\n\nPrompt: ${displayText}`;
+
+        vscode.window.showInformationMessage(notificationText);
+
+        // Increment counter
+        aiPromptCounter++;
+        updateStatusBar();
+        providerRef?.refresh();
+
+        info(`Keyboard detection SUCCESS: counter=${aiPromptCounter}`);
       })
     );
 
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
         info('🎯 CTRL+ENTER DETECTED');
-        // Get actual text from chat input BEFORE submitting
-        const { getChatInputText } = await import('./chatHelpers');
-        const actualText = await getChatInputText(false);
-        const promptText = actualText || '[Prompt sent via Ctrl+Enter]';
-        recordPrompt(promptText, 'keyboard-ctrl-enter');
-        // Forward to normal chat submit (set flag to avoid double detection)
+
+        // Forward to normal chat submit first
         isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');
         isOurCommand = false;
+
+        // Wait a bit for SpecStory to create export and for us to load it
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Show notification with the most recent prompt from state (loaded by SpecStory)
+        const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Ctrl+Enter';
+        const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+
+        const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+        let customMsg = cfg.get<string>('customMessage') || '';
+
+        const notificationText = customMsg
+          ? `AI Prompt sent (keyboard-ctrl-enter)\n${customMsg}\n\nPrompt: ${displayText}`
+          : `AI Prompt sent (keyboard-ctrl-enter)\n\nPrompt: ${displayText}`;
+
+        vscode.window.showInformationMessage(notificationText);
+
+        // Increment counter
+        aiPromptCounter++;
+        updateStatusBar();
+        providerRef?.refresh();
+
+        info(`Keyboard detection SUCCESS: counter=${aiPromptCounter}`);
       })
     );
     
