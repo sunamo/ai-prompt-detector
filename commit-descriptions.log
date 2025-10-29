@@ -228,3 +228,4 @@ v1.1.448 | Fix mouse detection: add live prompt capture and state update for mou
 v1.1.449 | Fix log directory path to correct location in project folder
 v1.1.450 | Fix double notification issue: update lastKeyboardDetection timestamp to prevent false mouse detection, unify Enter and Ctrl+Enter handlers to use text capture
 v1.1.451 | Fix text capture: enable focus attempt in getChatInputText to properly capture prompt text from chat input
+v1.1.452 | Add extensive debug logging to getChatInputText to diagnose why text capture fails

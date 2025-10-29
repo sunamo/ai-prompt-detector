@@ -515,6 +515,15 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`⚠️ getChatInputText failed: ${e}`);
         }
 
+        // Forward to chat submit (since our keybinding blocks default behavior)
+        info('Forwarding to workbench.action.chat.submit...');
+        try {
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit executed');
+        } catch (e) {
+          info(`❌ Chat submit failed: ${e}`);
+        }
+
         // If we got text, add it to state immediately as live prompt
         if (capturedText && capturedText.trim()) {
           const liveEntry: PromptEntry = {
