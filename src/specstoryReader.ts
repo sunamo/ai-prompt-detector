@@ -46,13 +46,13 @@ export function loadPromptsFromFile(filePath: string, recent: string[]): void {
     const c = fs.readFileSync(filePath, 'utf8');
     info(`📄 File size: ${c.length} characters`);
 
-    const sections = c.split(/(?=_\*\*User\*\*_)/);
+    const sections = c.split(/(?=_\*\*User)/);
     info(`📋 Found ${sections.length} sections in file`);
 
     const collected: string[] = [];
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i];
-      if (s.includes('_**User**_')) {
+      if (s.includes('_**User')) {
         const body = s
           .split('\n')
           .slice(1)
