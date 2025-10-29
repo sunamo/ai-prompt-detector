@@ -8,12 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { info } from './logger';
+import { PromptEntry, state } from './state';
 
-/**
- * Ověří zda soubor odpovídá očekávanému formátu názvu SpecStory exportu.
- * @param filePath Absolutní cesta k souboru.
- * @returns true pokud název i existence souboru vyhovují.
- */
 export function isValidSpecStoryFile(filePath: string): boolean {
   info(`🔍 Checking if file is valid SpecStory file: "${filePath}"`);
   const fileName = path.basename(filePath);
@@ -25,22 +21,11 @@ export function isValidSpecStoryFile(filePath: string): boolean {
   return isValid;
 }
 
-/**
- * Načte prompty z jednoho souboru SpecStory – pořadí v souboru se převrací (collected.reverse())
- * aby nejnovější prompty daného souboru byly dříve a zachovala se globální invariantní logika.
- * Invariant (NEPORUŠIT): Pořadí se připravuje takto:
- * 1. Nasbíráme prompty v pořadí výskytu v souboru (nejstarší -> nejnovější)
- * 2. Poté provedeme collected.reverse() aby nejNOVĚJŠÍ (poslední) byl jako první
- * 3. Výsledek pushujeme do global recent pole v tomto již otočeném pořadí
- * UI (activityBarProvider) NESMÍ přidávat reverse – spoleh na zdejší úpravu.
- * Jakákoliv změna (např. zrušení reverse a náhrada obracením v UI) je REGRESE.
- * @param filePath Cesta k markdown souboru.
- * @param recent Pole do něhož se přidávají nalezené prompty.
- */
-export function loadPromptsFromFile(filePath: string, recent: string[]): void {
+export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): void {
   info(`📂 ============ LOADING PROMPTS FROM FILE ============`);
   info(`File path: "${filePath}"`);
   info(`Current recent prompts count BEFORE load: ${recent.length}`);
+  info(`Current specStoryPrompts set size: ${state.specStoryPrompts.size}`);
 
   try {
     const c = fs.readFileSync(filePath, 'utf8');
@@ -73,15 +58,45 @@ export function loadPromptsFromFile(filePath: string, recent: string[]): void {
     info(`📊 Collected ${collected.length} prompts from file`);
     info(`🔄 Reversing order (newest in file will be first)...`);
 
-    // NEODSTRAŇOVAT: Obrácené pořadí v rámci souboru – nejnovější (poslední v souboru) jde první.
     const reversed = collected.reverse();
+    let replacedCount = 0;
+
     for (let i = 0; i < reversed.length; i++) {
       const p = reversed[i];
-      recent.push(p);
-      info(`  Added prompt ${i+1}/${reversed.length}: "${p.substring(0, 60)}..."`);
+      state.specStoryPrompts.add(p);
+
+      let replaced = false;
+      for (let j = 0; j < recent.length; j++) {
+        const entry = recent[j];
+        if (entry.isLive && (entry.text === p || entry.text.includes('Loading prompt from SpecStory'))) {
+          info(`  🔄 Replacing live prompt at index ${j} with SpecStory text`);
+          recent[j] = {
+            text: p,
+            isLive: false,
+            timestamp: entry.timestamp,
+            id: entry.id
+          };
+          replaced = true;
+          replacedCount++;
+          break;
+        }
+      }
+
+      if (!replaced) {
+        const entry: PromptEntry = {
+          text: p,
+          isLive: false,
+          timestamp: Date.now(),
+          id: `specstory-${Date.now()}-${i}`
+        };
+        recent.push(entry);
+        info(`  Added new prompt ${i+1}/${reversed.length}: "${p.substring(0, 60)}..."`);
+      }
     }
 
     info(`✅ Loading complete - recent prompts count AFTER load: ${recent.length}`);
+    info(`📊 Replaced ${replacedCount} live prompts with SpecStory text`);
+    info(`📊 specStoryPrompts set size AFTER load: ${state.specStoryPrompts.size}`);
     info(`📂 ============ FILE LOADING END ============`);
   } catch (e) {
     info(`❌ ERROR loading file: ${e}`);

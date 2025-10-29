@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import { debug, info } from './logger';
-import { state } from './state';
+import { state, PromptEntry } from './state';
 
 /**
  * Poskytuje webview s výpisem zachycených promptů ve vlastním panelu Activity Bar.
@@ -76,7 +76,8 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
       const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse / NE sort
       promptsHtml = renderList
         .map((prompt, index) => {
-          const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
+          const promptText = prompt.text;
+          const shortPrompt = promptText.length > 150 ? promptText.substring(0, 150) + '…' : promptText;
           const safePrompt = shortPrompt
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -145,14 +146,15 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
  * @param prompts Seřazené prompty (index 0 = nejnovější globálně).
  * @param max Maximální počet zobrazených.
  */
-function renderPrompts(prompts: string[], max: number): string {
+function renderPrompts(prompts: PromptEntry[], max: number): string {
   let promptsHtml = '';
 
   if (prompts.length > 0) {
     const renderList = prompts.slice(0, max); // NE reverse / NE sort
     promptsHtml = renderList
       .map((prompt, index) => {
-        const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '…' : prompt;
+          const promptText = prompt.text;
+          const shortPrompt = promptText.length > 150 ? promptText.substring(0, 150) + '…' : promptText;
         const safePrompt = shortPrompt
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')

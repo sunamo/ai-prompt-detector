@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { state } from './state';
+import { state, PromptEntry } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
@@ -174,13 +174,13 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Prevent duplicate recordings within 500ms
     const now = Date.now();
-    if (now - lastPromptTime < 500 && text === state.recentPrompts[0]) {
+    if (now - lastPromptTime < 500 && text === state.recentPrompts[0]?.text) {
       info('recordPrompt: Skipping duplicate within 500ms');
       return false;
     }
     lastPromptTime = now;
     
-    state.recentPrompts.unshift(text);
+    state.recentPrompts.unshift({ text, isLive: false, timestamp: now, id: `record-${now}` });
     if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     
     // Always increment counter and show notification
@@ -499,7 +499,7 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ============ ENTER DETECTED ============');
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
         // Forward to normal chat submit first
@@ -515,7 +515,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
         const placeholderText = '⏳ Loading prompt from SpecStory...';
-        state.recentPrompts.unshift(placeholderText);
+        state.recentPrompts.unshift({ text: placeholderText, isLive: true, timestamp: Date.now(), id: `live-${Date.now()}` });
         info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
 
         // Increment counter immediately
@@ -537,13 +537,13 @@ export async function activate(context: vscode.ExtensionContext) {
         await new Promise(r => setTimeout(r, 1500));
 
         info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
 
         // Replace placeholder with actual text from SpecStory (if available)
-        let latestPrompt = state.recentPrompts[0];
-        if (latestPrompt === placeholderText && state.recentPrompts.length > 1) {
+        let latestPrompt = state.recentPrompts[0]?.text || '';
+        if (latestPrompt.includes('Loading prompt from SpecStory') && state.recentPrompts.length > 1) {
           // Placeholder still there, use second item if available
-          latestPrompt = state.recentPrompts[1];
+          latestPrompt = state.recentPrompts[1]?.text || '';
           info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
         } else if (latestPrompt !== placeholderText) {
           // Placeholder was replaced by file watcher - good!
@@ -582,7 +582,7 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
         info('🎯 ============ CTRL+ENTER DETECTED ============');
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
         // Forward to normal chat submit first
@@ -598,7 +598,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
         const placeholderText = '⏳ Loading prompt from SpecStory...';
-        state.recentPrompts.unshift(placeholderText);
+        state.recentPrompts.unshift({ text: placeholderText, isLive: true, timestamp: Date.now(), id: `live-${Date.now()}` });
         info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
 
         // Increment counter immediately
@@ -620,13 +620,13 @@ export async function activate(context: vscode.ExtensionContext) {
         await new Promise(r => setTimeout(r, 1500));
 
         info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
 
         // Replace placeholder with actual text from SpecStory (if available)
-        let latestPrompt = state.recentPrompts[0];
-        if (latestPrompt === placeholderText && state.recentPrompts.length > 1) {
+        let latestPrompt = state.recentPrompts[0]?.text || '';
+        if (latestPrompt.includes('Loading prompt from SpecStory') && state.recentPrompts.length > 1) {
           // Placeholder still there, use second item if available
-          latestPrompt = state.recentPrompts[1];
+          latestPrompt = state.recentPrompts[1]?.text || '';
           info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
         } else if (latestPrompt !== placeholderText) {
           // Placeholder was replaced by file watcher - good!
@@ -677,7 +677,7 @@ export async function activate(context: vscode.ExtensionContext) {
           info('🎯 ============ MOUSE DETECTED ============');
           info('Counter increased without recent keyboard detection - must be mouse');
           info(`state.recentPrompts count: ${state.recentPrompts.length}`);
-          info(`state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+          info(`state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
 
           // Show notification for mouse with prompt text
           const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
@@ -685,7 +685,8 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`Custom message from config: "${customMsg}"`);
 
           // Get the most recent prompt text
-          const latestPrompt = state.recentPrompts[0] || '[Prompt text not available]';
+          const latestPromptEntry = state.recentPrompts[0];
+          const latestPrompt = latestPromptEntry?.text || '[Prompt text not available]';
           info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
           const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
           info(`Display text (truncated): "${displayText}"`);
