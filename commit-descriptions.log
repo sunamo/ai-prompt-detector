@@ -218,3 +218,4 @@ v1.1.435 | Updated README.md - added all four Enter variants details
 v1.1.436 | Updated keybindings: removed Ctrl+Shift+Enter and Ctrl+Alt+Enter, kept only Enter and Ctrl+Enter
 v1.1.437 | Show actual prompt text in notifications
 v1.1.438 | Capture actual prompt text instead of placeholder
+v1.1.439 | Use SpecStory exports for prompt text + fix cmd window

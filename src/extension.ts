@@ -497,69 +497,121 @@ export async function activate(context: vscode.ExtensionContext) {
     // Method 3: Keyboard detection (WORKS PERFECTLY)
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
-        info('🎯 ENTER DETECTED');
+        info('🎯 ============ ENTER DETECTED ============');
+        info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
         // Forward to normal chat submit first
+        info('Forwarding to workbench.action.chat.submit...');
         isOurCommand = true;
-        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        try {
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit command executed successfully');
+        } catch (e) {
+          info(`❌ Chat submit command failed: ${e}`);
+        }
         isOurCommand = false;
 
         // Wait a bit for SpecStory to create export and for us to load it
+        info('Waiting 1000ms for SpecStory export...');
         await new Promise(r => setTimeout(r, 1000));
+
+        info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
 
         // Show notification with the most recent prompt from state (loaded by SpecStory)
         const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Enter';
+        info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+        info(`Display text (truncated): "${displayText}"`);
 
         const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
         let customMsg = cfg.get<string>('customMessage') || '';
+        info(`Custom message from config: "${customMsg}"`);
 
         const notificationText = customMsg
           ? `AI Prompt sent (keyboard-enter)\n${customMsg}\n\nPrompt: ${displayText}`
           : `AI Prompt sent (keyboard-enter)\n\nPrompt: ${displayText}`;
 
+        info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
 
         // Increment counter
+        const oldCounter = aiPromptCounter;
         aiPromptCounter++;
-        updateStatusBar();
-        providerRef?.refresh();
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
 
-        info(`Keyboard detection SUCCESS: counter=${aiPromptCounter}`);
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called - will show ${state.recentPrompts.length} prompts in activity bar`);
+
+        info(`✅ ENTER detection complete - final counter: ${aiPromptCounter}`);
+        info('🎯 ============ ENTER DETECTION END ============');
       })
     );
 
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
-        info('🎯 CTRL+ENTER DETECTED');
+        info('🎯 ============ CTRL+ENTER DETECTED ============');
+        info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
         // Forward to normal chat submit first
+        info('Forwarding to workbench.action.chat.submit...');
         isOurCommand = true;
-        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        try {
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit command executed successfully');
+        } catch (e) {
+          info(`❌ Chat submit command failed: ${e}`);
+        }
         isOurCommand = false;
 
         // Wait a bit for SpecStory to create export and for us to load it
+        info('Waiting 1000ms for SpecStory export...');
         await new Promise(r => setTimeout(r, 1000));
+
+        info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
 
         // Show notification with the most recent prompt from state (loaded by SpecStory)
         const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Ctrl+Enter';
+        info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+        info(`Display text (truncated): "${displayText}"`);
 
         const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
         let customMsg = cfg.get<string>('customMessage') || '';
+        info(`Custom message from config: "${customMsg}"`);
 
         const notificationText = customMsg
           ? `AI Prompt sent (keyboard-ctrl-enter)\n${customMsg}\n\nPrompt: ${displayText}`
           : `AI Prompt sent (keyboard-ctrl-enter)\n\nPrompt: ${displayText}`;
 
+        info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
 
         // Increment counter
+        const oldCounter = aiPromptCounter;
         aiPromptCounter++;
-        updateStatusBar();
-        providerRef?.refresh();
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
 
-        info(`Keyboard detection SUCCESS: counter=${aiPromptCounter}`);
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called - will show ${state.recentPrompts.length} prompts in activity bar`);
+
+        info(`✅ CTRL+ENTER detection complete - final counter: ${aiPromptCounter}`);
+        info('🎯 ============ CTRL+ENTER DETECTION END ============');
       })
     );
     
@@ -569,25 +621,41 @@ export async function activate(context: vscode.ExtensionContext) {
     
     const monitorInterval = setInterval(() => {
       if (aiPromptCounter > lastSeenCounter) {
+        info(`📊 Counter change detected: ${lastSeenCounter} → ${aiPromptCounter}`);
         const now = Date.now();
+        const timeSinceLastKeyboard = now - lastKeyboardDetection;
+        info(`⏱️ Time since last keyboard detection: ${timeSinceLastKeyboard}ms`);
+
         // If counter increased and we haven't detected it recently via keyboard
-        if (now - lastKeyboardDetection > 500) {
-          info('🎯 MOUSE DETECTED - counter increased without keyboard');
+        if (timeSinceLastKeyboard > 500) {
+          info('🎯 ============ MOUSE DETECTED ============');
+          info('Counter increased without recent keyboard detection - must be mouse');
+          info(`state.recentPrompts count: ${state.recentPrompts.length}`);
+          info(`state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
+
           // Show notification for mouse with prompt text
           const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
           let customMsg = cfg.get<string>('customMessage') || '';
+          info(`Custom message from config: "${customMsg}"`);
 
           // Get the most recent prompt text
           const latestPrompt = state.recentPrompts[0] || '[Prompt text not available]';
+          info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
           const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+          info(`Display text (truncated): "${displayText}"`);
 
           const notificationText = customMsg
             ? `AI Prompt sent (mouse)\n${customMsg}\n\nPrompt: ${displayText}`
             : `AI Prompt sent (mouse)\n\nPrompt: ${displayText}`;
 
+          info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
           vscode.window.showInformationMessage(notificationText);
+          info('🎯 ============ MOUSE DETECTION END ============');
+        } else {
+          info(`⏩ Skipping mouse notification - recent keyboard detection (${timeSinceLastKeyboard}ms ago)`);
         }
         lastSeenCounter = aiPromptCounter;
+        info(`Updated lastSeenCounter to: ${lastSeenCounter}`);
       }
     }, 250); // Check every 250ms
     
