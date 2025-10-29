@@ -509,7 +509,7 @@ export async function activate(context: vscode.ExtensionContext) {
         try {
           // Try getChatInputText helper
           const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(false);
+          capturedText = await getChatInputText(true);
           info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
         } catch (e) {
           info(`⚠️ getChatInputText failed: ${e}`);
@@ -587,7 +587,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         try {
           const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(false);
+          capturedText = await getChatInputText(true);
           info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
         } catch (e) {
           info(`⚠️ getChatInputText failed: ${e}`);
@@ -670,7 +670,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
           try {
             const { getChatInputText } = await import('./chatHelpers');
-            capturedText = await getChatInputText(false);
+            capturedText = await getChatInputText(true);
             info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
           } catch (e) {
             info(`⚠️ getChatInputText failed: ${e}`);
