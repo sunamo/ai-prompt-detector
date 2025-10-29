@@ -499,24 +499,44 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ============ ENTER DETECTED ============');
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Forward to normal chat submit first
-        info('Forwarding to workbench.action.chat.submit...');
-        isOurCommand = true;
-        try {
-          await vscode.commands.executeCommand('workbench.action.chat.submit');
-          info('✅ Chat submit command executed successfully');
-        } catch (e) {
-          info(`❌ Chat submit command failed: ${e}`);
-        }
-        isOurCommand = false;
+        // Try to get actual text from chat input BEFORE submitting
+        let capturedText = '';
+        info('🔍 Attempting to capture prompt text...');
 
-        // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
-        const placeholderText = '⏳ Loading prompt from SpecStory...';
-        state.recentPrompts.unshift({ text: placeholderText, isLive: true, timestamp: Date.now(), id: `live-${Date.now()}` });
-        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+        try {
+          // Try getChatInputText helper
+          const { getChatInputText } = await import('./chatHelpers');
+          capturedText = await getChatInputText(false);
+          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+        } catch (e) {
+          info(`⚠️ getChatInputText failed: ${e}`);
+        }
+
+        // If we got text, add it to state immediately as live prompt
+        if (capturedText && capturedText.trim()) {
+          const liveEntry: PromptEntry = {
+            text: capturedText.trim(),
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-${Date.now()}`
+          };
+          state.recentPrompts.unshift(liveEntry);
+          info(`✅ Added LIVE prompt with real text to state - count now: ${state.recentPrompts.length}`);
+        } else {
+          // Fallback: add placeholder
+          info(`⚠️ Could not capture text, using placeholder`);
+          const placeholderEntry: PromptEntry = {
+            text: '⏳ Prompt sent (text capture failed)',
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-${Date.now()}`
+          };
+          state.recentPrompts.unshift(placeholderEntry);
+          info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+        }
 
         // Increment counter immediately
         const oldCounter = aiPromptCounter;
@@ -528,33 +548,12 @@ export async function activate(context: vscode.ExtensionContext) {
         const v = ext?.packageJSON?.version || '?';
         info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
 
-        // Refresh activity bar to show placeholder immediately
+        // Refresh activity bar to show live prompt immediately
         providerRef?.refresh();
-        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts (including placeholder)`);
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts`);
 
-        // Wait a bit for SpecStory to create export and for us to load it
-        info('Waiting 1500ms for SpecStory export...');
-        await new Promise(r => setTimeout(r, 1500));
-
-        info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
-
-        // Replace placeholder with actual text from SpecStory (if available)
-        let latestPrompt = state.recentPrompts[0]?.text || '';
-        if (latestPrompt.includes('Loading prompt from SpecStory') && state.recentPrompts.length > 1) {
-          // Placeholder still there, use second item if available
-          latestPrompt = state.recentPrompts[1]?.text || '';
-          info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
-        } else if (latestPrompt !== placeholderText) {
-          // Placeholder was replaced by file watcher - good!
-          info(`✅ Placeholder was replaced by SpecStory export: "${latestPrompt.substring(0, 100)}"`);
-        } else {
-          // No SpecStory export yet, use fallback
-          latestPrompt = 'Prompt sent via Enter';
-          info(`❌ No SpecStory export found, using fallback text`);
-        }
-
-        info(`Using latestPrompt for notification: "${latestPrompt.substring(0, 100)}"`);
+        // Show notification with captured text
+        const latestPrompt = state.recentPrompts[0]?.text || 'Prompt sent via Enter';
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
         info(`Display text (truncated): "${displayText}"`);
 
@@ -568,10 +567,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
         info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
-
-        // Refresh again to show final text (in case it changed)
-        providerRef?.refresh();
-        info(`🔄 Provider refresh called AFTER SpecStory load - final count: ${state.recentPrompts.length}`);
 
         info(`✅ ENTER detection complete - final counter: ${aiPromptCounter}`);
         info('🎯 ============ ENTER DETECTION END ============');

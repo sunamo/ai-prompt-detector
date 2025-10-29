@@ -222,3 +222,4 @@ v1.1.439 | Use SpecStory exports for prompt text + fix cmd window
 v1.1.440 | Add extensive debug logging throughout extension
 v1.1.441 | Fix SpecStory User marker regex - support timestamps
 v1.1.442 | Show placeholder in activity bar immediately
+v1.1.446 | Complete PromptEntry implementation - mix live and SpecStory prompts

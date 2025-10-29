@@ -59,30 +59,26 @@ export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): vo
     info(`🔄 Reversing order (newest in file will be first)...`);
 
     const reversed = collected.reverse();
-    let replacedCount = 0;
+    let foundInSpecStoryCount = 0;
 
     for (let i = 0; i < reversed.length; i++) {
       const p = reversed[i];
       state.specStoryPrompts.add(p);
 
-      let replaced = false;
+      let alreadyExists = false;
       for (let j = 0; j < recent.length; j++) {
         const entry = recent[j];
-        if (entry.isLive && (entry.text === p || entry.text.includes('Loading prompt from SpecStory'))) {
-          info(`  🔄 Replacing live prompt at index ${j} with SpecStory text`);
-          recent[j] = {
-            text: p,
-            isLive: false,
-            timestamp: entry.timestamp,
-            id: entry.id
-          };
-          replaced = true;
-          replacedCount++;
+        if (entry.text === p) {
+          if (entry.isLive) {
+            info(`  ℹ️ Found live prompt that is now in SpecStory at index ${j}`);
+            foundInSpecStoryCount++;
+          }
+          alreadyExists = true;
           break;
         }
       }
 
-      if (!replaced) {
+      if (!alreadyExists) {
         const entry: PromptEntry = {
           text: p,
           isLive: false,
@@ -95,7 +91,7 @@ export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): vo
     }
 
     info(`✅ Loading complete - recent prompts count AFTER load: ${recent.length}`);
-    info(`📊 Replaced ${replacedCount} live prompts with SpecStory text`);
+    info(`📊 Found ${foundInSpecStoryCount} live prompts that are now in SpecStory (will be hidden in Activity Bar)`);
     info(`📊 specStoryPrompts set size AFTER load: ${state.specStoryPrompts.size}`);
     info(`📂 ============ FILE LOADING END ============`);
   } catch (e) {

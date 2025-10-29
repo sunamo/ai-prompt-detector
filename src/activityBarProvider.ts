@@ -72,8 +72,23 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     }
     const maxPrompts = rawMax; // platná hodnota z nastavení
 
-    if (recentPrompts.length > 0) {
-      const renderList = recentPrompts.slice(0, maxPrompts); // NE reverse / NE sort
+    // Filter: show only live prompts NOT in SpecStory + all SpecStory prompts
+    info(`🎨 Activity Bar: Filtering prompts - total: ${recentPrompts.length}, SpecStory Set size: ${state.specStoryPrompts.size}`);
+    const filteredPrompts = recentPrompts.filter(prompt => {
+      if (prompt.isLive) {
+        // Show live prompt only if NOT in SpecStory Set
+        const isInSpecStory = state.specStoryPrompts.has(prompt.text);
+        info(`  🔍 Live prompt: "${prompt.text.substring(0, 60)}..." - in SpecStory: ${isInSpecStory} - ${isInSpecStory ? 'HIDDEN' : 'SHOWN'}`);
+        return !isInSpecStory;
+      }
+      // Always show non-live (SpecStory) prompts
+      info(`  ✅ SpecStory prompt: "${prompt.text.substring(0, 60)}..." - SHOWN`);
+      return true;
+    });
+    info(`🎨 Activity Bar: After filtering - ${filteredPrompts.length} prompts to display`);
+
+    if (filteredPrompts.length > 0) {
+      const renderList = filteredPrompts.slice(0, maxPrompts); // NE reverse / NE sort
       promptsHtml = renderList
         .map((prompt, index) => {
           const promptText = prompt.text;
@@ -133,7 +148,7 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
       `::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius:4px; }\n` +
       `::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }\n` +
       `</style>\n</head>\n<body>\n` +
-      `<div class="header-bar"> <span>📊 Total: ${recentPrompts.length}/${maxPrompts}</span><span class="meta">v${extensionVersion}</span></div>\n` +
+      `<div class="header-bar"> <span>📊 Total: ${filteredPrompts.length}/${maxPrompts}</span><span class="meta">v${extensionVersion}</span></div>\n` +
       `<div class="list">${promptsHtml}</div>\n` +
       `<div class="footer">AI Copilot Prompt Detector</div>\n` +
       `</body>\n</html>`
