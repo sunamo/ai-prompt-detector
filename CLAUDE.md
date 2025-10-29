@@ -302,20 +302,21 @@ I added the folder C:\temp\ai-prompt-detector-logs to your workspace. If you don
 
 enter must work for both copilot and my extension without remapping. In another branch of this extension, it worked because the extension "stole" enter, processed it asynchronously and sent it to copilot, which started working on it.
 
-## 🔑 Mandatory Keybindings Requirement
-- The extension MUST fully support sending prompts (including detection, logging, notification, counter increment) with ALL of these keys:
-  - Enter
-  - Ctrl+Enter
-  - Ctrl+Shift+Enter
-  - Ctrl+Alt+Enter
-- Loss of functionality for ANY of these is considered a regression and must be fixed immediately before any other changes.
+## 🔑 Mandatory Keybindings Requirement (Updated Oct 29 2025)
+- The extension MUST fully support sending prompts (including detection, logging, notification, counter increment) with these STANDARD GitHub Copilot keys:
+  - Enter (standardní odeslání)
+  - Ctrl+Enter (rychlé odeslání)
+- **NOT DETECTED** (by design):
+  - Ctrl+Shift+Enter - pouze předá prompt do nového okna BEZ jeho vykonávání
+  - Ctrl+Alt+Enter - není standardní GitHub Copilot zkratka
+- Loss of functionality for Enter or Ctrl+Enter is considered a regression and must be fixed immediately before any other changes.
 - Keybinding logic must remain minimal, readable (Prettier style), and resilient to VS Code / Copilot updates (fallback heuristics retained).
 
-## 🔑 Keybinding Focus Contexts (Appended Aug 9 2025)
-- All four Enter variants now mapped with extended when clause: `inChatInput || chatInputFocus || chatEditingInputFocus || chatInputEditorFocus || interactiveSessionFocus`.
-- This ensures detection inside emerging Copilot / Chat input focus contexts.
-- Never remove any of these focus identifiers without explicit instruction.
-- Regression definition: any loss of prompt capture (counter, notification, list) for any of the four key variants in any chat focus context.
+## 🔑 Keybinding Focus Contexts (Updated Oct 29 2025)
+- Both Enter variants (Enter, Ctrl+Enter) mapped with when clause: `inChatInput || chatInputFocus`.
+- This ensures detection inside standard Copilot Chat input focus contexts.
+- Never remove these focus identifiers without explicit instruction.
+- Regression definition: any loss of prompt capture (counter, notification, list) for Enter or Ctrl+Enter in chat input context.
 
 ## 🛡 Content Preservation Policy (copilot-instructions.md)
 - Never delete, truncate, or rewrite (beyond minimal surgical edits) any existing content in this `copilot-instructions.md` file.

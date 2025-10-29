@@ -9,7 +9,7 @@
 
 AI Copilot Prompt Detector monitoruje vaše interakce s GitHub Copilot Chatem a poskytuje okamžitou zpětnou vazbu pro ověření kvality AI kódu. Pokaždé když odešlete prompt do Copilotu:
 
-1. **Detekuje prompt okamžitě** - všechny čtyři Enter varianty (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter)
+1. **Detekuje prompt okamžitě** - klávesnice (Enter, Ctrl+Enter) i myš (omezená detekce)
 2. **Zobrazí notifikaci** připomínající vám zkontrolovat odpověď AI
 3. **Zobrazí všechny prompty** v panelu Activity Bar s real-time čítačem
 4. **Čte SpecStory exporty** ze složek `.specstory/history/` pro kontextovou analýzu
@@ -18,11 +18,9 @@ AI Copilot Prompt Detector monitoruje vaše interakce s GitHub Copilot Chatem a 
 ## 🚀 Hlavní Funkce
 
 ### Real-Time Detekce Promptů
-- **Detekce Všech Enter Variant**: Zachytává všechny čtyři způsoby odeslání
-  - `Enter` - standardní odeslání
-  - `Ctrl+Enter` - rychlé odeslání
-  - `Ctrl+Shift+Enter` - multiline odeslání
-  - `Ctrl+Alt+Enter` - alternativní odeslání
+- **Detekce Klávesnice**: Zachytává standardní GitHub Copilot zkratky
+  - `Enter` - standardní odeslání promptu
+  - `Ctrl+Enter` - rychlé odeslání promptu
 - **Detekce Myši**: Omezená (architektonické omezení VS Code, viz Technické poznámky)
 - **Čítač ve Status Baru**: Zobrazuje celkový počet odeslaných promptů (např. "AI Prompts: 42")
 - **Ikona v Activity Baru**: Vlastní ikona v levém postranním panelu pro rychlý přístup
@@ -94,16 +92,16 @@ Když je `customMessage` prázdné, rozšíření generuje kontextové zprávy:
 
 ### Klávesové Zkratky
 
-Rozšíření detekuje všechny čtyři Enter varianty:
+Rozšíření detekuje standardní GitHub Copilot klávesové zkratky:
 
 | Klávesová Kombinace | Akce | Popis |
 |---------------------|------|-------|
-| `Enter` | Odeslat prompt + detekovat | Standardní odeslání |
-| `Ctrl+Enter` | Odeslat prompt + detekovat | Rychlé odeslání |
-| `Ctrl+Shift+Enter` | Odeslat prompt + detekovat | Multiline odeslání |
-| `Ctrl+Alt+Enter` | Odeslat prompt + detekovat | Alternativní odeslání |
+| `Enter` | Odeslat prompt + detekovat | Standardní odeslání promptu |
+| `Ctrl+Enter` | Odeslat prompt + detekovat | Rychlé odeslání promptu |
 
-**Všechny čtyři klávesové kombinace fungují perfektně bez remapování nebo interference s Copilotem.**
+**Obě klávesové kombinace fungují perfektně bez remapování nebo interference s Copilotem.**
+
+> **Poznámka**: `Ctrl+Shift+Enter` (předání do nového okna) a jiné kombinace nejsou detekovány, protože neprovádějí přímé odeslání promptu.
 
 ## 📊 UI Komponenty
 
@@ -139,7 +137,8 @@ Recent Prompts (50)
 ### Detekce Klávesnice (Funguje Perfektně)
 - Keybindings registrované v `package.json` s `inChatInput || chatInputFocus` kontextem
 - Příkazy se vykonávají asynchronně bez blokování Copilotu
-- Všechny čtyři Enter varianty podporovány (Enter, Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Alt+Enter)
+- Podporované zkratky: `Enter` a `Ctrl+Enter` (standardní GitHub Copilot zkratky)
+- Nedetekované zkratky: `Ctrl+Shift+Enter` (pouze předání do nového okna, ne odeslání)
 
 ### Detekce Myši (Omezená)
 - **Architektonické Omezení**: Kliknutí myší probíhají v Renderer Process, neviditelné pro Extension Host
