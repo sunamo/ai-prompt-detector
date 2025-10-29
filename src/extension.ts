@@ -613,7 +613,7 @@ export async function activate(context: vscode.ExtensionContext) {
       'OK'
     ).then(selection => {
       if (selection === 'Learn More') {
-        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/specstory-autosave/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/ai-prompt-detector/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
       }
     });
   }

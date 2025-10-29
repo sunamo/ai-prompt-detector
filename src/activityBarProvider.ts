@@ -19,13 +19,8 @@ import { state } from './state';
  *  - Přidání jakéhokoli přetřídění = REGRESE (porušení Activity Bar Rendering Policy)
  */
 export class PromptsProvider implements vscode.WebviewViewProvider {
-<<<<<<< HEAD
-	public static readonly viewType = 'ai-prompt-detector-view';
-	private _view?: vscode.WebviewView;
-=======
   public static readonly viewType = 'ai-prompt-detector-view';
   private _view?: vscode.WebviewView;
->>>>>>> refs/remotes/origin/master
 
   /**
    * Konstruktor – trace log vytvoření provideru.
@@ -58,53 +53,6 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
    */
   private updateWebview(): void { if (!this._view) return; this._view.webview.html = this.createPromptsHtml(); }
 
-<<<<<<< HEAD
-	private createPromptsHtml(): string {
-		let promptsHtml = '';
-		const recentPrompts = state.recentPrompts;
-		const config = vscode.workspace.getConfiguration('ai-prompt-detector');
-		const maxPrompts = config.get<number>('maxPrompts', 50);
-		if (recentPrompts.length > 0) {
-			const displayPrompts = recentPrompts.slice(0, maxPrompts);
-			promptsHtml = displayPrompts.map((prompt, index) => {
-				const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
-				const safePrompt = shortPrompt
-					.replace(/&/g, '&amp;')
-					.replace(/</g, '&lt;')
-					.replace(/>/g, '&gt;')
-					.replace(/"/g, '&quot;');
-				return `
-<div class="prompt-item">
-	<div class="prompt-number">#${index + 1}</div>
-	<div class="prompt-text">${safePrompt}</div>
-</div>`;
-			}).join('');
-		} else {
-			promptsHtml = `
-<div class="no-prompts">
-	<p>🔍 No SpecStory prompts found</p>
-	<p>Create a SpecStory conversation to display prompts</p>
-</div>`;
-		}
-		const extensionVersion = vscode.extensions.getExtension('sunamocz.ai-prompt-detector')?.packageJSON.version || '1.1.79';
-		return `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>SpecStory Prompts</title>
-	<style>
-		body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #cccccc; margin: 0; padding: 8px; font-size: 12px; line-height: 1.4; }
-		.prompt-item { background-color: #252526; border: 1px solid #3c3c3c; border-left: 4px solid #007acc; margin: 6px 0; padding: 8px; border-radius: 3px; transition: background-color 0.2s; }
-		.prompt-item:hover { background-color: #2d2d30; }
-		.prompt-number { font-weight: bold; color: #569cd6; margin-bottom: 4px; font-size: 11px; }
-		.prompt-text { color: #d4d4d4; font-size: 11px; line-height: 1.3; word-wrap: break-word; }
-		.no-prompts { text-align: center; padding: 20px; color: #888; }
-		.header-bar { margin-bottom: 15px; padding: 8px; background-color: #0e639c; border-radius: 3px; text-align: center; color: white; font-size: 10px; }
-	</style>
-</head>
-<body>
-=======
   /**
    * Výpis promptů: pořadí vychází přímo z `state.recentPrompts`.
    * INVARIANT: Žádné reverse/sort/secondary slice od konce – pouze slice(0, maxPrompts).
@@ -115,7 +63,6 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     let promptsHtml = '';
     const recentPrompts = state.recentPrompts; // pořadí: newest file first + newest prompt first (index 0 = nejnovější)
     const config = vscode.workspace.getConfiguration('ai-prompt-detector');
->>>>>>> refs/remotes/origin/master
 
     // KONFIGURACE BEZ DEFAULTU: NESMÍME používat druhý parametr get(). Pokud není hodnota nastavena, zobrazíme chybu.
     const rawMax = config.get<number>('maxPrompts');

@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# AI Assistant Instructions - AI Prompt Detector Extension
-=======
 # AI Assistant Instructions - AI Copilot Prompt Detector Extension
 
 ## ✅ Formatting Policy (Human Readable Output)
@@ -12,7 +9,6 @@
 - Avoid excessively long lines (>140 chars) where reasonable.
 - Always keep the final code below per‑file length limits already defined in these instructions.
 - This policy is mandatory for every response containing code or documentation.
->>>>>>> refs/remotes/origin/master
 
 Write to me at the beginning of each prompt that you see the logs in the folder¨
 
@@ -29,11 +25,7 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **Activity Panel** = Content area when Activity Bar icon is clicked (shows our webview)
 
 ### 🌍 LANGUAGE POLICY - CRITICAL RULE!
-<<<<<<< HEAD
-- **Communication with the copilot and comments in the code are in Czech. Everything else is in English. Without exception.**
-=======
 - **Communication with the copilot and comments in the code are in Czech. Everything else is in English. Without exceptions.**
->>>>>>> refs/remotes/origin/master
 - **ONLY cs.json localization file** is allowed to contain non-English text
 - **ALL code comments in English**
 - **ALL commit messages in English**
@@ -276,11 +268,7 @@ Install only the most essential packages. All files will be in typescript.
 
 Never create tests. We will not use unit tests or any other tests in the application.
 
-<<<<<<< HEAD
-For the app name, use AI Prompt Detector everywhere, no shorter or other versions
-=======
 For the app name, use AI Copilot Prompt Detector  everywhere, no shorter or other versions
->>>>>>> refs/remotes/origin/master
 
 Create files as small as possible, no more than 200 lines each.
 
