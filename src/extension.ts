@@ -660,7 +660,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Since counter somehow increases on mouse clicks, monitor it
     let lastSeenCounter = aiPromptCounter;
     
-    const monitorInterval = setInterval(() => {
+    const monitorInterval = setInterval(async () => {
       if (aiPromptCounter > lastSeenCounter) {
         info(`📊 Counter change detected: ${lastSeenCounter} → ${aiPromptCounter}`);
         const now = Date.now();
@@ -671,21 +671,44 @@ export async function activate(context: vscode.ExtensionContext) {
         if (timeSinceLastKeyboard > 500) {
           info('🎯 ============ MOUSE DETECTED ============');
           info('Counter increased without recent keyboard detection - must be mouse');
-          info(`state.recentPrompts count: ${state.recentPrompts.length}`);
-          info(`state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+          info(`state.recentPrompts count BEFORE: ${state.recentPrompts.length}`);
 
-          // Show notification for mouse with prompt text
+          // Try to capture actual text from chat input
+          let capturedText = '';
+          info('🔍 Attempting to capture prompt text for mouse...');
+
+          try {
+            const { getChatInputText } = await import('./chatHelpers');
+            capturedText = await getChatInputText(false);
+            info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+          } catch (e) {
+            info(`⚠️ getChatInputText failed: ${e}`);
+          }
+
+          // Add to state immediately as live prompt with real text (or fallback)
+          const promptText = capturedText && capturedText.trim()
+            ? capturedText.trim()
+            : 'Prompt sent via mouse';
+
+          const liveEntry: PromptEntry = {
+            text: promptText,
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-mouse-${Date.now()}`
+          };
+          state.recentPrompts.unshift(liveEntry);
+          info(`✅ Added LIVE prompt (mouse) to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
+
+          // Refresh activity bar
+          providerRef?.refresh();
+          info(`🔄 Provider refresh called for mouse detection`);
+
+          // Show notification with captured text
           const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
           let customMsg = cfg.get<string>('customMessage') || '';
           info(`Custom message from config: "${customMsg}"`);
 
-          // Get the most recent prompt text
-          const latestPromptEntry = state.recentPrompts[0];
-          const latestPrompt = latestPromptEntry?.text || '[Prompt text not available]';
-          info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
-          const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
-          info(`Display text (truncated): "${displayText}"`);
-
+          const displayText = promptText.length > 200 ? promptText.substring(0, 200) + '...' : promptText;
           const notificationText = customMsg
             ? `AI Prompt sent (mouse)\n${customMsg}\n\nPrompt: ${displayText}`
             : `AI Prompt sent (mouse)\n\nPrompt: ${displayText}`;
