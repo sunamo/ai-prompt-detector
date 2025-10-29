@@ -152,92 +152,46 @@ $vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-
 if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VSIX packaging failed" }
 Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
 
-# --- Close Code - OSS before installation ---
-Write-Host "5. Closing Code - OSS before installation..." -ForegroundColor Yellow
+# --- Close VS Code before installation ---
+Write-Host "5. Closing VS Code before installation..." -ForegroundColor Yellow
 try {
-    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Host "   ✅ Code - OSS closed" -ForegroundColor Green
+    Write-Host "   ✅ VS Code closed" -ForegroundColor Green
 } catch {
-    Write-Host "   ⚠️ Code - OSS was not running or couldn't be closed" -ForegroundColor Yellow
+    Write-Host "   ⚠️ VS Code was not running or couldn't be closed" -ForegroundColor Yellow
 }
 
-# --- Install extension to Code - OSS extensions folder ---
-Write-Host "6. Installing extension to Code - OSS..." -ForegroundColor Yellow
-# Najít Code - OSS extensions složku
-$codeOssExtensionsPath = "$env:USERPROFILE\.vscode-oss-dev\extensions"
-if (-not (Test-Path $codeOssExtensionsPath)) {
-    New-Item -ItemType Directory -Path $codeOssExtensionsPath -Force | Out-Null
+# --- Install extension to VS Code ---
+Write-Host "6. Installing extension to VS Code..." -ForegroundColor Yellow
+$installOutput = code --install-extension $vsixName --force 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   ⚠️ Installation warning: $installOutput" -ForegroundColor Yellow
+} else {
+    Write-Host "   ✅ Extension installed to VS Code (version $newVersion)" -ForegroundColor Green
 }
-
-# Rozbalit VSIX do extensions složky
-$extensionPath = Join-Path $codeOssExtensionsPath "sunamocz.ai-prompt-detector-$newVersion"
-if (Test-Path $extensionPath) {
-    Remove-Item $extensionPath -Recurse -Force
-}
-
-# Rozbalit VSIX (je to ZIP soubor)
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$vsixFullPath = Join-Path (Get-Location) $vsixName
-[System.IO.Compression.ZipFile]::ExtractToDirectory($vsixFullPath, $extensionPath)
-
-# Přesunout extension soubory do správné složky
-$extractedExtension = Join-Path $extensionPath "extension"
-if (Test-Path $extractedExtension) {
-    $tempPath = "$extensionPath-temp"
-    Move-Item $extractedExtension $tempPath -Force
-    Remove-Item $extensionPath -Recurse -Force
-    Move-Item $tempPath $extensionPath -Force
-}
-
-Write-Host "   ✅ Extension installed to Code - OSS (version $newVersion)" -ForegroundColor Green
 
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
 
-# --- Restart Code - OSS to load the new extension version ---
-Write-Host "7. Restarting Code - OSS..." -ForegroundColor Yellow
+# --- Restart VS Code to load the new extension version ---
+Write-Host "7. Restarting VS Code..." -ForegroundColor Yellow
 try {
-    # Zavři všechny instance Code - OSS
-    Write-Host "   - Closing all Code - OSS instances..." -ForegroundColor Gray
-    Get-Process -Name "Code - OSS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    
+    # Zavři všechny instance VS Code
+    Write-Host "   - Closing all VS Code instances..." -ForegroundColor Gray
+    Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
-    
-    # Oprav main.js před spuštěním Code - OSS
-    Write-Host "   - Patching Code - OSS main.js to fix startup errors..." -ForegroundColor Gray
-    $mainJsPath = 'E:\vs\TypeScript_Projects\_\vscode\out\main.js'
-    if (Test-Path $mainJsPath) {
-        $mainContent = Get-Content $mainJsPath -Raw
-        
-        # Zakomentuj problematické řádky
-        # 1. app.enableSandbox()
-        if ($mainContent -notmatch '// app\.enableSandbox\(\)') {
-            $mainContent = $mainContent -replace '(\s+)(app\.enableSandbox\(\);)', '$1// $2 // Patched by install.ps1'
-        }
-        
-        # 2. protocol.registerSchemesAsPrivileged - jednoduše to zakomentujeme
-        if ($mainContent -notmatch '// protocol\.registerSchemesAsPrivileged') {
-            # Najdeme celý blok a zakomentujeme ho
-            $mainContent = $mainContent -replace '(protocol\.registerSchemesAsPrivileged\(\[[\s\S]*?\]\);)', '/* Patched by install.ps1 - moved to whenReady
-$1
-*/'
-        }
-        
-        Set-Content $mainJsPath $mainContent -NoNewline
-        Write-Host "   ✅ main.js patched" -ForegroundColor Green
-    }
-    
-    # Spusť Code - OSS s projektem
-    Write-Host "   - Starting Code - OSS..." -ForegroundColor Gray
-    $codeOssPath = 'E:\vs\TypeScript_Projects\_\VSCode-win32-x64\Code - OSS.exe'
-    Start-Process -FilePath $codeOssPath -ArgumentList 'E:\vs\TypeScript_Projects\ai-prompt-detector' -WindowStyle Normal
-    
-    Write-Host "   ✅ Code - OSS restarted" -ForegroundColor Green
+
+    # Spusť VS Code s projektem
+    Write-Host "   - Starting VS Code..." -ForegroundColor Gray
+    Start-Process -FilePath "code" -ArgumentList $PSScriptRoot -WindowStyle Normal
+
+    Write-Host "   ✅ VS Code restarted" -ForegroundColor Green
 } catch {
-    Write-Host "   ⚠️ Code - OSS restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "   ⚠️ VS Code restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Extension v$newVersion installed and Code - OSS restarted!" -ForegroundColor Green
+Write-Host "Extension v$newVersion installed and VS Code restarted!" -ForegroundColor Green
