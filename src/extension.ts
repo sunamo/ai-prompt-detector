@@ -513,16 +513,48 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         isOurCommand = false;
 
+        // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
+        const placeholderText = '⏳ Loading prompt from SpecStory...';
+        state.recentPrompts.unshift(placeholderText);
+        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+
+        // Increment counter immediately
+        const oldCounter = aiPromptCounter;
+        aiPromptCounter++;
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        // Refresh activity bar to show placeholder immediately
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts (including placeholder)`);
+
         // Wait a bit for SpecStory to create export and for us to load it
-        info('Waiting 1000ms for SpecStory export...');
-        await new Promise(r => setTimeout(r, 1000));
+        info('Waiting 1500ms for SpecStory export...');
+        await new Promise(r => setTimeout(r, 1500));
 
         info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
         info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
 
-        // Show notification with the most recent prompt from state (loaded by SpecStory)
-        const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Enter';
-        info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
+        // Replace placeholder with actual text from SpecStory (if available)
+        let latestPrompt = state.recentPrompts[0];
+        if (latestPrompt === placeholderText && state.recentPrompts.length > 1) {
+          // Placeholder still there, use second item if available
+          latestPrompt = state.recentPrompts[1];
+          info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
+        } else if (latestPrompt !== placeholderText) {
+          // Placeholder was replaced by file watcher - good!
+          info(`✅ Placeholder was replaced by SpecStory export: "${latestPrompt.substring(0, 100)}"`);
+        } else {
+          // No SpecStory export yet, use fallback
+          latestPrompt = 'Prompt sent via Enter';
+          info(`❌ No SpecStory export found, using fallback text`);
+        }
+
+        info(`Using latestPrompt for notification: "${latestPrompt.substring(0, 100)}"`);
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
         info(`Display text (truncated): "${displayText}"`);
 
@@ -537,18 +569,9 @@ export async function activate(context: vscode.ExtensionContext) {
         info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
 
-        // Increment counter
-        const oldCounter = aiPromptCounter;
-        aiPromptCounter++;
-        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
-
-        updateStatusBar();
-        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
-        const v = ext?.packageJSON?.version || '?';
-        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
-
+        // Refresh again to show final text (in case it changed)
         providerRef?.refresh();
-        info(`🔄 Provider refresh called - will show ${state.recentPrompts.length} prompts in activity bar`);
+        info(`🔄 Provider refresh called AFTER SpecStory load - final count: ${state.recentPrompts.length}`);
 
         info(`✅ ENTER detection complete - final counter: ${aiPromptCounter}`);
         info('🎯 ============ ENTER DETECTION END ============');
@@ -573,16 +596,48 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         isOurCommand = false;
 
+        // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
+        const placeholderText = '⏳ Loading prompt from SpecStory...';
+        state.recentPrompts.unshift(placeholderText);
+        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+
+        // Increment counter immediately
+        const oldCounter = aiPromptCounter;
+        aiPromptCounter++;
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        // Refresh activity bar to show placeholder immediately
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts (including placeholder)`);
+
         // Wait a bit for SpecStory to create export and for us to load it
-        info('Waiting 1000ms for SpecStory export...');
-        await new Promise(r => setTimeout(r, 1000));
+        info('Waiting 1500ms for SpecStory export...');
+        await new Promise(r => setTimeout(r, 1500));
 
         info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
         info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.substring(0, 100) || 'EMPTY'}"`);
 
-        // Show notification with the most recent prompt from state (loaded by SpecStory)
-        const latestPrompt = state.recentPrompts[0] || 'Prompt sent via Ctrl+Enter';
-        info(`Using latestPrompt: "${latestPrompt.substring(0, 100)}"`);
+        // Replace placeholder with actual text from SpecStory (if available)
+        let latestPrompt = state.recentPrompts[0];
+        if (latestPrompt === placeholderText && state.recentPrompts.length > 1) {
+          // Placeholder still there, use second item if available
+          latestPrompt = state.recentPrompts[1];
+          info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
+        } else if (latestPrompt !== placeholderText) {
+          // Placeholder was replaced by file watcher - good!
+          info(`✅ Placeholder was replaced by SpecStory export: "${latestPrompt.substring(0, 100)}"`);
+        } else {
+          // No SpecStory export yet, use fallback
+          latestPrompt = 'Prompt sent via Ctrl+Enter';
+          info(`❌ No SpecStory export found, using fallback text`);
+        }
+
+        info(`Using latestPrompt for notification: "${latestPrompt.substring(0, 100)}"`);
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
         info(`Display text (truncated): "${displayText}"`);
 
@@ -597,18 +652,9 @@ export async function activate(context: vscode.ExtensionContext) {
         info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
 
-        // Increment counter
-        const oldCounter = aiPromptCounter;
-        aiPromptCounter++;
-        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
-
-        updateStatusBar();
-        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
-        const v = ext?.packageJSON?.version || '?';
-        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
-
+        // Refresh again to show final text (in case it changed)
         providerRef?.refresh();
-        info(`🔄 Provider refresh called - will show ${state.recentPrompts.length} prompts in activity bar`);
+        info(`🔄 Provider refresh called AFTER SpecStory load - final count: ${state.recentPrompts.length}`);
 
         info(`✅ CTRL+ENTER detection complete - final counter: ${aiPromptCounter}`);
         info('🎯 ============ CTRL+ENTER DETECTION END ============');
