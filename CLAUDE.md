@@ -84,7 +84,8 @@ As a copilot, you never change versions. The version changes fundamentally only 
 ### 🌍 LOCALIZATION - CRITICAL RULE!
 - **ALL user texts use from i18n/en.json**
 - **NEVER write texts directly in code** - always through i18n system
-- **CHANGELOG.md, README.md and all documents only in English**
+- **README.md is in CZECH during development** - will be translated to English only before marketplace release
+- **CHANGELOG.md and all other documents only in English**
 - **Commit messages in English**
 - **Code comments in English**
 - **Debug logs in English**
