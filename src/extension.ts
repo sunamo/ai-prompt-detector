@@ -502,19 +502,7 @@ export async function activate(context: vscode.ExtensionContext) {
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Try to get actual text from VS Code chat session files
-        let capturedText = '';
-        info('🔍 Attempting to capture prompt text from chat session files...');
-
-        try {
-          const { getLastChatRequest } = await import('./chatSessionReader');
-          capturedText = await getLastChatRequest() || '';
-          info(`📝 Captured text from chat session: "${capturedText.substring(0, 100)}"`);
-        } catch (e) {
-          info(`⚠️ Chat session read failed: ${e}`);
-        }
-
-        // Forward to chat submit (since our keybinding blocks default behavior)
+        // Forward to chat submit FIRST (since our keybinding blocks default behavior)
         info('Forwarding to workbench.action.chat.submit...');
         try {
           await vscode.commands.executeCommand('workbench.action.chat.submit');
@@ -523,28 +511,57 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`❌ Chat submit failed: ${e}`);
         }
 
-        // If we got text, add it to state immediately as live prompt
-        if (capturedText && capturedText.trim()) {
-          const liveEntry: PromptEntry = {
-            text: capturedText.trim(),
-            isLive: true,
-            timestamp: Date.now(),
-            id: `live-${Date.now()}`
-          };
-          state.recentPrompts.unshift(liveEntry);
-          info(`✅ Added LIVE prompt with real text to state - count now: ${state.recentPrompts.length}`);
-        } else {
-          // Fallback: add placeholder
-          info(`⚠️ Could not capture text, using placeholder`);
-          const placeholderEntry: PromptEntry = {
-            text: '⏳ Prompt sent (text capture failed)',
-            isLive: true,
-            timestamp: Date.now(),
-            id: `live-${Date.now()}`
-          };
-          state.recentPrompts.unshift(placeholderEntry);
-          info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
-        }
+        // Add placeholder immediately
+        const placeholderId = `live-${Date.now()}`;
+        const placeholderEntry: PromptEntry = {
+          text: '⏳ Waiting for prompt text...',
+          isLive: true,
+          timestamp: Date.now(),
+          id: placeholderId
+        };
+        state.recentPrompts.unshift(placeholderEntry);
+        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+
+        // Start polling for the actual prompt text (with delay to allow VS Code to write file)
+        info('🔄 Starting delayed polling for prompt text...');
+        setTimeout(async () => {
+          let capturedText = '';
+          let pollAttempts = 0;
+          const maxPolls = 10; // Poll for up to 5 seconds (10 * 500ms)
+
+          while (pollAttempts < maxPolls && !capturedText) {
+            pollAttempts++;
+            await new Promise(r => setTimeout(r, 500)); // Wait 500ms between attempts
+
+            try {
+              const { getLastChatRequest } = await import('./chatSessionReader');
+              const text = await getLastChatRequest(true) || ''; // expectNew=true to only get NEW requests
+
+              if (text) {
+                capturedText = text;
+                info(`✅ Poll attempt ${pollAttempts}: Got NEW text "${capturedText.substring(0, 100)}"`);
+              } else {
+                info(`⏳ Poll attempt ${pollAttempts}: No new request yet`);
+              }
+            } catch (e) {
+              info(`⚠️ Poll attempt ${pollAttempts} failed: ${e}`);
+            }
+          }
+
+          // Update the placeholder with actual text (or failure message)
+          const index = state.recentPrompts.findIndex(p => p.id === placeholderId);
+          if (index !== -1) {
+            if (capturedText) {
+              state.recentPrompts[index].text = capturedText;
+              info(`✅ Updated placeholder with actual text at index ${index}`);
+            } else {
+              state.recentPrompts[index].text = '⏳ Prompt sent (text capture failed after polling)';
+              info(`⚠️ Updated placeholder with failure message after ${pollAttempts} attempts`);
+            }
+            // Refresh Activity Bar to show updated text
+            providerRef?.refresh();
+          }
+        }, 100); // Start polling after 100ms initial delay
 
         // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;

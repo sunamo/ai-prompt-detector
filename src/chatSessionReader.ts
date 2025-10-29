@@ -138,13 +138,18 @@ function findLatestChatSessionFile(workspaceStoragePath: string): string | undef
 	return files[0].path;
 }
 
+// Track last known request count to detect new requests
+let lastKnownRequestCount = 0;
+let lastKnownSessionFile = '';
+
 /**
  * Přečte poslední chat request z nejnovějšího chat session souboru.
- * @returns Text posledního requestu nebo undefined pokud se nepodaří načíst.
+ * @param expectNew Pokud true, vrátí text pouze pokud je to NOVÝ request (počet requestů se zvýšil).
+ * @returns Text posledního requestu nebo undefined pokud se nepodaří načíst nebo není nový.
  */
-export async function getLastChatRequest(): Promise<string | undefined> {
+export async function getLastChatRequest(expectNew = false): Promise<string | undefined> {
 	try {
-		info('🔍 Attempting to read last chat request from VS Code chat session files...');
+		info(`🔍 Attempting to read last chat request (expectNew=${expectNew})...`);
 
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		if (!workspaceFolder) {
@@ -162,7 +167,7 @@ export async function getLastChatRequest(): Promise<string | undefined> {
 			return undefined;
 		}
 
-		info(`📖 Reading chat session file: ${chatSessionFile}`);
+		info(`📖 Reading chat session file: ${path.basename(chatSessionFile)}`);
 		const data: ChatSession = JSON.parse(fs.readFileSync(chatSessionFile, 'utf8'));
 
 		if (!data.requests || data.requests.length === 0) {
@@ -170,10 +175,30 @@ export async function getLastChatRequest(): Promise<string | undefined> {
 			return undefined;
 		}
 
+		const currentRequestCount = data.requests.length;
 		const lastRequest = data.requests[data.requests.length - 1];
 		const text = lastRequest.message.text;
 
-		info(`✅ Successfully read last chat request: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`);
+		info(`📊 Session: ${path.basename(chatSessionFile)}, Requests: ${currentRequestCount}, Last known: ${lastKnownRequestCount}`);
+
+		// If expectNew is true, check if this is a new request
+		if (expectNew) {
+			const isNewSession = chatSessionFile !== lastKnownSessionFile;
+			const isNewRequest = currentRequestCount > lastKnownRequestCount || isNewSession;
+
+			if (!isNewRequest) {
+				info(`⏩ Not a new request (same count: ${currentRequestCount})`);
+				return undefined;
+			}
+
+			info(`✅ NEW REQUEST detected! (${lastKnownRequestCount} → ${currentRequestCount})`);
+		}
+
+		// Update tracking
+		lastKnownSessionFile = chatSessionFile;
+		lastKnownRequestCount = currentRequestCount;
+
+		info(`✅ Read request: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`);
 		return text;
 
 	} catch (e) {
