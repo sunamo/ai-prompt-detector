@@ -85,8 +85,17 @@ Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -Foreg
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Commit description (not stored in commit message body beyond second -m to preserve policy semantics): $CommitDescription" -ForegroundColor Cyan
 
+# --- Add VS Code Insiders to PATH if not already present ---
+if (-not (Get-Command 'code-insiders' -ErrorAction SilentlyContinue)) {
+    $vscodeInsidersPath = 'C:\Program Files\Microsoft VS Code Insiders\bin'
+    if (Test-Path $vscodeInsidersPath) {
+        $env:PATH = "$vscodeInsidersPath;$env:PATH"
+        Write-Host "Added VS Code Insiders to PATH: $vscodeInsidersPath" -ForegroundColor Cyan
+    }
+}
+
 # --- Tool presence checks (non-fatal warning if missing vsce; we will fail when used) ---
-$required = @('pnpm','git','code')
+$required = @('pnpm','git','code-insiders')
 foreach ($t in $required) { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { Fail "Required tool '$t' not found in PATH" } }
 if (-not (Get-Command vsce -ErrorAction SilentlyContinue)) { Fail "Required tool 'vsce' not found in PATH" }
 
@@ -152,46 +161,46 @@ $vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-
 if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VSIX packaging failed" }
 Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
 
-# --- Close VS Code before installation ---
-Write-Host "5. Closing VS Code before installation..." -ForegroundColor Yellow
+# --- Close VS Code Insiders before installation ---
+Write-Host "5. Closing VS Code Insiders before installation..." -ForegroundColor Yellow
 try {
-    Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Code - Insiders" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Host "   ✅ VS Code closed" -ForegroundColor Green
+    Write-Host "   ✅ VS Code Insiders closed" -ForegroundColor Green
 } catch {
-    Write-Host "   ⚠️ VS Code was not running or couldn't be closed" -ForegroundColor Yellow
+    Write-Host "   ⚠️ VS Code Insiders was not running or couldn't be closed" -ForegroundColor Yellow
 }
 
-# --- Install extension to VS Code ---
-Write-Host "6. Installing extension to VS Code..." -ForegroundColor Yellow
-$installOutput = code --install-extension $vsixName --force 2>&1
+# --- Install extension to VS Code Insiders ---
+Write-Host "6. Installing extension to VS Code Insiders..." -ForegroundColor Yellow
+$installOutput = code-insiders --install-extension $vsixName --force 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "   ⚠️ Installation warning: $installOutput" -ForegroundColor Yellow
 } else {
-    Write-Host "   ✅ Extension installed to VS Code (version $newVersion)" -ForegroundColor Green
+    Write-Host "   ✅ Extension installed to VS Code Insiders (version $newVersion)" -ForegroundColor Green
 }
 
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
 
-# --- Restart VS Code to load the new extension version ---
-Write-Host "7. Restarting VS Code..." -ForegroundColor Yellow
+# --- Restart VS Code Insiders to load the new extension version ---
+Write-Host "7. Restarting VS Code Insiders..." -ForegroundColor Yellow
 try {
-    # Zavři všechny instance VS Code
-    Write-Host "   - Closing all VS Code instances..." -ForegroundColor Gray
-    Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Zavři všechny instance VS Code Insiders
+    Write-Host "   - Closing all VS Code Insiders instances..." -ForegroundColor Gray
+    Get-Process -Name "Code - Insiders" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
     # Krátké čekání pro dokončení ukončení procesů
     Start-Sleep -Seconds 2
 
-    # Spusť VS Code s projektem
-    Write-Host "   - Starting VS Code..." -ForegroundColor Gray
-    Start-Process -FilePath "code" -ArgumentList $PSScriptRoot -WindowStyle Normal
+    # Spusť VS Code Insiders s projektem
+    Write-Host "   - Starting VS Code Insiders..." -ForegroundColor Gray
+    Start-Process -FilePath "code-insiders" -ArgumentList $PSScriptRoot -WindowStyle Normal
 
-    Write-Host "   ✅ VS Code restarted" -ForegroundColor Green
+    Write-Host "   ✅ VS Code Insiders restarted" -ForegroundColor Green
 } catch {
-    Write-Host "   ⚠️ VS Code restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "   ⚠️ VS Code Insiders restart failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Extension v$newVersion installed and VS Code restarted!" -ForegroundColor Green
+Write-Host "Extension v$newVersion installed and VS Code Insiders restarted!" -ForegroundColor Green
