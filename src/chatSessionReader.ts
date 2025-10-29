@@ -86,9 +86,17 @@ function findWorkspaceStoragePath(workspaceFolder: vscode.WorkspaceFolder): stri
 		if (fs.existsSync(workspaceJsonPath)) {
 			try {
 				const workspaceJson = JSON.parse(fs.readFileSync(workspaceJsonPath, 'utf8'));
-				if (workspaceJson.folder && workspaceJson.folder.toLowerCase() === workspacePath.toLowerCase()) {
-					info(`✅ Found matching workspace storage: ${folder}`);
-					return path.join(workspaceStoragePath, folder);
+				if (workspaceJson.folder) {
+					// Convert URI to file path: file:///e%3A/path -> e:/path -> e:\path
+					let folderPath = workspaceJson.folder.replace('file:///', '');
+					folderPath = decodeURIComponent(folderPath);
+					// Normalize path separators
+					folderPath = folderPath.replace(/\//g, path.sep);
+
+					if (folderPath.toLowerCase() === workspacePath.toLowerCase()) {
+						info(`✅ Found matching workspace storage: ${folder}`);
+						return path.join(workspaceStoragePath, folder);
+					}
 				}
 			} catch (e) {
 				// Skip invalid JSON

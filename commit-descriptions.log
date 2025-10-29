@@ -231,3 +231,4 @@ v1.1.451 | Fix text capture: enable focus attempt in getChatInputText to properl
 v1.1.452 | Add extensive debug logging to getChatInputText to diagnose why text capture fails
 v1.1.453 | Fix submit forwarding: add workbench.action.chat.submit call after text capture so prompt actually gets sent to Copilot
 v1.1.454 | Increase chat input focus wait time to 200ms for better text capture
+v1.1.455 | Read chat prompts from VS Code chat session files instead of trying to access chat input editor
