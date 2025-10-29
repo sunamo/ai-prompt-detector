@@ -55,12 +55,11 @@ export const getChatInputText = async (
   try {
     info(`getChatInputText called: attemptFocus=${attemptFocus}`);
 
-    if (attemptFocus) {
-      info('Attempting to focus chat input...');
-      await focusChatInput();
-      await new Promise(r => setTimeout(r, 50));
-      info('Focus attempt completed');
-    }
+    // ALWAYS focus first and wait longer to ensure chat input is active editor
+    info('Focusing chat input and waiting for editor to become active...');
+    await focusChatInput();
+    await new Promise(r => setTimeout(r, 200)); // Increased wait time from 50ms to 200ms
+    info('Focus and wait completed');
 
     // Try to get text from active text editor (chat input is often a text editor)
     const activeEditor = vscode.window.activeTextEditor;
