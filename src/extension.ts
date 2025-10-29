@@ -502,17 +502,16 @@ export async function activate(context: vscode.ExtensionContext) {
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Try to get actual text from chat input BEFORE submitting
+        // Try to get actual text from VS Code chat session files
         let capturedText = '';
-        info('🔍 Attempting to capture prompt text...');
+        info('🔍 Attempting to capture prompt text from chat session files...');
 
         try {
-          // Try getChatInputText helper
-          const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(true);
-          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+          const { getLastChatRequest } = await import('./chatSessionReader');
+          capturedText = await getLastChatRequest() || '';
+          info(`📝 Captured text from chat session: "${capturedText.substring(0, 100)}"`);
         } catch (e) {
-          info(`⚠️ getChatInputText failed: ${e}`);
+          info(`⚠️ Chat session read failed: ${e}`);
         }
 
         // Forward to chat submit (since our keybinding blocks default behavior)
