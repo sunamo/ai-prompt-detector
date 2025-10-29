@@ -194,8 +194,16 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing setting customMessage');
       customMsg = '';
     }
-    
-    vscode.window.showInformationMessage(`AI Prompt sent (${source})\n${customMsg}`);
+
+    // Truncate text for notification if too long (max 200 chars)
+    const displayText = text.length > 200 ? text.substring(0, 200) + '...' : text;
+
+    // Show notification with actual prompt text
+    const notificationText = customMsg
+      ? `AI Prompt sent (${source})\n${customMsg}\n\nPrompt: ${displayText}`
+      : `AI Prompt sent (${source})\n\nPrompt: ${displayText}`;
+
+    vscode.window.showInformationMessage(notificationText);
     info(`recordPrompt SUCCESS: src=${source} len=${text.length} counter=${aiPromptCounter}`);
     return true;
   };
@@ -519,10 +527,19 @@ export async function activate(context: vscode.ExtensionContext) {
         // If counter increased and we haven't detected it recently via keyboard
         if (now - lastKeyboardDetection > 500) {
           info('🎯 MOUSE DETECTED - counter increased without keyboard');
-          // Show notification for mouse
+          // Show notification for mouse with prompt text
           const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
           let customMsg = cfg.get<string>('customMessage') || '';
-          vscode.window.showInformationMessage(`AI Prompt sent (mouse)\n${customMsg}`);
+
+          // Get the most recent prompt text
+          const latestPrompt = state.recentPrompts[0] || '[Prompt text not available]';
+          const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+
+          const notificationText = customMsg
+            ? `AI Prompt sent (mouse)\n${customMsg}\n\nPrompt: ${displayText}`
+            : `AI Prompt sent (mouse)\n\nPrompt: ${displayText}`;
+
+          vscode.window.showInformationMessage(notificationText);
         }
         lastSeenCounter = aiPromptCounter;
       }

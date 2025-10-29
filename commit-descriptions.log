@@ -215,3 +215,4 @@ v1.1.432 | Resolved all merge conflicts and removed legacy files
 v1.1.433 | Changed install script to use code.exe instead of Code - OSS
 v1.1.434 | Fixed: install to code-insiders instead of code
 v1.1.435 | Updated README.md - added all four Enter variants details
+v1.1.436 | Updated keybindings: removed Ctrl+Shift+Enter and Ctrl+Alt+Enter, kept only Enter and Ctrl+Enter
