@@ -6,3 +6,4 @@ dist/
 .vscode-insiders-test/
 .nyc_output/
 coverage/
+logs

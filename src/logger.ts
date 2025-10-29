@@ -29,7 +29,7 @@ function refreshDebug() {
 export function initLogger() {
   channel = vscode.window.createOutputChannel('SpecStory Prompts');
   refreshDebug();
-  const dir = 'E:/vs/TypeScript_Projects/_/logs';
+  const dir = 'E:/vs/TypeScript_Projects/_vscode/ai-prompt-detector/logs';
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   } catch {}
