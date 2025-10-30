@@ -513,18 +513,8 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`❌ Chat submit failed: ${e}`);
         }
 
-        // Trigger SpecStory export immediately to avoid 18s+ delay from chat session file writes
-        info('🚀 Triggering SpecStory export to force immediate save...');
-        try {
-          await vscode.commands.executeCommand('specstory.showSpecStoryPreview');
-          const specstoryTriggerTime = Date.now();
-          info(`✅ SpecStory export triggered at: ${specstoryTriggerTime}`);
-          info(`⏱️ TIME: Prompt send → SpecStory trigger = ${specstoryTriggerTime - promptSendTime} ms`);
-        } catch (e) {
-          info(`⚠️ SpecStory export trigger failed (extension may not be installed): ${e}`);
-        }
-
-        // Add placeholder immediately - will be updated by chat session watch callback
+        // Add placeholder immediately - MUST be before any async operations
+        // Will be updated by either: 1) SpecStory file watch, or 2) chat session watch
         const placeholderEntry: PromptEntry = {
           text: '⏳ Waiting for prompt text...',
           isLive: true,

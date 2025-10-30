@@ -236,3 +236,4 @@ v1.1.456 | Fix workspace storage path matching - decode URI and normalize path s
 v1.1.457 | Implement polling with NEW request detection - track request count to avoid showing old prompts
 v1.1.458 | Replace polling with fs.watch() on chat session files for instant prompt detection
 v1.1.460 | Add detailed timing logs to diagnose Activity Bar update delays
+v1.1.462 | Add immediate SpecStory export trigger + watch on .specstory/history for instant prompt display
