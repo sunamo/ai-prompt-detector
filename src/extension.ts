@@ -160,9 +160,9 @@ export async function activate(context: vscode.ExtensionContext) {
       return false;
     }
     lastPromptTime = now;
-    
-    state.recentPrompts.unshift({ text, isLive: false, timestamp: now, id: `record-${now}` });
-    if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
+
+    state.recentPrompts.push({ text, isLive: false, timestamp: now, id: `record-${now}` });
+    if (state.recentPrompts.length > 1000) state.recentPrompts.shift();
     
     // Always increment counter and show notification
     aiPromptCounter++;
@@ -502,7 +502,7 @@ export async function activate(context: vscode.ExtensionContext) {
           timestamp: promptSendTime,
           id: `live-${promptSendTime}`
         };
-        state.recentPrompts.unshift(placeholderEntry);
+        state.recentPrompts.push(placeholderEntry);
         info(`📝 Added placeholder - will be updated automatically by chat session watch`);
 
         // Start aggressive polling immediately to get prompt text ASAP
@@ -622,7 +622,7 @@ export async function activate(context: vscode.ExtensionContext) {
           timestamp: Date.now(),
           id: `live-${Date.now()}`
         };
-        state.recentPrompts.unshift(liveEntry);
+        state.recentPrompts.push(liveEntry);
         info(`✅ Added LIVE prompt to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
 
         // Increment counter immediately and update keyboard timestamp
@@ -705,7 +705,7 @@ export async function activate(context: vscode.ExtensionContext) {
             timestamp: Date.now(),
             id: `live-mouse-${Date.now()}`
           };
-          state.recentPrompts.unshift(liveEntry);
+          state.recentPrompts.push(liveEntry);
           info(`✅ Added LIVE prompt (mouse) to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
 
           // Refresh activity bar

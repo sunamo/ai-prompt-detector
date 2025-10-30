@@ -257,3 +257,4 @@ v1.1.484 | Change commit format to single line: version + description
 v1.1.485 | Fallback description if prompt log fails
 v1.1.486 | psal jsem že tam chci text prompt který tuto verzi měnil
 v1.1.487 | potřebuji teď udělat nemodifikovatelné součásti které už jsou správně a nemůžou se změnit. každá nemodifikovatelná součást = 1 soubor. pojmenuj každou nemodifikovatelnou část s prefixem unmodifiable_any.ts. první unmodifiable součást je zobrazení verze a počet odeslaných promptů v status baru
+v1.1.488 | ok, vypni mi zobrazení notifikace hned po startu a naopak udělej aby se automaticky zobrazil můj AB po startu
