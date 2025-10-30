@@ -38,7 +38,7 @@ AI Copilot Prompt Detector monitoruje vaše interakce s GitHub Copilot Chatem a 
 
 ### Panel Activity Bar
 - **Seznam Posledních Promptů**: Zobrazuje posledních N promptů (konfigurovatelné, výchozí: 50)
-- **Chronologické Pořadí**: Nejnovější prompt vždy nahoře (#1), nejstarší dole
+- **Chronologické Pořadí**: SpecStory prompty v původním pořadí, nové runtime prompty na konci
 - **Označitelný Text**: Snadné kopírování předchozích promptů
 - **Real-Time Aktualizace**: Obnovuje se automaticky po každé detekci
 
@@ -120,10 +120,10 @@ Rozšíření detekuje standardní GitHub Copilot klávesové zkratky:
 Recent Prompts (50)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#1: Fix the authentication bug in login.ts (nejnovější)
-#2: Add error handling to API endpoints
-#3: Refactor UserService class
+#1: Refactor UserService class (ze SpecStory)
+#2: Add error handling to API endpoints (ze SpecStory)
 ...
+#48: Fix the authentication bug (právě odesláno - nejnovější)
 ```
 
 ## 🔧 Technické Detaily

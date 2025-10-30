@@ -242,3 +242,4 @@ v1.1.466 | Add aggressive polling every 200ms to catch chat session updates fast
 v1.1.468 | Fix SpecStory prompts order - use unshift instead of push for newest first
 v1.1.470 | Revert to push - unshift broke prompt ordering
 v1.1.471 | Fixed: prompts now appear in chronological order (oldest first, newest last) as requested
+v1.1.472 | Fixed: newest prompt now appears as #1 (display reversed)
