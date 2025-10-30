@@ -371,58 +371,58 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - A helper script may re‑insert this header automatically; such commits are valid and must not be rejected as noise.
 - Treat absence, alteration, or truncation of this header as a readability regression equal in severity to keybinding failure.
 
-## 🔒 Prompt Ordering Invariants (Aug 10 2025)
-- Global ordering requirement is NOW STABLE and MUST NOT change without explicit instruction.
-- Per-file load: `specstoryReader.loadPromptsFromFile` collects user prompt segments in encounter order, then applies `collected.reverse()` BEFORE pushing into global state. This makes the newest (last in file) prompt from that markdown appear FIRST among that file's contributions.
-- Global aggregation: Files are processed in descending filename order (newest date/time first) – DO NOT alter this sorting logic. Combined with per-file reverse this yields final ordering: newest file first, within it newest prompt first.
-- Activity Bar rendering (`PromptsProvider.createPromptsHtml`) MUST NOT perform any `reverse()` on the slice of `state.recentPrompts`; it trusts upstream ordering. Adding a reverse here would flip ordering incorrectly (regression).
-- Manual runtime prompt capture (`recordPrompt` in `extension.ts`) uses `unshift()` to put freshly submitted prompts at the very top. DO NOT change to `push()` or re-sorting – would break the invariant that index #1 is always the latest overall prompt.
-- Changing ANY of: (1) per-file reverse, (2) file sorting, (3) activity bar omission of reverse, (4) use of `unshift` for new prompts – without explicit request is a regression.
-- Tests are intentionally absent; enforcement relies on code review + this documented invariant. Treat accidental removal as critical like keybinding failure.
+## 🔒 Prompt Ordering Invariants (UPDATED Oct 30 2025)
+**CRITICAL CHANGE**: User requested prompts appear in CHRONOLOGICAL order (oldest first, newest last).
 
-### ✅ Ordering Enforcement Quick Checklist
-1. specstoryReader: contains `collected.reverse()` BEFORE pushing – present? If missing → restore.
-2. extension recordPrompt: uses `state.recentPrompts.unshift(text)` – present? If changed → revert.
-3. activityBarProvider: NO `reverse()` on `recentPrompts` / `renderList` – ensure absent.
-4. File sorting (newest filename first) still applied before file loop – verify comparator unchanged.
-5. After edits, newest prompt (manual or from newest file) appears at #1 in Activity Bar.
+### New Ordering Policy (Oct 30 2025):
+- **Runtime prompts**: Use `push()` to append NEW prompts at the END of array (not `unshift()`)
+- **Activity Bar display**: #1 = oldest prompt, last number = NEWEST prompt
+- **Array structure**: `state.recentPrompts[0]` = oldest, `state.recentPrompts[length-1]` = newest
+- **No reversal**: UI displays array as-is without reverse() or re-sorting
+- **Overflow handling**: When exceeding 1000 prompts, use `shift()` to remove oldest (not `splice()`)
 
-### 🚫 Forbidden Anti-Patterns
-- Adding secondary sorting of `state.recentPrompts` in any render code.
-- Replacing `unshift` with `push` or batch reassigning `state.recentPrompts = state.recentPrompts.reverse()`.
-- Removing `collected.reverse()` in `specstoryReader` and compensating with UI reversal.
+### ✅ Updated Ordering Enforcement Checklist
+1. extension.ts: ALL prompt additions use `push()` NOT `unshift()` ✅
+2. extension.ts: Overflow uses `shift()` to remove from beginning ✅
+3. activityBarProvider: NO `reverse()` on render list ✅
+4. Newest prompt appears as LAST item in Activity Bar (highest number) ✅
+5. specstoryReader: May keep `collected.reverse()` if needed for file-specific ordering
 
-Persist forever. Append refinements only; never delete this section.
+### 🚫 New Forbidden Anti-Patterns
+- Using `unshift()` for runtime prompt capture (adds to wrong end)
+- Reversing array in UI rendering (would show newest first, breaking user request)
+- Using `splice(1000)` for overflow (should be `shift()` to remove oldest)
 
-## 📊 Activity Bar Rendering Policy (Aug 10 2025 Addendum)
-- Purpose: Ensure SpecStory-derived prompts render in a stable, predictable order and structure.
+**Rationale**: User explicitly requested "new prompts go at the end, not beginning (#1)". This overrides previous policy.
+
+## 📊 Activity Bar Rendering Policy (UPDATED Oct 30 2025)
+**CRITICAL CHANGE**: Display order changed from "newest first" to "oldest first" per user request.
+
+- Purpose: Ensure prompts render in chronological order (oldest → newest).
 - Ordering Source of Truth:
-  1. File discovery sorts filenames descending (newest timestamp/name first).
-  2. Per file, raw user prompt segments are collected in encounter order then reversed BEFORE insertion (newest in file first).
-  3. Runtime submissions use unshift() placing newest overall prompt at index 0.
-  4. UI strictly consumes state.recentPrompts WITHOUT reversing or re-sorting.
-- Therefore: Index #1 (displayed) is ALWAYS the newest overall prompt across all sources.
+  1. Runtime submissions use `push()` placing new prompts at array END
+  2. UI strictly consumes `state.recentPrompts` WITHOUT reversing or re-sorting
+  3. Display #1 = `state.recentPrompts[0]` (oldest), Last # = newest
+- Therefore: **Last displayed number is ALWAYS the newest prompt** (not #1 anymore)
 - UI MUST NOT:
-  - Call reverse() or sort() on the prompt list.
-  - Filter, group, paginate, or re-chunk prompts implicitly.
-  - Inject artificial headers that break sequential numbering.
-- Numbering: Displayed #n corresponds to (array index + 1) of the already correctly ordered slice.
-- Truncation: Only apply slice(0, maxPrompts) – never slice from the end.
-- Escaping: HTML entities (& < > ") MUST be escaped for safety; no additional sanitization is required for plain text prompts.
-- Styling: header-bar, list, prompt-item, ln, txt, empty, footer class names are STABLE – do not rename without explicit instruction (automation or user CSS dependents may rely on them).
-- Accessibility: Keep text content selectable; avoid focus stealing (snapshot retrieval uses getChatInputText(false) for passive polling).
-- Script Policy: enableScripts remains false to reduce attack surface; do not enable unless a future feature explicitly requires it.
-- Regression Definition: Any deviation causing newest prompt not to appear at #1, or insertion of an extra reverse/sort, or loss of selectable text, is a REGRESSION equal to keybinding failure.
-- Preservation: Treat this section plus existing Prompt Ordering Invariants as a unified contract. Append refinements only.
+  - Call reverse() or sort() on the prompt list
+  - Filter, group, paginate, or re-chunk prompts implicitly
+  - Inject artificial headers that break sequential numbering
+- Numbering: Displayed #n corresponds to (array index + 1) directly
+- Truncation: Apply `slice(-maxPrompts)` to keep NEWEST N prompts (not `slice(0, maxPrompts)`)
+- Escaping: HTML entities (& < > ") MUST be escaped for safety
+- Styling: header-bar, list, prompt-item, ln, txt, empty, footer class names STABLE
+- Accessibility: Keep text content selectable
+- Script Policy: enableScripts remains false
+- **Regression Definition**: Newest prompt NOT appearing as last item, or insertion of reverse/sort, or loss of selectable text
 
-### ✅ Enforcement Checklist (Activity Bar)
+### ✅ Updated Enforcement Checklist (Activity Bar)
 1. createPromptsHtml: NO reverse/sort on render list? (Yes)
-2. loadPromptsFromFile: includes collected.reverse()? (Yes)
-3. recordPrompt: uses unshift()? (Yes)
-4. Max prompts applied only via slice(0, maxPrompts)? (Yes)
-5. HTML escaping intact (& < > ")? (Yes)
+2. recordPrompt: uses `push()` NOT `unshift()`? (Yes)
+3. Truncation uses `slice(-maxPrompts)` to keep newest? (Yes)
+4. Last displayed prompt is newest overall? (Yes)
+5. HTML escaping intact? (Yes)
 6. Scripts disabled? (Yes)
-7. Copy/select inside webview not interrupted by focus side-effects? (Yes – passive snapshots avoid forcing focus)
 
 ### 🔒 Marker
 - Presence of this section forbids silent reordering changes. Commits altering ordering logic MUST reference this policy.
