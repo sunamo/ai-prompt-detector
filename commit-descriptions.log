@@ -244,3 +244,4 @@ v1.1.470 | Revert to push - unshift broke prompt ordering
 v1.1.471 | Fixed: prompts now appear in chronological order (oldest first, newest last) as requested
 v1.1.472 | Fixed: newest prompt now appears as #1 (display reversed)
 v1.1.473 | Fixed: new runtime prompts at END, no reversal, natural order kept
+v1.1.474 | FINAL FIX: new prompts at beginning #1 using unshift()

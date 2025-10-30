@@ -613,36 +613,74 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
+        const promptSendTime = Date.now();
         info('🎯 ============ CTRL+ENTER DETECTED ============');
+        info(`⏱️ PROMPT SEND TIME: ${promptSendTime}`);
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Try to get actual text from chat input BEFORE submitting
-        let capturedText = '';
-        info('🔍 Attempting to capture prompt text...');
-
-        try {
-          const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(true);
-          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
-        } catch (e) {
-          info(`⚠️ getChatInputText failed: ${e}`);
-        }
-
-        // Add to state immediately as live prompt with real text (or fallback)
-        const promptText = capturedText && capturedText.trim()
-          ? capturedText.trim()
-          : 'Prompt sent via Ctrl+Enter';
-
-        const liveEntry: PromptEntry = {
-          text: promptText,
+        // Add placeholder immediately - MUST be before any async operations
+        // Will be updated by either: 1) SpecStory file watch, or 2) chat session watch
+        const placeholderEntry: PromptEntry = {
+          text: '⏳ Waiting for prompt text...',
           isLive: true,
-          timestamp: Date.now(),
-          id: `live-${Date.now()}`
+          timestamp: promptSendTime,
+          id: `live-${promptSendTime}`
         };
-        state.recentPrompts.unshift(liveEntry);
-        info(`✅ Added LIVE prompt to beginning (#1) - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
+        state.recentPrompts.unshift(placeholderEntry);
+        info(`📝 Added placeholder at beginning (#1) - will be updated automatically by chat session watch`);
+
+        // Start aggressive polling immediately to get prompt text ASAP
+        // Poll every 200ms for up to 5 seconds to catch chat session file update quickly
+        const pollStartTime = Date.now();
+        const maxPollTime = 5000; // 5 seconds
+        const pollInterval = 200; // 200ms
+        let pollAttempt = 0;
+
+        const pollForPromptText = async () => {
+          pollAttempt++;
+          const elapsed = Date.now() - pollStartTime;
+
+          if (elapsed > maxPollTime) {
+            info(`⏱️ Polling timeout after ${elapsed}ms (${pollAttempt} attempts) - will rely on file watch`);
+            return;
+          }
+
+          try {
+            const { getLastChatRequest } = await import('./chatSessionReader');
+            const promptText = await getLastChatRequest(true); // expectNew=true
+
+            if (promptText) {
+              const pollEndTime = Date.now();
+              info(`✅ Polling SUCCESS after ${pollEndTime - pollStartTime}ms (attempt ${pollAttempt})`);
+              info(`⏱️ TIME: Prompt send → Poll success = ${pollEndTime - promptSendTime} ms`);
+
+              // Find and update placeholder
+              const placeholderIndex = state.recentPrompts.findIndex(
+                p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+              );
+
+              if (placeholderIndex !== -1) {
+                state.recentPrompts[placeholderIndex].text = promptText;
+                info(`✅ Updated placeholder via aggressive polling at index ${placeholderIndex}`);
+                providerRef?.refresh();
+              }
+            } else {
+              // No new prompt yet, try again
+              setTimeout(pollForPromptText, pollInterval);
+            }
+          } catch (e) {
+            info(`⚠️ Polling error (attempt ${pollAttempt}): ${e}`);
+            // Continue polling despite errors
+            if (elapsed < maxPollTime) {
+              setTimeout(pollForPromptText, pollInterval);
+            }
+          }
+        };
+
+        // Start polling immediately (don't await - run in background)
+        pollForPromptText().catch(e => info(`❌ Polling failed: ${e}`));
 
         // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;
@@ -674,10 +712,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
         info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
         vscode.window.showInformationMessage(notificationText);
-
-        // Refresh again to show final text (in case it changed)
-        providerRef?.refresh();
-        info(`🔄 Provider refresh called AFTER SpecStory load - final count: ${state.recentPrompts.length}`);
 
         info(`✅ CTRL+ENTER detection complete - final counter: ${aiPromptCounter}`);
         info('🎯 ============ CTRL+ENTER DETECTION END ============');
