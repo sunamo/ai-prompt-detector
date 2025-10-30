@@ -524,6 +524,10 @@ export async function activate(context: vscode.ExtensionContext) {
         state.recentPrompts.unshift(placeholderEntry);
         info(`📝 Added placeholder at beginning (#1) - will be updated automatically by chat session watch`);
 
+        // Refresh Activity Bar IMMEDIATELY to show placeholder
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY after adding placeholder`);
+
         // Start aggressive polling immediately to get prompt text ASAP
         // Poll every 200ms for up to 5 seconds to catch chat session file update quickly
         const pollStartTime = Date.now();
@@ -630,6 +634,10 @@ export async function activate(context: vscode.ExtensionContext) {
         };
         state.recentPrompts.unshift(placeholderEntry);
         info(`📝 Added placeholder at beginning (#1) - will be updated automatically by chat session watch`);
+
+        // Refresh Activity Bar IMMEDIATELY to show placeholder
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY after adding placeholder`);
 
         // Start aggressive polling immediately to get prompt text ASAP
         // Poll every 200ms for up to 5 seconds to catch chat session file update quickly
