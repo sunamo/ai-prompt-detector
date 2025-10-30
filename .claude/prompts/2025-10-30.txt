@@ -93,6 +93,16 @@ Result: Created v1.1.490 - reverse numbering (WRONG)
 [12:10] Version: v1.1.490
 Prompt: "je to úplně jednoduché. je nutné zachovat chronologický postup"
 Note: Fix numbering back - simple chronological order: #1=oldest (top), last#=newest (bottom)
-Result: Will create v1.1.491 - revert to simple index + 1 numbering
+Result: Created v1.1.491 and v1.1.492 - wrong approach
+
+[12:12] Version: v1.1.492
+Prompt: "uprav jen to přidávání nových"
+Note: Revert to unshift() - new prompts go to BEGINNING of array again
+Result: Started reverting but incomplete
+
+[12:15] Version: v1.1.492
+Prompt: "Číslování: #1 = nejstarší, poslední# = nejnovější - je to správně naopak"
+Note: User wants #1 = newest (top), highest# = oldest (bottom)
+Result: Will create v1.1.493 - finish unshift() changes, keep normal display (no reverse)
 
 ================================
