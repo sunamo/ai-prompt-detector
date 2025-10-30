@@ -76,6 +76,11 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     info(`🎨 Activity Bar: Filtering prompts - total: ${recentPrompts.length}, SpecStory Set size: ${state.specStoryPrompts.size}`);
     const filteredPrompts = recentPrompts.filter(prompt => {
       if (prompt.isLive) {
+        // ALWAYS show placeholder prompts (they're temporary and will be updated)
+        if (prompt.text.includes('⏳ Waiting') || prompt.text.includes('text capture failed')) {
+          info(`  ⏳ PLACEHOLDER prompt: "${prompt.text.substring(0, 60)}..." - ALWAYS SHOWN`);
+          return true;
+        }
         // Show live prompt only if NOT in SpecStory Set
         const isInSpecStory = state.specStoryPrompts.has(prompt.text);
         info(`  🔍 Live prompt: "${prompt.text.substring(0, 60)}..." - in SpecStory: ${isInSpecStory} - ${isInSpecStory ? 'HIDDEN' : 'SHOWN'}`);
