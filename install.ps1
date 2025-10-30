@@ -22,10 +22,10 @@
     11. Instalace nové verze rozšíření s --force flagem
     12. Restart VS Code s otevřením projektu
 
-.PARAMETER CommitDescription
-    [POVINNÝ] Textový popis změn provedených v této verzi.
-    Tento popis se ukládá do commit-descriptions.log pro audit trail a je součástí commit message.
-    Formát commit message: "v{version} - {description}" (např. "v1.1.411 - Fixed mouse detection").
+.PARAMETER UserPrompt
+    [POVINNÝ] Přesný text promptu který uživatel zadal AI asistentovi.
+    Tento prompt se ukládá do .claude/prompts/{date}.txt a commit-descriptions.log.
+    Formát commit message: "v{version} - {user_prompt}" (např. "v1.1.411 - oprav mi bug v loggeru").
 
 .EXAMPLE
     ./install.ps1 "Fixed mouse detection and improved logging"
@@ -62,7 +62,7 @@
 #>
 param(
     [Parameter(Mandatory = $false, Position = 0)]
-    [string]$CommitDescription
+    [string]$UserPrompt
 )
 
 # =============================
@@ -76,14 +76,14 @@ function Fail($msg) {
     exit 1
 }
 
-# --- Validate commit description (policy: always required, no prompt) ---
-if ([string]::IsNullOrWhiteSpace($CommitDescription)) {
-    Fail "Commit description is required. Usage: ./install.ps1 'your description'"
+# --- Validate user prompt (policy: always required, no prompt) ---
+if ([string]::IsNullOrWhiteSpace($UserPrompt)) {
+    Fail "User prompt is required. Usage: ./install.ps1 'user prompt text'"
 }
 
 Write-Host "AI Copilot Prompt Detector - Build, Release & Install Script" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "Commit description (not stored in commit message body beyond second -m to preserve policy semantics): $CommitDescription" -ForegroundColor Cyan
+Write-Host "User prompt: $UserPrompt" -ForegroundColor Cyan
 
 # --- Add VS Code Insiders to PATH if not already present ---
 if (-not (Get-Command 'code-insiders' -ErrorAction SilentlyContinue)) {
@@ -177,32 +177,13 @@ Write-Host "   ✅ Build successful" -ForegroundColor Green
 Write-Host "4. Git commit & push..." -ForegroundColor Yellow
 git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
 
-# Read last prompt from .claude/prompts/{today}.txt
-$today = Get-Date -Format "yyyy-MM-dd"
-$promptLogPath = ".claude/prompts/$today.txt"
-$lastPrompt = ""
-
-if (Test-Path $promptLogPath) {
-    $logContent = Get-Content $promptLogPath -Raw
-    # Find last prompt entry using regex: [HH:MM] Version: vX.X.X\nPrompt: "..."
-    if ($logContent -match '(?s)Prompt: "([^"]+)"[^P]*$') {
-        $lastPrompt = $matches[1]
-        Write-Host "   📝 Using prompt text from log: '$lastPrompt'" -ForegroundColor Cyan
-    }
-}
-
-# If no prompt found, use parameter description
-if ([string]::IsNullOrWhiteSpace($lastPrompt)) {
-    $lastPrompt = $CommitDescription
-    Write-Host "   ⚠️ No prompt log found, using parameter description" -ForegroundColor Yellow
-}
-
-# Persist description externally (audit trail) – additive
+# Persist prompt externally (audit trail) – additive
 $descLog = 'commit-descriptions.log'
-try { Add-Content -Path $descLog -Value "v$newVersion | $lastPrompt" -ErrorAction SilentlyContinue } catch {}
+try { Add-Content -Path $descLog -Value "v$newVersion | $UserPrompt" -ErrorAction SilentlyContinue } catch {}
 
-# Commit message format: "v{version} - {prompt}" (single line for better git log visibility)
-git commit -m "v$newVersion - $lastPrompt"
+# Commit message format: "v{version} - {user_prompt}" (single line for better git log visibility)
+Write-Host "   📝 Commit message: v$newVersion - $UserPrompt" -ForegroundColor Cyan
+git commit -m "v$newVersion - $UserPrompt"
 if ($LASTEXITCODE -ne 0) { Fail "git commit failed" }
 
 git push origin master
