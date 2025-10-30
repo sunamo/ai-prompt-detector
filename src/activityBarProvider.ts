@@ -93,9 +93,8 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
     info(`🎨 Activity Bar: After filtering - ${filteredPrompts.length} prompts to display`);
 
     if (filteredPrompts.length > 0) {
-      // Take last N prompts (chronological order: oldest first, newest last)
-      const startIndex = Math.max(0, filteredPrompts.length - maxPrompts);
-      const renderList = filteredPrompts.slice(startIndex);
+      // Take ALL prompts (or limit to maxPrompts from start for chronological order)
+      const renderList = filteredPrompts.slice(0, maxPrompts);
       promptsHtml = renderList
         .map((prompt, index) => {
           const promptText = prompt.text;

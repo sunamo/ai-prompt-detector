@@ -260,3 +260,4 @@ v1.1.487 | potřebuji teď udělat nemodifikovatelné součásti které už jsou
 v1.1.488 | ok, vypni mi zobrazení notifikace hned po startu a naopak udělej aby se automaticky zobrazil můj AB po startu
 v1.1.489 | změň pouze místo přidávání nových promtů, teď hod dáváš na začátek tak ho potřebuji na konec promptů v AB. prostě aby i nový prompt šel chronologicky za těmi přechozími.
 v1.1.490 | číslo #1 by mělo být první (nejstarší) - - naopak, #1 je nejmladší
+v1.1.491 | je to úplně jednoduché. je nutné zachovat chronologický postup
