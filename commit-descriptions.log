@@ -250,3 +250,4 @@ v1.1.476 | Added immediate refresh after placeholder for debugging
 v1.1.477 | CRITICAL FIX: placeholder now ALWAYS shown in Activity Bar filter
 v1.1.479 | Restore v1.1.437 code with working notifications and prompt display
 v1.1.480 | Restore v1.1.438 code - second version with working notifications
+v1.1.481 | Restore milestone-logging-working code (v1.1.449, d34d9ff)

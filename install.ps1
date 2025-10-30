@@ -133,14 +133,48 @@ Write-Host "1. Cleaning old VSIX files..." -ForegroundColor Yellow
 Get-ChildItem -Path '.' -Filter '*.vsix' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "   - Removing: $($_.Name)" -ForegroundColor Gray; Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
 Write-Host "   ✅ Cleanup done" -ForegroundColor Green
 
+# --- Check critical files for changes ---
+Write-Host "2. Checking critical files for changes..." -ForegroundColor Yellow
+$criticalFiles = @(
+    'src/logger.ts'
+)
+
+$criticalFilesChanged = @()
+foreach ($file in $criticalFiles) {
+    if (Test-Path $file) {
+        $gitStatus = git status --porcelain $file 2>&1
+        if ($gitStatus -match '^\s*[MAD]') {
+            $criticalFilesChanged += $file
+        }
+    }
+}
+
+if ($criticalFilesChanged.Count -gt 0) {
+    Write-Host "   ⚠️ CRITICAL FILES CHANGED:" -ForegroundColor Red
+    foreach ($file in $criticalFilesChanged) {
+        Write-Host "      - $file" -ForegroundColor Red
+    }
+    Write-Host ""
+    Write-Host "   These files are CRITICAL and changes may break working functionality!" -ForegroundColor Red
+    Write-Host "   Do you want to continue? (Y/N)" -ForegroundColor Yellow
+    $response = Read-Host
+    if ($response -ne 'Y' -and $response -ne 'y') {
+        Write-Host "   ❌ Build cancelled by user" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "   ✅ User confirmed - continuing with build" -ForegroundColor Green
+} else {
+    Write-Host "   ✅ No critical files changed" -ForegroundColor Green
+}
+
 # --- Build (compile) ---
-Write-Host "2. Building (pnpm run compile)..." -ForegroundColor Yellow
+Write-Host "3. Building (pnpm run compile)..." -ForegroundColor Yellow
 pnpm run compile
 if ($LASTEXITCODE -ne 0) { Fail "Build failed" }
 Write-Host "   ✅ Build successful" -ForegroundColor Green
 
 # --- Git commit & push (after successful build only) ---
-Write-Host "3. Git commit & push..." -ForegroundColor Yellow
+Write-Host "4. Git commit & push..." -ForegroundColor Yellow
 git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
 # Persist description externally (audit trail) – additive
 $descLog = 'commit-descriptions.log'
@@ -154,7 +188,7 @@ if ($LASTEXITCODE -ne 0) { Fail "git push failed" }
 Write-Host "   ✅ Git push complete" -ForegroundColor Green
 
 # --- Package (vsce) ---
-Write-Host "4. Packaging VSIX..." -ForegroundColor Yellow
+Write-Host "5. Packaging VSIX..." -ForegroundColor Yellow
 $env:VSCE_INTERACTIVE = '0'
 $vsixName = "ai-prompt-detector-$newVersion.vsix"
 $vsceOutput = vsce package --allow-star-activation --out $vsixName --no-git-tag-version --no-dependencies 2>&1
@@ -162,7 +196,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host $vsceOutput -ForegroundColor Red; Fail "VS
 Write-Host "   ✅ VSIX created: $vsixName" -ForegroundColor Green
 
 # --- Close VS Code Insiders before installation ---
-Write-Host "5. Closing VS Code Insiders before installation..." -ForegroundColor Yellow
+Write-Host "6. Closing VS Code Insiders before installation..." -ForegroundColor Yellow
 try {
     Get-Process -Name "Code - Insiders" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
@@ -172,7 +206,7 @@ try {
 }
 
 # --- Install extension to VS Code Insiders ---
-Write-Host "6. Installing extension to VS Code Insiders..." -ForegroundColor Yellow
+Write-Host "7. Installing extension to VS Code Insiders..." -ForegroundColor Yellow
 $installOutput = code-insiders --install-extension $vsixName --force 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "   ⚠️ Installation warning: $installOutput" -ForegroundColor Yellow
@@ -184,7 +218,7 @@ Write-Host "===================================================" -ForegroundColo
 Write-Host "Build, Release & Installation complete (v$newVersion)." -ForegroundColor Green
 
 # --- Restart VS Code Insiders to load the new extension version ---
-Write-Host "7. Restarting VS Code Insiders..." -ForegroundColor Yellow
+Write-Host "8. Restarting VS Code Insiders..." -ForegroundColor Yellow
 try {
     # Zavři všechny instance VS Code Insiders
     Write-Host "   - Closing all VS Code Insiders instances..." -ForegroundColor Gray

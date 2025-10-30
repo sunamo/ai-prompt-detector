@@ -68,6 +68,17 @@ As a copilot, you never change versions. The version changes fundamentally only 
 - **PRESERVE existing functionality** while fixing corruption
 - Use replace_string_in_file or careful manual editing to repair files
 
+### 🛡️ CRITICAL FILES PROTECTION - CRITICAL RULE!
+**install.ps1 will STOP and require confirmation if these files change:**
+- `src/logger.ts` - Logging system (working correctly, changes may break logs)
+
+**To add more critical files:**
+1. Edit `install.ps1` → find `$criticalFiles = @(...)` array
+2. Add file path to the array: `'src/newCriticalFile.ts'`
+3. User will be asked "Do you want to continue? (Y/N)" if file changes
+
+**This prevents breaking working functionality by accident!**
+
 ### 📁 FILE NAMES - CRITICAL RULE!
 - **ALL instruction files must have format: `*.instructions.md`**
 - **NEVER use names like `ai-instructions.md`**
