@@ -105,11 +105,9 @@ export class PromptsProvider implements vscode.WebviewViewProvider {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
-          // Reverse numbering: last item (newest) = #1, first item (oldest) = highest number
-          const displayNumber = renderList.length - index;
           return (
             `<div class="prompt-item" data-index="${index}">\n` +
-            `\t<div class="ln">#${displayNumber}</div>\n` +
+            `\t<div class="ln">#${index + 1}</div>\n` +
             `\t<div class="txt" title="${safePrompt}">${safePrompt}</div>\n` +
             `</div>`
           );

@@ -88,6 +88,11 @@ Result: Created v1.1.489 - changed unshift() to push(), take last N prompts
 [12:07] Version: v1.1.489
 Prompt: "číslo #1 by mělo být první (nejstarší) - - naopak, #1 je nejmladší"
 Note: Fix numbering - #1 should be newest (last in list), not oldest
-Result: Will create v1.1.490 - reverse numbering so #1 is the newest prompt at the bottom
+Result: Created v1.1.490 - reverse numbering (WRONG)
+
+[12:10] Version: v1.1.490
+Prompt: "je to úplně jednoduché. je nutné zachovat chronologický postup"
+Note: Fix numbering back - simple chronological order: #1=oldest (top), last#=newest (bottom)
+Result: Will create v1.1.491 - revert to simple index + 1 numbering
 
 ================================
