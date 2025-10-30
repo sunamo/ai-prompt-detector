@@ -238,3 +238,4 @@ v1.1.458 | Replace polling with fs.watch() on chat session files for instant pro
 v1.1.460 | Add detailed timing logs to diagnose Activity Bar update delays
 v1.1.462 | Add immediate SpecStory export trigger + watch on .specstory/history for instant prompt display
 v1.1.464 | Fix placeholder display - remove blocking SpecStory dialog trigger
+v1.1.466 | Add aggressive polling every 200ms to catch chat session updates faster
