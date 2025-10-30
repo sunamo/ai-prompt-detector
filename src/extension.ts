@@ -497,51 +497,89 @@ export async function activate(context: vscode.ExtensionContext) {
     // Method 3: Keyboard detection (WORKS PERFECTLY)
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
+        const promptSendTime = Date.now();
         info('🎯 ============ ENTER DETECTED ============');
+        info(`⏱️ PROMPT SEND TIME: ${promptSendTime}`);
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Try to get actual text from chat input BEFORE submitting
-        let capturedText = '';
-        info('🔍 Attempting to capture prompt text...');
-
+        // Forward to chat submit FIRST (since our keybinding blocks default behavior)
+        info('Forwarding to workbench.action.chat.submit...');
         try {
-          // Try getChatInputText helper
-          const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(false);
-          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit executed');
         } catch (e) {
-          info(`⚠️ getChatInputText failed: ${e}`);
+          info(`❌ Chat submit failed: ${e}`);
         }
 
-        // If we got text, add it to state immediately as live prompt
-        if (capturedText && capturedText.trim()) {
-          const liveEntry: PromptEntry = {
-            text: capturedText.trim(),
-            isLive: true,
-            timestamp: Date.now(),
-            id: `live-${Date.now()}`
-          };
-          state.recentPrompts.unshift(liveEntry);
-          info(`✅ Added LIVE prompt with real text to state - count now: ${state.recentPrompts.length}`);
-        } else {
-          // Fallback: add placeholder
-          info(`⚠️ Could not capture text, using placeholder`);
-          const placeholderEntry: PromptEntry = {
-            text: '⏳ Prompt sent (text capture failed)',
-            isLive: true,
-            timestamp: Date.now(),
-            id: `live-${Date.now()}`
-          };
-          state.recentPrompts.unshift(placeholderEntry);
-          info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
-        }
+        // Add placeholder immediately - MUST be before any async operations
+        // Will be updated by either: 1) SpecStory file watch, or 2) chat session watch
+        const placeholderEntry: PromptEntry = {
+          text: '⏳ Waiting for prompt text...',
+          isLive: true,
+          timestamp: promptSendTime,
+          id: `live-${promptSendTime}`
+        };
+        state.recentPrompts.unshift(placeholderEntry);
+        info(`📝 Added placeholder - will be updated automatically by chat session watch`);
 
-        // Increment counter immediately
+        // Start aggressive polling immediately to get prompt text ASAP
+        // Poll every 200ms for up to 5 seconds to catch chat session file update quickly
+        const pollStartTime = Date.now();
+        const maxPollTime = 5000; // 5 seconds
+        const pollInterval = 200; // 200ms
+        let pollAttempt = 0;
+
+        const pollForPromptText = async () => {
+          pollAttempt++;
+          const elapsed = Date.now() - pollStartTime;
+
+          if (elapsed > maxPollTime) {
+            info(`⏱️ Polling timeout after ${elapsed}ms (${pollAttempt} attempts) - will rely on file watch`);
+            return;
+          }
+
+          try {
+            const { getLastChatRequest } = await import('./chatSessionReader');
+            const promptText = await getLastChatRequest(true); // expectNew=true
+
+            if (promptText) {
+              const pollEndTime = Date.now();
+              info(`✅ Polling SUCCESS after ${pollEndTime - pollStartTime}ms (attempt ${pollAttempt})`);
+              info(`⏱️ TIME: Prompt send → Poll success = ${pollEndTime - promptSendTime} ms`);
+
+              // Find and update placeholder
+              const placeholderIndex = state.recentPrompts.findIndex(
+                p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+              );
+
+              if (placeholderIndex !== -1) {
+                state.recentPrompts[placeholderIndex].text = promptText;
+                info(`✅ Updated placeholder via aggressive polling at index ${placeholderIndex}`);
+                providerRef?.refresh();
+              }
+            } else {
+              // No new prompt yet, try again
+              setTimeout(pollForPromptText, pollInterval);
+            }
+          } catch (e) {
+            info(`⚠️ Polling error (attempt ${pollAttempt}): ${e}`);
+            // Continue polling despite errors
+            if (elapsed < maxPollTime) {
+              setTimeout(pollForPromptText, pollInterval);
+            }
+          }
+        };
+
+        // Start polling immediately (don't await - run in background)
+        pollForPromptText().catch(e => info(`❌ Polling failed: ${e}`));
+
+        // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;
         aiPromptCounter++;
-        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+        lastKeyboardDetection = Date.now();
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}, lastKeyboardDetection updated`);
 
         updateStatusBar();
         const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
@@ -577,62 +615,52 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
         info('🎯 ============ CTRL+ENTER DETECTED ============');
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Forward to normal chat submit first
-        info('Forwarding to workbench.action.chat.submit...');
-        isOurCommand = true;
+        // Try to get actual text from chat input BEFORE submitting
+        let capturedText = '';
+        info('🔍 Attempting to capture prompt text...');
+
         try {
-          await vscode.commands.executeCommand('workbench.action.chat.submit');
-          info('✅ Chat submit command executed successfully');
+          const { getChatInputText } = await import('./chatHelpers');
+          capturedText = await getChatInputText(true);
+          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
         } catch (e) {
-          info(`❌ Chat submit command failed: ${e}`);
+          info(`⚠️ getChatInputText failed: ${e}`);
         }
-        isOurCommand = false;
 
-        // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
-        const placeholderText = '⏳ Loading prompt from SpecStory...';
-        state.recentPrompts.unshift({ text: placeholderText, isLive: true, timestamp: Date.now(), id: `live-${Date.now()}` });
-        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+        // Add to state immediately as live prompt with real text (or fallback)
+        const promptText = capturedText && capturedText.trim()
+          ? capturedText.trim()
+          : 'Prompt sent via Ctrl+Enter';
 
-        // Increment counter immediately
+        const liveEntry: PromptEntry = {
+          text: promptText,
+          isLive: true,
+          timestamp: Date.now(),
+          id: `live-${Date.now()}`
+        };
+        state.recentPrompts.unshift(liveEntry);
+        info(`✅ Added LIVE prompt to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
+
+        // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;
         aiPromptCounter++;
-        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+        lastKeyboardDetection = Date.now();
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}, lastKeyboardDetection updated`);
 
         updateStatusBar();
         const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
         const v = ext?.packageJSON?.version || '?';
         info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
 
-        // Refresh activity bar to show placeholder immediately
+        // Refresh activity bar to show live prompt immediately
         providerRef?.refresh();
-        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts (including placeholder)`);
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts`);
 
-        // Wait a bit for SpecStory to create export and for us to load it
-        info('Waiting 1500ms for SpecStory export...');
-        await new Promise(r => setTimeout(r, 1500));
-
-        info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
-        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
-
-        // Replace placeholder with actual text from SpecStory (if available)
-        let latestPrompt = state.recentPrompts[0]?.text || '';
-        if (latestPrompt.includes('Loading prompt from SpecStory') && state.recentPrompts.length > 1) {
-          // Placeholder still there, use second item if available
-          latestPrompt = state.recentPrompts[1]?.text || '';
-          info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
-        } else if (latestPrompt !== placeholderText) {
-          // Placeholder was replaced by file watcher - good!
-          info(`✅ Placeholder was replaced by SpecStory export: "${latestPrompt.substring(0, 100)}"`);
-        } else {
-          // No SpecStory export yet, use fallback
-          latestPrompt = 'Prompt sent via Ctrl+Enter';
-          info(`❌ No SpecStory export found, using fallback text`);
-        }
-
-        info(`Using latestPrompt for notification: "${latestPrompt.substring(0, 100)}"`);
+        // Show notification with captured text
+        const latestPrompt = state.recentPrompts[0]?.text || 'Prompt sent via Ctrl+Enter';
         const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
         info(`Display text (truncated): "${displayText}"`);
 
@@ -679,7 +707,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
           try {
             const { getChatInputText } = await import('./chatHelpers');
-            capturedText = await getChatInputText(false);
+            capturedText = await getChatInputText(true);
             info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
           } catch (e) {
             info(`⚠️ getChatInputText failed: ${e}`);
@@ -832,11 +860,106 @@ export async function activate(context: vscode.ExtensionContext) {
       refreshDebugFlag();
   });
 
+  // Setup watch on chat session files for real-time prompt detection (fallback for mouse clicks)
+  info('🔧 Setting up chat session file watch...');
+  const { watchChatSessions } = await import('./chatSessionReader');
+  const chatSessionWatcher = watchChatSessions((promptText: string) => {
+    const watchDetectTime = Date.now();
+    info(`📩 Chat session watch callback: New prompt detected: "${promptText.substring(0, 100)}"`);
+    info(`⏱️ WATCH DETECTED CHANGE TIME: ${watchDetectTime}`);
+
+    // Find the most recent placeholder (with isLive=true and placeholder text)
+    const placeholderIndex = state.recentPrompts.findIndex(
+      p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+    );
+
+    if (placeholderIndex !== -1) {
+      const placeholder = state.recentPrompts[placeholderIndex];
+      const promptSendTime = placeholder.timestamp;
+      const delay = watchDetectTime - promptSendTime;
+
+      // Update the placeholder with actual text
+      state.recentPrompts[placeholderIndex].text = promptText;
+      info(`✅ Updated placeholder at index ${placeholderIndex} with actual text`);
+      info(`⏱️ TIME: Prompt send → Watch detect = ${delay} ms`);
+
+      // Refresh Activity Bar to show updated text
+      providerRef?.refresh();
+    } else {
+      info(`⚠️ No placeholder found to update - prompt may have arrived late`);
+    }
+  });
+
+  // Setup watch on SpecStory history folder for immediate detection of new exports
+  info('🔧 Setting up SpecStory history folder watch...');
+  const specstoryWatcher = vscode.workspace.createFileSystemWatcher(
+    '**/.specstory/history/*.md',
+    false, // onCreate
+    false, // onChange
+    true   // onDelete - ignore deletes
+  );
+
+  specstoryWatcher.onDidCreate(async (uri: vscode.Uri) => {
+    const specstoryDetectTime = Date.now();
+    info(`📁 SpecStory file created: ${path.basename(uri.fsPath)}`);
+    info(`⏱️ SPECSTORY FILE CREATED TIME: ${specstoryDetectTime}`);
+
+    // Wait a bit for file to be fully written
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Load prompts from the new file
+    if (isValidSpecStoryFile(uri.fsPath)) {
+      const beforeCount = state.recentPrompts.length;
+      loadPromptsFromFile(uri.fsPath, state.recentPrompts);
+      const afterCount = state.recentPrompts.length;
+      const newPromptsCount = afterCount - beforeCount;
+
+      if (newPromptsCount > 0) {
+        info(`✅ Loaded ${newPromptsCount} new prompts from SpecStory file`);
+
+        // Find and update placeholder if exists
+        const placeholderIndex = state.recentPrompts.findIndex(
+          p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+        );
+
+        if (placeholderIndex !== -1) {
+          const placeholder = state.recentPrompts[placeholderIndex];
+          const promptSendTime = placeholder.timestamp;
+          const delay = specstoryDetectTime - promptSendTime;
+
+          // Remove placeholder - we now have the real prompt from SpecStory
+          state.recentPrompts.splice(placeholderIndex, 1);
+          info(`✅ Removed placeholder at index ${placeholderIndex}`);
+          info(`⏱️ TIME: Prompt send → SpecStory file created = ${delay} ms`);
+        }
+
+        // Refresh Activity Bar
+        providerRef?.refresh();
+      }
+    }
+  });
+
+  specstoryWatcher.onDidChange(async (uri: vscode.Uri) => {
+    info(`📝 SpecStory file changed: ${path.basename(uri.fsPath)}`);
+
+    // Wait a bit for file to be fully written
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Reload prompts from changed file
+    if (isValidSpecStoryFile(uri.fsPath)) {
+      // Clear existing prompts from this file and reload
+      await loadExistingPrompts();
+      providerRef?.refresh();
+    }
+  });
+
   context.subscriptions.push(
     registration,
     watcher,
     configWatcher,
     statusBarItem,
+    chatSessionWatcher,
+    specstoryWatcher,
   );
 
   info(`Activation complete - API mode: ${proposedApiAvailable ? 'FULL' : 'LIMITED'}`);
