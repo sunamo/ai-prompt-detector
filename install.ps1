@@ -136,7 +136,8 @@ Write-Host "   ✅ Cleanup done" -ForegroundColor Green
 # --- Check critical files for changes ---
 Write-Host "2. Checking critical files for changes..." -ForegroundColor Yellow
 $criticalFiles = @(
-    'src/logger.ts'
+    'src/logger.ts',
+    'src/unmodifiable_statusBar.ts'
 )
 
 $criticalFilesChanged = @()

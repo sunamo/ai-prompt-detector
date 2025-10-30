@@ -12,6 +12,7 @@ import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
 import { focusChatInput, forwardToChatAccept } from './chatHelpers';
+import { createStatusBar, updateStatusBar, setStatusBarPatchedTooltip } from './unmodifiable_statusBar';
 
 // --- Stav ---
 let statusBarItem: vscode.StatusBarItem;
@@ -126,32 +127,12 @@ export async function activate(context: vscode.ExtensionContext) {
   // Check if proposed API is available
   proposedApiAvailable = checkProposedApiAvailability();
 
-  // Create status bar with API indicator (NO background color)
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100,
-  );
-  
-  // Update tooltip based on API availability (no backgroundColor)
-  if (proposedApiAvailable) {
-    statusBarItem.tooltip = '✅ AI Prompt Detector\n✅ Proposed API enabled\n✅ Mouse detection WORKING';
-  } else {
-    statusBarItem.tooltip = '⚠️ AI Prompt Detector\n❌ Proposed API disabled\n⚠️ Mouse detection LIMITED\n💡 Run: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector';
-  }
-  statusBarItem.show();
+  // Create status bar using UNMODIFIABLE component
+  statusBarItem = createStatusBar(proposedApiAvailable);
 
-  /** Aktualizuje text ve status baru. ALWAYS use "AI Prompts:" */
-  const updateStatusBar = () => {
-    const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
-    const v: string | undefined = ext?.packageJSON?.version;
-    if (!v) {
-      vscode.window.showErrorMessage('AI Copilot Prompt Detector: missing package.json version');
-      statusBarItem.text = '🤖 AI Prompts: ' + aiPromptCounter + ' | v?';
-      return;
-    }
-    // Add indicator for API status - ALWAYS use "AI Prompts:" not "AI:"
-    const apiIndicator = proposedApiAvailable ? '✅' : '⚠️';
-    statusBarItem.text = `${apiIndicator} AI Prompts: ${aiPromptCounter} | v${v}`;
+  /** Aktualizuje text ve status baru pomocí UNMODIFIABLE komponenty */
+  const updateStatusBarWrapper = () => {
+    updateStatusBar(statusBarItem, aiPromptCounter, proposedApiAvailable);
   };
 
   // Track when we detect via keyboard
@@ -186,7 +167,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Always increment counter and show notification
     aiPromptCounter++;
     providerRef?.refresh();
-    updateStatusBar();
+    updateStatusBarWrapper();
     
     const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
     let customMsg = cfg.get<string>('customMessage');
@@ -581,7 +562,7 @@ export async function activate(context: vscode.ExtensionContext) {
         lastKeyboardDetection = Date.now();
         info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}, lastKeyboardDetection updated`);
 
-        updateStatusBar();
+        updateStatusBarWrapper();
         const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
         const v = ext?.packageJSON?.version || '?';
         info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
@@ -650,7 +631,7 @@ export async function activate(context: vscode.ExtensionContext) {
         lastKeyboardDetection = Date.now();
         info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}, lastKeyboardDetection updated`);
 
-        updateStatusBar();
+        updateStatusBarWrapper();
         const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
         const v = ext?.packageJSON?.version || '?';
         info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
@@ -761,7 +742,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Removed problematic code that was blocking mouse functionality
 
-  updateStatusBar();
+  updateStatusBarWrapper();
   await loadExistingPrompts();
   
   providerRef = new PromptsProvider();
@@ -802,8 +783,8 @@ export async function activate(context: vscode.ExtensionContext) {
         info('🎉 MOUSE DETECTION NOW WORKING via our VS Code patch!');
         mouseDetectionWorking = true;
         
-        // Update status bar to show patch is working
-        statusBarItem.tooltip = '🎉 AI Prompt Detector\n✅ VS Code PATCHED\n✅ onDidSubmitInput API WORKING\n✅ Mouse detection FULLY WORKING!';
+        // Update status bar to show patch is working using UNMODIFIABLE component
+        setStatusBarPatchedTooltip(statusBarItem);
         
         return true;
       } catch (e) {

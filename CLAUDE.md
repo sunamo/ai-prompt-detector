@@ -71,6 +71,13 @@ As a copilot, you never change versions. The version changes fundamentally only 
 ### 🛡️ CRITICAL FILES PROTECTION - CRITICAL RULE!
 **install.ps1 will STOP and require confirmation if these files change:**
 - `src/logger.ts` - Logging system (working correctly, changes may break logs)
+- `src/unmodifiable_statusBar.ts` - Status bar display (LOCKED ✅, working correctly)
+
+**UNMODIFIABLE COMPONENTS:**
+Files with prefix `unmodifiable_*.ts` are FROZEN, WORKING components that must NOT be changed without explicit user permission.
+- These files contain tested, stable functionality
+- Any modifications are STRICTLY FORBIDDEN
+- Each file has header warning: "⚠️ UNMODIFIABLE COMPONENT - DO NOT MODIFY! ⚠️"
 
 **To add more critical files:**
 1. Edit `install.ps1` → find `$criticalFiles = @(...)` array
