@@ -1,0 +1,53 @@
+================================
+PROMPT LOG - 2025-10-30
+================================
+
+MILESTONES:
+- milestone-logging-working → v1.1.449 (d34d9ff) - Logging system working correctly, live prompt capture for keyboard and mouse
+- v1.1.165 (bf4ca3b) - Return to code of version 1.1.156
+
+================================
+
+[11:25] Version: v1.1.477
+Prompt: "jaké jsou ty 2 commity ze včera které zobrazovali text promptu v notifikaci?"
+Note: User asked about commits from Oct 29, 2025 that showed prompt text in notifications
+
+[11:28] Version: v1.1.477
+Prompt: "včera bylo 29.10.2025"
+Note: User clarified the date context
+
+[11:30] Version: v1.1.477
+Prompt: "ne, včera byly 2 commity které přímo mluvili o zobrazování promptu"
+Note: User emphasized looking for specific commits mentioning prompt display
+
+[11:35] Version: v1.1.477
+Prompt: "vrať se mi k commitu 7e14d20 a udělej verzi s tímto kódem"
+Result: Created v1.1.479 with code from commit 7e14d20 (v1.1.437)
+
+[11:38] Version: v1.1.479
+Prompt: "udělej mi verzi i z commitu: 84885cc"
+Result: Created v1.1.480 with code from commit 84885cc (v1.1.438)
+
+[11:40] Version: v1.1.480
+Prompt: "v jakých commitech byly milestones?"
+Result: Found milestone-logging-working (d34d9ff, v1.1.449) and v1.1.165 (bf4ca3b)
+
+[11:42] Version: v1.1.480
+Prompt: "vedeme si nějakou evidenci zadaných promptů, tedy jaký prompt jsem ti dával na jakou verzi?"
+Result: Found commit-descriptions.log and .specstory/history files
+
+[11:43] Version: v1.1.480
+Prompt: "ok, zapisuj při každém promptu do .claude\prompts\{date}.txt obsah celého promptu co jsem ti zadal a zároveŇ aktuální verzi extension (v době odeslání promptu)."
+Result: Creating prompt logging system
+
+[11:45] Version: v1.1.480
+Prompt: "uváděj do těchto txt i milestones"
+Note: Added milestones section to prompt log
+Result: Updated prompt log format to include milestones at the top, updated CLAUDE.md instructions
+
+[11:47] Version: v1.1.480
+Prompt: "vrať mi kód jaký byl ve stavu posledním milestone"
+Note: Restoring code from milestone-logging-working (d34d9ff, v1.1.449)
+Result: Will create v1.1.481 with milestone code
+
+================================

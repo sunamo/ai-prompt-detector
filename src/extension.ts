@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { state } from './state';
+import { state, PromptEntry } from './state';
 import { PromptsProvider } from './activityBarProvider';
 import { isValidSpecStoryFile, loadPromptsFromFile } from './specstoryReader';
 import { initLogger, info, debug } from './logger';
@@ -179,9 +179,9 @@ export async function activate(context: vscode.ExtensionContext) {
       return false;
     }
     lastPromptTime = now;
-
+    
     state.recentPrompts.unshift({ text, isLive: false, timestamp: now, id: `record-${now}` });
-    if (state.recentPrompts.length > 1000) state.recentPrompts.pop();
+    if (state.recentPrompts.length > 1000) state.recentPrompts.splice(1000);
     
     // Always increment counter and show notification
     aiPromptCounter++;
@@ -497,31 +497,162 @@ export async function activate(context: vscode.ExtensionContext) {
     // Method 3: Keyboard detection (WORKS PERFECTLY)
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
-        info('🎯 ENTER DETECTED');
-        // Get actual text from chat input BEFORE submitting
-        const { getChatInputText } = await import('./chatHelpers');
-        const actualText = await getChatInputText(false);
-        const promptText = actualText || '[Prompt sent via Enter]';
-        recordPrompt(promptText, 'keyboard-enter');
-        // Forward to normal chat submit (set flag to avoid double detection)
-        isOurCommand = true;
-        await vscode.commands.executeCommand('workbench.action.chat.submit');
-        isOurCommand = false;
+        info('🎯 ============ ENTER DETECTED ============');
+        info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current aiPromptCounter: ${aiPromptCounter}`);
+
+        // Try to get actual text from chat input BEFORE submitting
+        let capturedText = '';
+        info('🔍 Attempting to capture prompt text...');
+
+        try {
+          // Try getChatInputText helper
+          const { getChatInputText } = await import('./chatHelpers');
+          capturedText = await getChatInputText(false);
+          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+        } catch (e) {
+          info(`⚠️ getChatInputText failed: ${e}`);
+        }
+
+        // If we got text, add it to state immediately as live prompt
+        if (capturedText && capturedText.trim()) {
+          const liveEntry: PromptEntry = {
+            text: capturedText.trim(),
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-${Date.now()}`
+          };
+          state.recentPrompts.unshift(liveEntry);
+          info(`✅ Added LIVE prompt with real text to state - count now: ${state.recentPrompts.length}`);
+        } else {
+          // Fallback: add placeholder
+          info(`⚠️ Could not capture text, using placeholder`);
+          const placeholderEntry: PromptEntry = {
+            text: '⏳ Prompt sent (text capture failed)',
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-${Date.now()}`
+          };
+          state.recentPrompts.unshift(placeholderEntry);
+          info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+        }
+
+        // Increment counter immediately
+        const oldCounter = aiPromptCounter;
+        aiPromptCounter++;
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        // Refresh activity bar to show live prompt immediately
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts`);
+
+        // Show notification with captured text
+        const latestPrompt = state.recentPrompts[0]?.text || 'Prompt sent via Enter';
+        const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+        info(`Display text (truncated): "${displayText}"`);
+
+        const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+        let customMsg = cfg.get<string>('customMessage') || '';
+        info(`Custom message from config: "${customMsg}"`);
+
+        const notificationText = customMsg
+          ? `AI Prompt sent (keyboard-enter)\n${customMsg}\n\nPrompt: ${displayText}`
+          : `AI Prompt sent (keyboard-enter)\n\nPrompt: ${displayText}`;
+
+        info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
+        vscode.window.showInformationMessage(notificationText);
+
+        info(`✅ ENTER detection complete - final counter: ${aiPromptCounter}`);
+        info('🎯 ============ ENTER DETECTION END ============');
       })
     );
 
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
-        info('🎯 CTRL+ENTER DETECTED');
-        // Get actual text from chat input BEFORE submitting
-        const { getChatInputText } = await import('./chatHelpers');
-        const actualText = await getChatInputText(false);
-        const promptText = actualText || '[Prompt sent via Ctrl+Enter]';
-        recordPrompt(promptText, 'keyboard-ctrl-enter');
-        // Forward to normal chat submit (set flag to avoid double detection)
+        info('🎯 ============ CTRL+ENTER DETECTED ============');
+        info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`Current state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+        info(`Current aiPromptCounter: ${aiPromptCounter}`);
+
+        // Forward to normal chat submit first
+        info('Forwarding to workbench.action.chat.submit...');
         isOurCommand = true;
-        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        try {
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit command executed successfully');
+        } catch (e) {
+          info(`❌ Chat submit command failed: ${e}`);
+        }
         isOurCommand = false;
+
+        // Add placeholder to activity bar immediately (will be replaced by SpecStory later)
+        const placeholderText = '⏳ Loading prompt from SpecStory...';
+        state.recentPrompts.unshift({ text: placeholderText, isLive: true, timestamp: Date.now(), id: `live-${Date.now()}` });
+        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
+
+        // Increment counter immediately
+        const oldCounter = aiPromptCounter;
+        aiPromptCounter++;
+        info(`📈 Counter: ${oldCounter} → ${aiPromptCounter}`);
+
+        updateStatusBar();
+        const ext = vscode.extensions.getExtension('sunamocz.ai-prompt-detector');
+        const v = ext?.packageJSON?.version || '?';
+        info(`📊 Status bar text now: "AI Prompts: ${aiPromptCounter} | v${v}"`);
+
+        // Refresh activity bar to show placeholder immediately
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called IMMEDIATELY - will show ${state.recentPrompts.length} prompts (including placeholder)`);
+
+        // Wait a bit for SpecStory to create export and for us to load it
+        info('Waiting 1500ms for SpecStory export...');
+        await new Promise(r => setTimeout(r, 1500));
+
+        info(`After wait - state.recentPrompts count: ${state.recentPrompts.length}`);
+        info(`After wait - state.recentPrompts[0]: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
+
+        // Replace placeholder with actual text from SpecStory (if available)
+        let latestPrompt = state.recentPrompts[0]?.text || '';
+        if (latestPrompt.includes('Loading prompt from SpecStory') && state.recentPrompts.length > 1) {
+          // Placeholder still there, use second item if available
+          latestPrompt = state.recentPrompts[1]?.text || '';
+          info(`⚠️ Placeholder still at [0], using [1]: "${latestPrompt?.substring(0, 100) || 'EMPTY'}"`);
+        } else if (latestPrompt !== placeholderText) {
+          // Placeholder was replaced by file watcher - good!
+          info(`✅ Placeholder was replaced by SpecStory export: "${latestPrompt.substring(0, 100)}"`);
+        } else {
+          // No SpecStory export yet, use fallback
+          latestPrompt = 'Prompt sent via Ctrl+Enter';
+          info(`❌ No SpecStory export found, using fallback text`);
+        }
+
+        info(`Using latestPrompt for notification: "${latestPrompt.substring(0, 100)}"`);
+        const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
+        info(`Display text (truncated): "${displayText}"`);
+
+        const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
+        let customMsg = cfg.get<string>('customMessage') || '';
+        info(`Custom message from config: "${customMsg}"`);
+
+        const notificationText = customMsg
+          ? `AI Prompt sent (keyboard-ctrl-enter)\n${customMsg}\n\nPrompt: ${displayText}`
+          : `AI Prompt sent (keyboard-ctrl-enter)\n\nPrompt: ${displayText}`;
+
+        info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
+        vscode.window.showInformationMessage(notificationText);
+
+        // Refresh again to show final text (in case it changed)
+        providerRef?.refresh();
+        info(`🔄 Provider refresh called AFTER SpecStory load - final count: ${state.recentPrompts.length}`);
+
+        info(`✅ CTRL+ENTER detection complete - final counter: ${aiPromptCounter}`);
+        info('🎯 ============ CTRL+ENTER DETECTION END ============');
       })
     );
     
@@ -529,27 +660,67 @@ export async function activate(context: vscode.ExtensionContext) {
     // Since counter somehow increases on mouse clicks, monitor it
     let lastSeenCounter = aiPromptCounter;
     
-    const monitorInterval = setInterval(() => {
+    const monitorInterval = setInterval(async () => {
       if (aiPromptCounter > lastSeenCounter) {
+        info(`📊 Counter change detected: ${lastSeenCounter} → ${aiPromptCounter}`);
         const now = Date.now();
+        const timeSinceLastKeyboard = now - lastKeyboardDetection;
+        info(`⏱️ Time since last keyboard detection: ${timeSinceLastKeyboard}ms`);
+
         // If counter increased and we haven't detected it recently via keyboard
-        if (now - lastKeyboardDetection > 500) {
-          info('🎯 MOUSE DETECTED - counter increased without keyboard');
-          // Show notification for mouse with prompt text
+        if (timeSinceLastKeyboard > 500) {
+          info('🎯 ============ MOUSE DETECTED ============');
+          info('Counter increased without recent keyboard detection - must be mouse');
+          info(`state.recentPrompts count BEFORE: ${state.recentPrompts.length}`);
+
+          // Try to capture actual text from chat input
+          let capturedText = '';
+          info('🔍 Attempting to capture prompt text for mouse...');
+
+          try {
+            const { getChatInputText } = await import('./chatHelpers');
+            capturedText = await getChatInputText(false);
+            info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+          } catch (e) {
+            info(`⚠️ getChatInputText failed: ${e}`);
+          }
+
+          // Add to state immediately as live prompt with real text (or fallback)
+          const promptText = capturedText && capturedText.trim()
+            ? capturedText.trim()
+            : 'Prompt sent via mouse';
+
+          const liveEntry: PromptEntry = {
+            text: promptText,
+            isLive: true,
+            timestamp: Date.now(),
+            id: `live-mouse-${Date.now()}`
+          };
+          state.recentPrompts.unshift(liveEntry);
+          info(`✅ Added LIVE prompt (mouse) to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
+
+          // Refresh activity bar
+          providerRef?.refresh();
+          info(`🔄 Provider refresh called for mouse detection`);
+
+          // Show notification with captured text
           const cfg = vscode.workspace.getConfiguration('ai-prompt-detector');
           let customMsg = cfg.get<string>('customMessage') || '';
+          info(`Custom message from config: "${customMsg}"`);
 
-          // Get the most recent prompt text
-          const latestPrompt = state.recentPrompts[0]?.text || '[Prompt text not available]';
-          const displayText = latestPrompt.length > 200 ? latestPrompt.substring(0, 200) + '...' : latestPrompt;
-
+          const displayText = promptText.length > 200 ? promptText.substring(0, 200) + '...' : promptText;
           const notificationText = customMsg
             ? `AI Prompt sent (mouse)\n${customMsg}\n\nPrompt: ${displayText}`
             : `AI Prompt sent (mouse)\n\nPrompt: ${displayText}`;
 
+          info(`Showing notification: "${notificationText.substring(0, 100)}..."`);
           vscode.window.showInformationMessage(notificationText);
+          info('🎯 ============ MOUSE DETECTION END ============');
+        } else {
+          info(`⏩ Skipping mouse notification - recent keyboard detection (${timeSinceLastKeyboard}ms ago)`);
         }
         lastSeenCounter = aiPromptCounter;
+        info(`Updated lastSeenCounter to: ${lastSeenCounter}`);
       }
     }, 250); // Check every 250ms
     

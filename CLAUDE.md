@@ -14,6 +14,34 @@ Write to me at the beginning of each prompt that you see the logs in the folder�
 
 Never do something, then run install.ps1, then do something again, then run install.ps1 again. Think carefully and do only one thing.
 
+## 📝 PROMPT LOGGING POLICY - CRITICAL!
+**MANDATORY**: At the START of EVERY conversation/prompt, BEFORE doing anything else:
+1. Read current version from package.json
+2. Get current timestamp
+3. Append to `.claude/prompts/{YYYY-MM-DD}.txt`:
+   ```
+   [HH:MM] Version: v{version}
+   Prompt: "{exact user prompt text}"
+   Note: {brief description of what was done}
+   Result: {brief outcome - e.g., "Created v1.1.481", "Fixed bug", "No changes"}
+
+   ```
+4. NEVER skip this step - it's required for tracking changes
+5. Format: One entry per prompt, chronological order, clear timestamps
+6. If file doesn't exist, create it with header:
+   ```
+   ================================
+   PROMPT LOG - {YYYY-MM-DD}
+   ================================
+
+   MILESTONES:
+   - milestone-logging-working → v1.1.449 (d34d9ff) - Logging system working correctly, live prompt capture for keyboard and mouse
+   - v1.1.165 (bf4ca3b) - Return to code of version 1.1.156
+
+   ================================
+   ```
+7. **MILESTONE SECTION**: Always include milestones at the top after header (check `git tag -l -n1`)
+
 ## ⚠️ CRITICAL RULES - STRICTLY FOLLOW!
 
 As a copilot, you never change versions. The version changes fundamentally only install.ps1
