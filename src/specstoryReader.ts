@@ -22,9 +22,11 @@ export function isValidSpecStoryFile(filePath: string): boolean {
 }
 
 export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): void {
+  const loadStartTime = Date.now();
   info(`📂 ============ LOADING PROMPTS FROM FILE ============`);
   info(`File path: "${filePath}"`);
-  info(`Current recent prompts count BEFORE load: ${recent.length}`);
+  const beforeCount = recent.length;
+  info(`Current recent prompts count BEFORE load: ${beforeCount}`);
   info(`Current specStoryPrompts set size: ${state.specStoryPrompts.size}`);
 
   try {
@@ -90,9 +92,20 @@ export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): vo
       }
     }
 
-    info(`✅ Loading complete - recent prompts count AFTER load: ${recent.length}`);
+    const afterCount = recent.length;
+    const newPromptsCount = afterCount - beforeCount;
+
+    info(`✅ Loading complete - recent prompts count AFTER load: ${afterCount}`);
     info(`📊 Found ${foundInSpecStoryCount} live prompts that are now in SpecStory (will be hidden in Activity Bar)`);
     info(`📊 specStoryPrompts set size AFTER load: ${state.specStoryPrompts.size}`);
+
+    // ONLY log timing if NEW prompts were actually loaded
+    if (newPromptsCount > 0) {
+      const loadEndTime = Date.now();
+      info(`⏱️ SPECSTORY LOADED ${newPromptsCount} NEW PROMPTS TIME: ${loadEndTime}`);
+      info(`⏱️ TIME: SpecStory load duration = ${loadEndTime - loadStartTime} ms`);
+    }
+
     info(`📂 ============ FILE LOADING END ============`);
   } catch (e) {
     info(`❌ ERROR loading file: ${e}`);

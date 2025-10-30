@@ -497,7 +497,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Method 3: Keyboard detection (WORKS PERFECTLY)
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
+        const promptSendTime = Date.now();
         info('🎯 ============ ENTER DETECTED ============');
+        info(`⏱️ PROMPT SEND TIME: ${promptSendTime}`);
         info(`Current state.recentPrompts count: ${state.recentPrompts.length}`);
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
@@ -515,8 +517,8 @@ export async function activate(context: vscode.ExtensionContext) {
         const placeholderEntry: PromptEntry = {
           text: '⏳ Waiting for prompt text...',
           isLive: true,
-          timestamp: Date.now(),
-          id: `live-${Date.now()}`
+          timestamp: promptSendTime,
+          id: `live-${promptSendTime}`
         };
         state.recentPrompts.unshift(placeholderEntry);
         info(`📝 Added placeholder - will be updated automatically by chat session watch`);
@@ -810,7 +812,9 @@ export async function activate(context: vscode.ExtensionContext) {
   info('🔧 Setting up chat session file watch...');
   const { watchChatSessions } = await import('./chatSessionReader');
   const chatSessionWatcher = watchChatSessions((promptText: string) => {
+    const watchDetectTime = Date.now();
     info(`📩 Chat session watch callback: New prompt detected: "${promptText.substring(0, 100)}"`);
+    info(`⏱️ WATCH DETECTED CHANGE TIME: ${watchDetectTime}`);
 
     // Find the most recent placeholder (with isLive=true and placeholder text)
     const placeholderIndex = state.recentPrompts.findIndex(
@@ -818,9 +822,14 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     if (placeholderIndex !== -1) {
+      const placeholder = state.recentPrompts[placeholderIndex];
+      const promptSendTime = placeholder.timestamp;
+      const delay = watchDetectTime - promptSendTime;
+
       // Update the placeholder with actual text
       state.recentPrompts[placeholderIndex].text = promptText;
       info(`✅ Updated placeholder at index ${placeholderIndex} with actual text`);
+      info(`⏱️ TIME: Prompt send → Watch detect = ${delay} ms`);
 
       // Refresh Activity Bar to show updated text
       providerRef?.refresh();
