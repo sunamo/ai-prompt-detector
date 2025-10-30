@@ -805,23 +805,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const apiSetupSuccess = !newApiWorking ? await setupProposedChatApi() : true;
   setupChatMonitoring(context);
 
-  // Show notification about API status
-  if (proposedApiAvailable) {
-    vscode.window.showInformationMessage(
-      'AI Prompt Detector: Proposed API enabled - full mouse detection working!',
-      'OK'
-    );
-  } else {
-    vscode.window.showWarningMessage(
-      'AI Prompt Detector: Limited mode - mouse detection not available. For full functionality, restart VS Code with: code-insiders --enable-proposed-api sunamocz.ai-prompt-detector',
-      'Learn More',
-      'OK'
-    ).then(selection => {
-      if (selection === 'Learn More') {
-        vscode.env.openExternal(vscode.Uri.parse('https://github.com/sunamo/ai-prompt-detector/blob/master/MOUSE_DETECTION_DOCUMENTATION.md'));
-      }
-    });
-  }
+  // Auto-open Activity Bar panel on startup
+  await vscode.commands.executeCommand('ai-prompt-detector-view.focus');
+  info('✅ Activity Bar panel auto-opened on startup');
 
   // File watcher for SpecStory
   const watcher = vscode.workspace.createFileSystemWatcher(
