@@ -371,61 +371,59 @@ A JSON root property `_noDuplicatePromptSuppression` in `package.json` documents
 - A helper script may re‑insert this header automatically; such commits are valid and must not be rejected as noise.
 - Treat absence, alteration, or truncation of this header as a readability regression equal in severity to keybinding failure.
 
-## 🔒 Prompt Ordering Invariants (UPDATED Oct 30 2025 v3)
-**CRITICAL CHANGE**: New runtime prompts append to END, display keeps natural order (no reversal).
+## 🔒 Prompt Ordering Invariants (UPDATED Oct 30 2025 v4 FINAL)
+**CRITICAL CHANGE**: New runtime prompts go to BEGINNING (#1) using unshift().
 
-### New Ordering Policy (Oct 30 2025 v3):
-- **Runtime prompts**: Use `push()` to append NEW prompts at the END of array
-- **SpecStory prompts**: Loaded in their natural order from files
-- **Display order**: Activity Bar shows prompts AS-IS (no reversal)
-- **Result**: Old SpecStory prompts appear first (#1, #2...), new runtime prompts appear last
-- **Overflow handling**: When exceeding 1000 prompts, use `shift()` to remove oldest
+### Final Ordering Policy (Oct 30 2025 v4):
+- **Runtime prompts**: Use `unshift()` to prepend NEW prompts at the BEGINNING of array
+- **Display order**: Activity Bar shows first N prompts via `slice(0, maxPrompts)`
+- **Result**: Newest runtime prompt always appears as #1 (first in array, first displayed)
+- **Overflow handling**: When exceeding 1000 prompts, use `pop()` to remove last (oldest)
 
-### ✅ Updated Ordering Enforcement Checklist
-1. extension.ts: ALL prompt additions use `push()` NOT `unshift()` ✅
-2. extension.ts: Overflow uses `shift()` to remove from beginning ✅
-3. activityBarProvider: NO `.reverse()` - display natural order ✅
-4. Newest runtime prompt appears at END of list (last number) ✅
-5. SpecStory prompts keep their original order at beginning
+### ✅ Final Ordering Enforcement Checklist
+1. extension.ts: ALL prompt additions use `unshift()` NOT `push()` ✅
+2. extension.ts: Overflow uses `pop()` to remove from end ✅
+3. activityBarProvider: Uses `slice(0, maxPrompts)` to take first N ✅
+4. Newest runtime prompt appears as #1 in Activity Bar ✅
+5. No reversal needed - newest is already at index 0
 
-### 🚫 New Forbidden Anti-Patterns
-- Using `unshift()` for runtime prompt capture (would put new prompts at beginning)
-- Calling `.reverse()` in UI rendering (would flip SpecStory order)
-- Using `splice(1000)` for overflow (should be `shift()` to remove oldest)
+### 🚫 Forbidden Anti-Patterns
+- Using `push()` for runtime prompt capture (would put new prompts at end, not #1)
+- Using `shift()` for overflow (removes newest, not oldest)
+- Using `slice(-maxPrompts)` (would skip newest prompts at beginning)
 
-**Rationale**: User wants new runtime prompts at the END, not at beginning. SpecStory prompts keep their order.
+**Rationale**: User explicitly confirmed "new prompts go to beginning (#1), not end".
 
-## 📊 Activity Bar Rendering Policy (UPDATED Oct 30 2025 v3)
-**CRITICAL CHANGE**: Display natural order - SpecStory first, new runtime prompts at end.
+## 📊 Activity Bar Rendering Policy (UPDATED Oct 30 2025 v4 FINAL)
+**CRITICAL CHANGE**: Newest prompts at beginning (#1), display first N.
 
-- Purpose: Show prompts in natural chronological order without reversal.
+- Purpose: Show newest prompts first without reversal.
 - Ordering Source of Truth:
-  1. SpecStory prompts loaded in original order (beginning of array)
-  2. Runtime submissions use `push()` placing new prompts at array END
-  3. UI displays via `slice(-maxPrompts)` WITHOUT reversal
-  4. Display #1 = oldest (SpecStory or start of slice), Last # = newest runtime prompt
-- Therefore: **Last number is ALWAYS the newest runtime prompt** in Activity Bar
+  1. Runtime submissions use `unshift()` placing new prompts at array index 0
+  2. UI displays via `slice(0, maxPrompts)` to get first N
+  3. Display #1 = `state.recentPrompts[0]` (newest), increasing numbers = older
+- Therefore: **#1 is ALWAYS the newest runtime prompt** in Activity Bar
 - UI MUST:
-  - Apply `slice(-maxPrompts)` to get last N prompts
-  - Display WITHOUT calling `.reverse()` - keep natural order
+  - Apply `slice(0, maxPrompts)` to get first N prompts
+  - Display WITHOUT calling `.reverse()` - newest already at index 0
   - Maintain sequential numbering #1, #2, #3... matching array order
 - UI MUST NOT:
   - Call `.reverse()` or `.sort()` on prompt list
+  - Use `slice(-maxPrompts)` (would skip newest prompts at beginning)
   - Filter, group, paginate, or re-chunk prompts implicitly
-  - Inject artificial headers that break sequential numbering
 - Numbering: Displayed #n corresponds to (array index + 1) directly
-- Truncation: `slice(-maxPrompts)` keeps newest N in natural order
+- Truncation: `slice(0, maxPrompts)` keeps first N (newest)
 - Escaping: HTML entities (& < > ") MUST be escaped for safety
 - Styling: header-bar, list, prompt-item, ln, txt, empty, footer class names STABLE
 - Accessibility: Keep text content selectable
 - Script Policy: enableScripts remains false
-- **Regression Definition**: New runtime prompts NOT appearing at end, or unwanted `.reverse()`, or loss of selectable text
+- **Regression Definition**: Newest prompt NOT appearing as #1, or wrong slicing, or loss of selectable text
 
-### ✅ Updated Enforcement Checklist (Activity Bar)
-1. createPromptsHtml: NO `.reverse()` call - natural order only? (Yes)
-2. recordPrompt: uses `push()` NOT `unshift()`? (Yes)
-3. Truncation uses `slice(-maxPrompts)` without reverse? (Yes)
-4. Last displayed prompt is newest runtime prompt? (Yes)
+### ✅ Final Enforcement Checklist (Activity Bar)
+1. createPromptsHtml: Uses `slice(0, maxPrompts)` NOT `slice(-maxPrompts)`? (Yes)
+2. recordPrompt: uses `unshift()` NOT `push()`? (Yes)
+3. NO `.reverse()` call anywhere? (Yes)
+4. #1 displayed prompt is newest runtime prompt? (Yes)
 5. HTML escaping intact? (Yes)
 6. Scripts disabled? (Yes)
 
