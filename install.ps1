@@ -176,12 +176,33 @@ Write-Host "   ✅ Build successful" -ForegroundColor Green
 # --- Git commit & push (after successful build only) ---
 Write-Host "4. Git commit & push..." -ForegroundColor Yellow
 git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
+
+# Read last prompt from .claude/prompts/{today}.txt
+$today = Get-Date -Format "yyyy-MM-dd"
+$promptLogPath = ".claude/prompts/$today.txt"
+$lastPrompt = ""
+
+if (Test-Path $promptLogPath) {
+    $logContent = Get-Content $promptLogPath -Raw
+    # Find last prompt entry using regex: [HH:MM] Version: vX.X.X\nPrompt: "..."
+    if ($logContent -match '(?s)Prompt: "([^"]+)"[^P]*$') {
+        $lastPrompt = $matches[1]
+        Write-Host "   📝 Using prompt text from log: '$lastPrompt'" -ForegroundColor Cyan
+    }
+}
+
+# If no prompt found, use parameter description
+if ([string]::IsNullOrWhiteSpace($lastPrompt)) {
+    $lastPrompt = $CommitDescription
+    Write-Host "   ⚠️ No prompt log found, using parameter description" -ForegroundColor Yellow
+}
+
 # Persist description externally (audit trail) – additive
 $descLog = 'commit-descriptions.log'
-try { Add-Content -Path $descLog -Value "v$newVersion | $CommitDescription" -ErrorAction SilentlyContinue } catch {}
+try { Add-Content -Path $descLog -Value "v$newVersion | $lastPrompt" -ErrorAction SilentlyContinue } catch {}
 
-# Commit message format: "v{version} - {description}" (single line for better git log visibility)
-git commit -m "v$newVersion - $CommitDescription"
+# Commit message format: "v{version} - {prompt}" (single line for better git log visibility)
+git commit -m "v$newVersion - $lastPrompt"
 if ($LASTEXITCODE -ne 0) { Fail "git commit failed" }
 
 git push origin master
