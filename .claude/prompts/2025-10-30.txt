@@ -103,6 +103,11 @@ Result: Started reverting but incomplete
 [12:15] Version: v1.1.492
 Prompt: "Číslování: #1 = nejstarší, poslední# = nejnovější - je to správně naopak"
 Note: User wants #1 = newest (top), highest# = oldest (bottom)
-Result: Will create v1.1.493 - finish unshift() changes, keep normal display (no reverse)
+Result: Created v1.1.493 - finished unshift() changes
+
+[12:18] Version: v1.1.493
+Prompt: "teď se pro změnu nepřidává placeholder o tom že byl prompt"
+Note: Ctrl+Enter doesn't forward to chat.submit, so prompt never actually sends
+Result: Will create v1.1.494 - add workbench.action.chat.submit to Ctrl+Enter handler
 
 ================================

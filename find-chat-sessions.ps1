@@ -1,4 +1,4 @@
-# Find VS Code Insiders chat sessions
+mi # Find VS Code Insiders chat sessions
 $workspaces = Get-ChildItem "$env:APPDATA\Code - Insiders\User\workspaceStorage" -Directory | Sort-Object LastWriteTime -Descending
 
 foreach ($workspace in $workspaces) {

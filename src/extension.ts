@@ -599,31 +599,26 @@ export async function activate(context: vscode.ExtensionContext) {
         info(`Current state.recentPrompts[0]?.text: "${state.recentPrompts[0]?.text.substring(0, 100) || 'EMPTY'}"`);
         info(`Current aiPromptCounter: ${aiPromptCounter}`);
 
-        // Try to get actual text from chat input BEFORE submitting
-        let capturedText = '';
-        info('🔍 Attempting to capture prompt text...');
+        const promptSendTime = Date.now();
 
+        // Forward to chat submit FIRST (since our keybinding blocks default behavior)
+        info('Forwarding to workbench.action.chat.submit...');
         try {
-          const { getChatInputText } = await import('./chatHelpers');
-          capturedText = await getChatInputText(true);
-          info(`📝 Captured text via getChatInputText: "${capturedText.substring(0, 100)}"`);
+          await vscode.commands.executeCommand('workbench.action.chat.submit');
+          info('✅ Chat submit executed');
         } catch (e) {
-          info(`⚠️ getChatInputText failed: ${e}`);
+          info(`⚠️ Chat submit failed: ${e}`);
         }
 
-        // Add to state immediately as live prompt with real text (or fallback)
-        const promptText = capturedText && capturedText.trim()
-          ? capturedText.trim()
-          : 'Prompt sent via Ctrl+Enter';
-
-        const liveEntry: PromptEntry = {
-          text: promptText,
+        // Add placeholder immediately - MUST be after forward so prompt is submitted
+        const placeholderEntry: PromptEntry = {
+          text: '⏳ Waiting for prompt text...',
           isLive: true,
-          timestamp: Date.now(),
-          id: `live-${Date.now()}`
+          timestamp: promptSendTime,
+          id: `live-${promptSendTime}`
         };
-        state.recentPrompts.unshift(liveEntry);
-        info(`✅ Added LIVE prompt to state - text: "${promptText.substring(0, 100)}", count now: ${state.recentPrompts.length}`);
+        state.recentPrompts.unshift(placeholderEntry);
+        info(`📝 Added placeholder - will be updated automatically by chat session watch`);
 
         // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;
