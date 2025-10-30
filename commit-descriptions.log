@@ -233,3 +233,4 @@ v1.1.453 | Fix submit forwarding: add workbench.action.chat.submit call after te
 v1.1.454 | Increase chat input focus wait time to 200ms for better text capture
 v1.1.455 | Read chat prompts from VS Code chat session files instead of trying to access chat input editor
 v1.1.456 | Fix workspace storage path matching - decode URI and normalize path separators
+v1.1.457 | Implement polling with NEW request detection - track request count to avoid showing old prompts

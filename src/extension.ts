@@ -511,57 +511,15 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`❌ Chat submit failed: ${e}`);
         }
 
-        // Add placeholder immediately
-        const placeholderId = `live-${Date.now()}`;
+        // Add placeholder immediately - will be updated by chat session watch callback
         const placeholderEntry: PromptEntry = {
           text: '⏳ Waiting for prompt text...',
           isLive: true,
           timestamp: Date.now(),
-          id: placeholderId
+          id: `live-${Date.now()}`
         };
         state.recentPrompts.unshift(placeholderEntry);
-        info(`📝 Added placeholder prompt to state - count now: ${state.recentPrompts.length}`);
-
-        // Start polling for the actual prompt text (with delay to allow VS Code to write file)
-        info('🔄 Starting delayed polling for prompt text...');
-        setTimeout(async () => {
-          let capturedText = '';
-          let pollAttempts = 0;
-          const maxPolls = 10; // Poll for up to 5 seconds (10 * 500ms)
-
-          while (pollAttempts < maxPolls && !capturedText) {
-            pollAttempts++;
-            await new Promise(r => setTimeout(r, 500)); // Wait 500ms between attempts
-
-            try {
-              const { getLastChatRequest } = await import('./chatSessionReader');
-              const text = await getLastChatRequest(true) || ''; // expectNew=true to only get NEW requests
-
-              if (text) {
-                capturedText = text;
-                info(`✅ Poll attempt ${pollAttempts}: Got NEW text "${capturedText.substring(0, 100)}"`);
-              } else {
-                info(`⏳ Poll attempt ${pollAttempts}: No new request yet`);
-              }
-            } catch (e) {
-              info(`⚠️ Poll attempt ${pollAttempts} failed: ${e}`);
-            }
-          }
-
-          // Update the placeholder with actual text (or failure message)
-          const index = state.recentPrompts.findIndex(p => p.id === placeholderId);
-          if (index !== -1) {
-            if (capturedText) {
-              state.recentPrompts[index].text = capturedText;
-              info(`✅ Updated placeholder with actual text at index ${index}`);
-            } else {
-              state.recentPrompts[index].text = '⏳ Prompt sent (text capture failed after polling)';
-              info(`⚠️ Updated placeholder with failure message after ${pollAttempts} attempts`);
-            }
-            // Refresh Activity Bar to show updated text
-            providerRef?.refresh();
-          }
-        }, 100); // Start polling after 100ms initial delay
+        info(`📝 Added placeholder - will be updated automatically by chat session watch`);
 
         // Increment counter immediately and update keyboard timestamp
         const oldCounter = aiPromptCounter;
@@ -848,11 +806,35 @@ export async function activate(context: vscode.ExtensionContext) {
       refreshDebugFlag();
   });
 
+  // Setup watch on chat session files for real-time prompt detection
+  info('🔧 Setting up chat session file watch...');
+  const { watchChatSessions } = await import('./chatSessionReader');
+  const chatSessionWatcher = watchChatSessions((promptText: string) => {
+    info(`📩 Chat session watch callback: New prompt detected: "${promptText.substring(0, 100)}"`);
+
+    // Find the most recent placeholder (with isLive=true and placeholder text)
+    const placeholderIndex = state.recentPrompts.findIndex(
+      p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+    );
+
+    if (placeholderIndex !== -1) {
+      // Update the placeholder with actual text
+      state.recentPrompts[placeholderIndex].text = promptText;
+      info(`✅ Updated placeholder at index ${placeholderIndex} with actual text`);
+
+      // Refresh Activity Bar to show updated text
+      providerRef?.refresh();
+    } else {
+      info(`⚠️ No placeholder found to update - prompt may have arrived late`);
+    }
+  });
+
   context.subscriptions.push(
     registration,
     watcher,
     configWatcher,
     statusBarItem,
+    chatSessionWatcher,
   );
 
   info(`Activation complete - API mode: ${proposedApiAvailable ? 'FULL' : 'LIMITED'}`);
