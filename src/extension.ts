@@ -513,6 +513,17 @@ export async function activate(context: vscode.ExtensionContext) {
           info(`❌ Chat submit failed: ${e}`);
         }
 
+        // Trigger SpecStory export immediately to avoid 18s+ delay from chat session file writes
+        info('🚀 Triggering SpecStory export to force immediate save...');
+        try {
+          await vscode.commands.executeCommand('specstory.showSpecStoryPreview');
+          const specstoryTriggerTime = Date.now();
+          info(`✅ SpecStory export triggered at: ${specstoryTriggerTime}`);
+          info(`⏱️ TIME: Prompt send → SpecStory trigger = ${specstoryTriggerTime - promptSendTime} ms`);
+        } catch (e) {
+          info(`⚠️ SpecStory export trigger failed (extension may not be installed): ${e}`);
+        }
+
         // Add placeholder immediately - will be updated by chat session watch callback
         const placeholderEntry: PromptEntry = {
           text: '⏳ Waiting for prompt text...',
@@ -808,7 +819,7 @@ export async function activate(context: vscode.ExtensionContext) {
       refreshDebugFlag();
   });
 
-  // Setup watch on chat session files for real-time prompt detection
+  // Setup watch on chat session files for real-time prompt detection (fallback for mouse clicks)
   info('🔧 Setting up chat session file watch...');
   const { watchChatSessions } = await import('./chatSessionReader');
   const chatSessionWatcher = watchChatSessions((promptText: string) => {
@@ -838,12 +849,76 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Setup watch on SpecStory history folder for immediate detection of new exports
+  info('🔧 Setting up SpecStory history folder watch...');
+  const specstoryWatcher = vscode.workspace.createFileSystemWatcher(
+    '**/.specstory/history/*.md',
+    false, // onCreate
+    false, // onChange
+    true   // onDelete - ignore deletes
+  );
+
+  specstoryWatcher.onDidCreate(async (uri: vscode.Uri) => {
+    const specstoryDetectTime = Date.now();
+    info(`📁 SpecStory file created: ${path.basename(uri.fsPath)}`);
+    info(`⏱️ SPECSTORY FILE CREATED TIME: ${specstoryDetectTime}`);
+
+    // Wait a bit for file to be fully written
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Load prompts from the new file
+    if (isValidSpecStoryFile(uri.fsPath)) {
+      const beforeCount = state.recentPrompts.length;
+      loadPromptsFromFile(uri.fsPath, state.recentPrompts);
+      const afterCount = state.recentPrompts.length;
+      const newPromptsCount = afterCount - beforeCount;
+
+      if (newPromptsCount > 0) {
+        info(`✅ Loaded ${newPromptsCount} new prompts from SpecStory file`);
+
+        // Find and update placeholder if exists
+        const placeholderIndex = state.recentPrompts.findIndex(
+          p => p.isLive && (p.text.includes('⏳ Waiting') || p.text.includes('text capture failed'))
+        );
+
+        if (placeholderIndex !== -1) {
+          const placeholder = state.recentPrompts[placeholderIndex];
+          const promptSendTime = placeholder.timestamp;
+          const delay = specstoryDetectTime - promptSendTime;
+
+          // Remove placeholder - we now have the real prompt from SpecStory
+          state.recentPrompts.splice(placeholderIndex, 1);
+          info(`✅ Removed placeholder at index ${placeholderIndex}`);
+          info(`⏱️ TIME: Prompt send → SpecStory file created = ${delay} ms`);
+        }
+
+        // Refresh Activity Bar
+        providerRef?.refresh();
+      }
+    }
+  });
+
+  specstoryWatcher.onDidChange(async (uri: vscode.Uri) => {
+    info(`📝 SpecStory file changed: ${path.basename(uri.fsPath)}`);
+
+    // Wait a bit for file to be fully written
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Reload prompts from changed file
+    if (isValidSpecStoryFile(uri.fsPath)) {
+      // Clear existing prompts from this file and reload
+      await loadExistingPrompts();
+      providerRef?.refresh();
+    }
+  });
+
   context.subscriptions.push(
     registration,
     watcher,
     configWatcher,
     statusBarItem,
     chatSessionWatcher,
+    specstoryWatcher,
   );
 
   info(`Activation complete - API mode: ${proposedApiAvailable ? 'FULL' : 'LIMITED'}`);
