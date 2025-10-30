@@ -15,7 +15,7 @@
     4. Kontrola a případná instalace dependencies (pouze pokud chybí TypeScript compiler)
     5. Vyčištění starých VSIX souborů z předchozích buildů
     6. Kompilace TypeScript kódu pomocí pnpm run compile
-    7. Git add všech změn, commit s verzí jako hlavní message a popisem jako druhý -m parametr
+    7. Git add všech změn, commit s verzí a popisem na jednom řádku (formát: "v{version} - {description}")
     8. Push na origin/master branch
     9. Vytvoření VSIX balíčku pomocí vsce s --allow-star-activation a --no-dependencies flagy
     10. Odinstalace staré verze rozšíření z VS Code
@@ -24,8 +24,8 @@
 
 .PARAMETER CommitDescription
     [POVINNÝ] Textový popis změn provedených v této verzi.
-    Tento popis se ukládá do commit-descriptions.log pro audit trail a jako druhý -m parametr v git commit.
-    Není součástí hlavní commit message (ta obsahuje pouze verzi, např. "v1.1.411").
+    Tento popis se ukládá do commit-descriptions.log pro audit trail a je součástí commit message.
+    Formát commit message: "v{version} - {description}" (např. "v1.1.411 - Fixed mouse detection").
 
 .EXAMPLE
     ./install.ps1 "Fixed mouse detection and improved logging"
@@ -180,7 +180,8 @@ git add .; if ($LASTEXITCODE -ne 0) { Fail "git add failed" }
 $descLog = 'commit-descriptions.log'
 try { Add-Content -Path $descLog -Value "v$newVersion | $CommitDescription" -ErrorAction SilentlyContinue } catch {}
 
-git commit -m "v$newVersion" -m "$CommitDescription"
+# Commit message format: "v{version} - {description}" (single line for better git log visibility)
+git commit -m "v$newVersion - $CommitDescription"
 if ($LASTEXITCODE -ne 0) { Fail "git commit failed" }
 
 git push origin master

@@ -58,6 +58,11 @@ Result: Created v1.1.482 - install.ps1 now checks src/logger.ts and prompts user
 [11:52] Version: v1.1.482
 Prompt: "vrať mi soubory k commitu 5a4338d a udělej verzi"
 Note: Restoring all files from commit 5a4338d (v1.1.466)
-Result: Will create v1.1.483 with code from commit 5a4338d
+Result: Created v1.1.483 with code from commit 5a4338d
+
+[11:54] Version: v1.1.483
+Prompt: "uprav mi install.ps1 aby mi dával text commitu na stejný řádek jako verzi. teď v každém commitu vidím jen verzi a teprve po jeho otevření vidím jeho text. zároveň používej jako text commitu verze + text promptu"
+Note: Changing git commit format to include description on same line
+Result: Will create v1.1.484 - commit message format changed from separate -m to single line
 
 ================================
