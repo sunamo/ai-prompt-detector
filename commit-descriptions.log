@@ -247,3 +247,4 @@ v1.1.473 | Fixed: new runtime prompts at END, no reversal, natural order kept
 v1.1.474 | FINAL FIX: new prompts at beginning #1 using unshift()
 v1.1.475 | Fixed: added placeholder for Ctrl+Enter like Enter has
 v1.1.476 | Added immediate refresh after placeholder for debugging
+v1.1.477 | CRITICAL FIX: placeholder now ALWAYS shown in Activity Bar filter
