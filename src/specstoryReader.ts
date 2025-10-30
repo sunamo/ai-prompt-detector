@@ -87,7 +87,7 @@ export function loadPromptsFromFile(filePath: string, recent: PromptEntry[]): vo
           timestamp: Date.now(),
           id: `specstory-${Date.now()}-${i}`
         };
-        recent.unshift(entry); // Add to START (newest first), not END
+        recent.push(entry); // Add to END - caller will handle ordering
         info(`  Added new prompt ${i+1}/${reversed.length}: "${p.substring(0, 60)}..."`);
       }
     }
