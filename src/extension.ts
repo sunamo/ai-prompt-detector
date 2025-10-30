@@ -498,18 +498,26 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectEnter', async () => {
         info('🎯 ENTER DETECTED');
-        recordPrompt('[Prompt sent via Enter]', 'keyboard-enter');
+        // Get actual text from chat input BEFORE submitting
+        const { getChatInputText } = await import('./chatHelpers');
+        const actualText = await getChatInputText(false);
+        const promptText = actualText || '[Prompt sent via Enter]';
+        recordPrompt(promptText, 'keyboard-enter');
         // Forward to normal chat submit (set flag to avoid double detection)
         isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');
         isOurCommand = false;
       })
     );
-    
+
     context.subscriptions.push(
       vscode.commands.registerCommand('ai-prompt-detector.detectCtrlEnter', async () => {
         info('🎯 CTRL+ENTER DETECTED');
-        recordPrompt('[Prompt sent via Ctrl+Enter]', 'keyboard-ctrl-enter');
+        // Get actual text from chat input BEFORE submitting
+        const { getChatInputText } = await import('./chatHelpers');
+        const actualText = await getChatInputText(false);
+        const promptText = actualText || '[Prompt sent via Ctrl+Enter]';
+        recordPrompt(promptText, 'keyboard-ctrl-enter');
         // Forward to normal chat submit (set flag to avoid double detection)
         isOurCommand = true;
         await vscode.commands.executeCommand('workbench.action.chat.submit');

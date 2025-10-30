@@ -248,3 +248,4 @@ v1.1.474 | FINAL FIX: new prompts at beginning #1 using unshift()
 v1.1.475 | Fixed: added placeholder for Ctrl+Enter like Enter has
 v1.1.476 | Added immediate refresh after placeholder for debugging
 v1.1.477 | CRITICAL FIX: placeholder now ALWAYS shown in Activity Bar filter
+v1.1.479 | Restore v1.1.437 code with working notifications and prompt display
