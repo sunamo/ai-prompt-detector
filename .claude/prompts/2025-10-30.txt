@@ -83,6 +83,11 @@ Result: Created v1.1.488 - remove startup notification, add auto-open Activity B
 [12:05] Version: v1.1.488
 Prompt: "změň pouze místo přidávání nových promtů, teď hod dáváš na začátek tak ho potřebuji na konec promptů v AB. prostě aby i nový prompt šel chronologicky za těmi přechozími."
 Note: Change prompt ordering - new prompts to END (chronological order, oldest first)
-Result: Will create v1.1.489 - change unshift() to push(), reverse display in AB
+Result: Created v1.1.489 - changed unshift() to push(), take last N prompts
+
+[12:07] Version: v1.1.489
+Prompt: "číslo #1 by mělo být první (nejstarší) - - naopak, #1 je nejmladší"
+Note: Fix numbering - #1 should be newest (last in list), not oldest
+Result: Will create v1.1.490 - reverse numbering so #1 is the newest prompt at the bottom
 
 ================================
